@@ -90,3 +90,29 @@ test('markdownDocument is frontmatter, one H1, then the body', () => {
   assert.match(doc, /\n# LI04\n/);
   assert.ok(doc.endsWith('\n'));
 });
+
+test('inline whitespace collapses the way HTML collapses it', () => {
+  // Hand-authored HTML is indented. Without collapsing newlines, every wrapped
+  // source line reaches the reader with a leading space.
+  const md = htmlToMarkdown(`
+    <p>
+      A point code looks like a catalogue number
+      and behaves like a street address.
+    </p>
+  `);
+  assert.equal(md, 'A point code looks like a catalogue number and behaves like a street address.');
+  assert.ok(!md.split('\n').some(l => l.startsWith(' ')), 'no line may start with a space');
+});
+
+test('indented table cells stay clean', () => {
+  const md = htmlToMarkdown(`
+    <table>
+      <tr><th>Channel</th><th>Code</th></tr>
+      <tr>
+        <td>Kidney</td>
+        <td><code>KD</code></td>
+      </tr>
+    </table>
+  `);
+  assert.equal(md, '| Channel | Code |\n| --- | --- |\n| Kidney | `KD` |');
+});

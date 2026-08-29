@@ -25,7 +25,12 @@ export function inlineToMarkdown(html: string): string {
       .replace(/<img\b[^>]*src="([^"]*)"[^>]*>/gi, '![]($1)')
       .replace(/<[^>]+>/g, ''),
   )
-    .replace(/[ \t]{2,}/g, ' ')
+    // HTML collapses whitespace in inline context, so the converter has to as
+    // well — including newlines. Editor-produced HTML arrives on one line and
+    // never exposes this, but hand-authored HTML is indented, and without the
+    // newline in this class every wrapped source line reaches the reader with a
+    // leading space and markdown renderers start seeing stray indentation.
+    .replace(/\s+/g, ' ')
     .trim();
 }
 

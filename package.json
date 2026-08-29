@@ -1,23 +1,60 @@
 {
   "name": "wiki-formant",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The portable half of a wiki: derived taxonomy, a spec-correct MCP transport, markdown twins, and the conditional-GET plumbing agent surfaces need. Zero runtime dependencies.",
   "type": "module",
   "license": "MIT",
-  "repository": { "type": "git", "url": "git+https://github.com/tutmoses/wiki-formant.git" },
-  "keywords": ["wiki", "taxonomy", "facets", "mcp", "model-context-protocol", "llms-txt", "markdown", "agent"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tutmoses/wiki-formant.git"
+  },
+  "keywords": [
+    "wiki",
+    "taxonomy",
+    "facets",
+    "mcp",
+    "model-context-protocol",
+    "llms-txt",
+    "markdown",
+    "agent"
+  ],
   "sideEffects": false,
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./taxonomy": { "types": "./dist/taxonomy.d.ts", "import": "./dist/taxonomy.js" },
-    "./mcp": { "types": "./dist/mcp.d.ts", "import": "./dist/mcp.js" },
-    "./markdown": { "types": "./dist/markdown.d.ts", "import": "./dist/markdown.js" },
-    "./http": { "types": "./dist/http.d.ts", "import": "./dist/http.js" },
-    "./pagination": { "types": "./dist/pagination.d.ts", "import": "./dist/pagination.js" },
-    "./versioning": { "types": "./dist/versioning.d.ts", "import": "./dist/versioning.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./taxonomy": {
+      "types": "./dist/taxonomy.d.ts",
+      "import": "./dist/taxonomy.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.js"
+    },
+    "./markdown": {
+      "types": "./dist/markdown.d.ts",
+      "import": "./dist/markdown.js"
+    },
+    "./http": {
+      "types": "./dist/http.d.ts",
+      "import": "./dist/http.js"
+    },
+    "./pagination": {
+      "types": "./dist/pagination.d.ts",
+      "import": "./dist/pagination.js"
+    },
+    "./versioning": {
+      "types": "./dist/versioning.d.ts",
+      "import": "./dist/versioning.js"
+    }
   },
-  "files": ["dist"],
-  "engines": { "node": ">=20" },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "test": "npm run build && node --test 'test/*.test.js'",
