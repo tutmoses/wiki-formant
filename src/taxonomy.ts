@@ -237,13 +237,24 @@ export function createTaxonomy(config: TaxonomyConfig): Taxonomy {
         .sort((a, b) => b.score - a.score || a.i - b.i)
         .slice(0, limit);
 
-      // Name the narrowest axis the page shares — a `category` with 15 options
-      // says more about a page than a `status` with 4, so headline that rather
-      // than whichever key happens to come first.
+      // Name the narrowest axis the page ACTUALLY SHARES with something in the
+      // list — a `category` with 15 options says more than a `status` with 4, so
+      // headline the narrower one, but only among the axes that are shared.
+      //
+      // Picking the narrowest axis the *page* carries, without checking whether
+      // any returned sibling matches on it, produces a heading that links to a
+      // set the list below it is not in: "More Classical pages in Nomenclature"
+      // over five pages that are not Classical. The heading is the link into the
+      // filtered set, so it has to name a filter that contains them.
+      const matched = ranked.filter(r => r.score > 0);
       const narrowest = keys
-        .filter(k => metaValue(page, k.key))
+        .filter(
+          k =>
+            metaValue(page, k.key) &&
+            matched.some(r => metaValue(r.p, k.key) === metaValue(page, k.key)),
+        )
         .sort((a, b) => (b.options?.length ?? 0) - (a.options?.length ?? 0))[0];
-      const value = narrowest && ranked[0]?.score ? metaValue(page, narrowest.key) : '';
+      const value = narrowest ? metaValue(page, narrowest.key) : '';
       return {
         pages: ranked.map(r => r.p),
         sharedFacet: narrowest && value ? { key: narrowest.key, value } : null,

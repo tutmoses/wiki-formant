@@ -1,6 +1,6 @@
 {
   "name": "wiki-formant",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "The portable half of a wiki: derived taxonomy, a spec-correct MCP transport, markdown twins, and the conditional-GET plumbing agent surfaces need. Zero runtime dependencies.",
   "type": "module",
   "license": "MIT",

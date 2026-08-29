@@ -120,3 +120,22 @@ test('one href helper carries sort, filters and letter together', () => {
   });
   assert.equal(mounted.href('kb', { letter: 'B' }), '/wiki/kb?letter=B');
 });
+
+test('the named axis is one the related pages actually share', () => {
+  // The heading built from sharedFacet IS the link into the filtered set, so
+  // naming an axis the listed pages do not match sends the reader to a page
+  // that excludes every one of them.
+  const subject = page('Subject', { category: 'Gaming', status: 'Active' });
+  const siblings = [page('Sibling', { category: 'DeFi', status: 'Active' })];
+  const { sharedFacet } = tx.rankRelated(subject, siblings, 'ecosystem', 5);
+  // `category` is narrower (3 options vs 2) but is NOT shared; `status` is.
+  assert.deepEqual(sharedFacet, { key: 'status', value: 'Active' });
+});
+
+test('no shared axis means no heading link', () => {
+  const subject = page('Subject', { category: 'Gaming', status: 'Active' });
+  const siblings = [page('Sibling', { category: 'DeFi', status: 'Paused' })];
+  const { pages, sharedFacet } = tx.rankRelated(subject, siblings, 'ecosystem', 5);
+  assert.equal(pages.length, 1, 'siblings are still listed');
+  assert.equal(sharedFacet, null, 'but nothing is claimed about why');
+});
