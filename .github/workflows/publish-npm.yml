@@ -1,0 +1,80 @@
+# Publish wiki-formant to npm when its version changes.
+#
+# Gated on the version actually moving, not on package.json being touched: a
+# README link or a devDependency bump edits the same file, and an ungated job
+# would fail the publish with EPUBLISHCONFLICT every time.
+#
+# Auth note: the npm account has 2FA disabled, so this uses a GRANULAR access
+# token with "bypass 2FA" enabled, held as the NPM_TOKEN repository secret.
+# That token is a publishing credential with no second factor in front of it —
+# scope it to this package alone once the package exists, and rotate it if the
+# repository's collaborator set ever changes.
+#
+# The trigger is deliberately push-to-main only. Never add a pull_request
+# trigger: that is the path by which a fork could run workflow code with the
+# publishing credential in scope.
+
+name: Publish to npm
+
+on:
+  push:
+    branches: [main]
+    paths: ['package.json']
+  workflow_dispatch:
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required for npm provenance, which signs an attestation tying the
+      # tarball to this commit and workflow. Consumers can verify the package
+      # was built here rather than uploaded from someone's laptop.
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Check whether the version actually changed
+        id: check
+        run: |
+          LOCAL="$(jq -r .version package.json)"
+          NAME="$(jq -r .name package.json)"
+          PUBLISHED="$(npm view "$NAME" version 2>/dev/null || echo none)"
+          echo "local=$LOCAL published=$PUBLISHED"
+          if [ "$LOCAL" = "$PUBLISHED" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::package.json changed but version $LOCAL is already on npm — skipping."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Build and test explicitly rather than leaning on prepublishOnly, so a
+      # failure lands before the credential is ever in scope and reports as its
+      # own step instead of as a publish error.
+      - name: Install
+        if: steps.check.outputs.changed == 'true'
+        run: npm ci
+
+      - name: Build
+        if: steps.check.outputs.changed == 'true'
+        run: npm run build
+
+      - name: Test
+        if: steps.check.outputs.changed == 'true'
+        run: node --test 'test/*.test.js'
+
+      - name: Publish
+        if: steps.check.outputs.changed == 'true'
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
