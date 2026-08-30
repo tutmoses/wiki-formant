@@ -183,3 +183,37 @@ test('handleMcp is usable without the HTTP layer', async () => {
   const pong = await handleMcp(rpc('ping'), config);
   assert.deepEqual(pong.result, {});
 });
+
+test('object params and arrays of objects validate', async () => {
+  const cfg = {
+    ...config,
+    tools: [{
+      name: 'create_page',
+      description: 'Write a page.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          content: { type: 'array', description: 'blocks', items: { type: 'object' } },
+          metadata: { type: 'object', description: 'key-value metadata' },
+        },
+        required: ['content'],
+      },
+      handler: async args => ({ ok: true, blocks: args.content.length }),
+    }],
+  };
+  const send = args => mcpResponse(
+    new Request('https://x', { method: 'POST', body: JSON.stringify(rpc('tools/call', { name: 'create_page', arguments: args })) }),
+    cfg,
+  );
+
+  const good = await (await send({ content: [{ id: '1', type: 'content' }], metadata: { a: 'b' } })).json();
+  assert.equal(good.result.isError, undefined);
+
+  // An array where an object is required, and a null inside an object array —
+  // `typeof` calls both "object", which is why the item check cannot use it.
+  const bad = await (await send({ content: [null], metadata: ['not', 'an', 'object'] })).json();
+  assert.equal(bad.result.isError, true);
+  const text = bad.result.content[0].text;
+  assert.match(text, /"content" must contain only objects/);
+  assert.match(text, /"metadata" must be a object; received array/);
+});

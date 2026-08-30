@@ -16,10 +16,10 @@
 export const MCP_PROTOCOL_VERSION = '2025-03-26';
 
 export type ToolParam = {
-  type: 'string' | 'number' | 'boolean' | 'array';
+  type: 'string' | 'number' | 'boolean' | 'array' | 'object';
   description: string;
   enum?: string[];
-  items?: { type: 'string' | 'number' };
+  items?: { type: 'string' | 'number' | 'object' };
 };
 
 export type ToolSchema = {
@@ -190,7 +190,7 @@ function validateArgs(tool: McpTool, args: Record<string, unknown>): string | nu
         problems.push(
           `Parameter "${key}" must be an array of ${itemType}s; received ${actual} (${JSON.stringify(value)}).`,
         );
-      } else if ((value as unknown[]).some(item => typeof item !== itemType)) {
+      } else if ((value as unknown[]).some(item => typeOf(item) !== itemType)) {
         problems.push(`Parameter "${key}" must contain only ${itemType}s.`);
       }
     } else if (actual !== spec.type) {
