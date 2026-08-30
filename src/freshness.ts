@@ -36,8 +36,14 @@ export function isStale(page: FreshnessInput, now: number, maxAgeDays = DEFAULT_
   return age === null || age > maxAgeDays;
 }
 
-/** The wording the banner carries, which depends on why the page is stale. */
-export function freshnessMessage(page: FreshnessInput, now: number): string {
-  const age = daysSince(page.lastVerifiedAt, now);
-  return age === null ? 'not yet verified against sources' : `last verified ${age} days ago`;
+/**
+ * The sentence the notice carries. Both wikis shipped this string identically,
+ * down to the ISO date and the closing request, so it lives here rather than
+ * being re-typed either side of the extraction.
+ */
+export function freshnessNotice(page: FreshnessInput): string {
+  const when = page.lastVerifiedAt
+    ? `last verified ${new Date(page.lastVerifiedAt).toISOString().slice(0, 10)}`
+    : 'not yet verified against sources';
+  return `This page was ${when} and may be out of date. Please help re-check its facts against current sources and the live ledger.`;
 }

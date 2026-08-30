@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isStale, daysSince, freshnessMessage, DEFAULT_MAX_AGE_DAYS } from '../dist/freshness.js';
+import { isStale, daysSince, freshnessNotice, DEFAULT_MAX_AGE_DAYS } from '../dist/freshness.js';
 
 const NOW = Date.UTC(2026, 7, 30);
 const daysAgo = n => new Date(NOW - n * 86_400_000);
@@ -32,9 +32,14 @@ test('ISO strings and Date objects agree', () => {
   assert.equal(daysSince(daysAgo(7), NOW), 7);
 });
 
-test('the message distinguishes never-verified from stale', () => {
-  assert.equal(freshnessMessage({ updatedAt: daysAgo(400) }, NOW), 'not yet verified against sources');
-  assert.match(freshnessMessage({ lastVerifiedAt: daysAgo(200) }, NOW), /last verified 200 days ago/);
+test('the notice is the exact sentence both wikis shipped', () => {
+  // Published copy: an ISO date, not a day count, and the closing request.
+  assert.equal(
+    freshnessNotice({ lastVerifiedAt: new Date(Date.UTC(2026, 2, 15)) }),
+    'This page was last verified 2026-03-15 and may be out of date. '
+    + 'Please help re-check its facts against current sources and the live ledger.',
+  );
+  assert.match(freshnessNotice({ updatedAt: daysAgo(400) }), /^This page was not yet verified against sources and may be out of date\./);
 });
 
 test('now is a parameter, so two renders of one request agree', () => {
