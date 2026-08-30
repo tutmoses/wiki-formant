@@ -4,11 +4,21 @@
 # README link or a devDependency bump edits the same file, and an ungated job
 # would fail the publish with EPUBLISHCONFLICT every time.
 #
+# The job runs on EVERY push to main rather than only on package.json changes,
+# because the interesting failure is the one that used to be silent: editing
+# src/ and pushing without a version bump did nothing at all — no run, no error,
+# and npm quietly fell behind the repo. That is now a failed run that names the
+# fix. A push touching only docs, tests or this workflow still ends as a clean
+# no-op.
+#
 # Auth note: the npm account has 2FA disabled, so this uses a GRANULAR access
 # token with "bypass 2FA" enabled, held as the NPM_TOKEN repository secret.
 # That token is a publishing credential with no second factor in front of it —
-# scope it to this package alone once the package exists, and rotate it if the
-# repository's collaborator set ever changes.
+# scope it to this package alone, and rotate it if the repository's collaborator
+# set ever changes. npm removes direct publish from bypass-2FA tokens in
+# January 2027; the replacement is trusted publishing (OIDC), which needs no
+# token and which `id-token: write` below already satisfies once it is
+# configured for this package on npmjs.com.
 #
 # The trigger is deliberately push-to-main only. Never add a pull_request
 # trigger: that is the path by which a fork could run workflow code with the
@@ -19,7 +29,6 @@ name: Publish to npm
 on:
   push:
     branches: [main]
-    paths: ['package.json']
   workflow_dispatch:
 
 concurrency:
@@ -37,7 +46,10 @@ jobs:
       id-token: write
 
     steps:
+      # Full history: the bump check diffs this push against its base commit.
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -53,10 +65,31 @@ jobs:
           echo "local=$LOCAL published=$PUBLISHED"
           if [ "$LOCAL" = "$PUBLISHED" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::package.json changed but version $LOCAL is already on npm — skipping."
+            echo "::notice::Version $LOCAL is already on npm — nothing to publish."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+
+      # The silent-no-op guard. Shipping a src/ change without a version bump is
+      # almost always a mistake, and the old path filter made it invisible.
+      # Scoped to src/ deliberately: docs, tests and CI edits legitimately ship
+      # nothing, and failing those would train everyone to ignore this job.
+      - name: Refuse a src change that ships nowhere
+        if: github.event_name == 'push' && steps.check.outputs.changed == 'false'
+        run: |
+          BEFORE="${{ github.event.before }}"
+          # A new branch or a force-push leaves no usable base. Skip rather than
+          # guess: a false failure here blocks an innocent push.
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "::notice::No usable base commit — skipping the bump check."
+            exit 0
+          fi
+          if git diff --name-only "$BEFORE" "${{ github.sha }}" | grep -q '^src/'; then
+            echo "::error::src/ changed but package.json still says $(jq -r .version package.json), which is already on npm. Bump the version in the same commit, or these changes ship nowhere."
+            exit 1
+          fi
+          echo "::notice::No src/ changes in this push — nothing to publish is correct."
 
       # Build and test explicitly rather than leaning on prepublishOnly, so a
       # failure lands before the credential is ever in scope and reports as its
