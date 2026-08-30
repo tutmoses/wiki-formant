@@ -11,3 +11,6 @@ export * from './entities.js';
 export * from './http.js';
 export * from './pagination.js';
 export * from './versioning.js';
+export * from './rate-limit.js';
+export * from './analytics.js';
+export * from './blocks.js';

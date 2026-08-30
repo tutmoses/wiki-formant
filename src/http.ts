@@ -50,12 +50,22 @@ export function textHeaders(
  * Headers for a markdown twin. Separate from `textHeaders` because the twin is
  * addressed per page and carries its own `Last-Modified`, and because a client
  * that asked for `.md` should not be handed `text/plain`.
+ *
+ * `lastModified` is optional because not every corpus has a row timestamp to
+ * offer, and a twin that stamps the epoch is worse than one that stamps
+ * nothing. `extra` carries whatever the mount needs on top — an `X-Robots-Tag`
+ * where the twin is a second public URL with no canonical of its own.
  */
-export function markdownHeaders(lastModified: string, maxAge = 3600): Record<string, string> {
+export function markdownHeaders(
+  lastModified?: string | null,
+  opts: { maxAge?: number; extra?: Record<string, string> } = {},
+): Record<string, string> {
+  const maxAge = opts.maxAge ?? 3600;
   return {
     'Content-Type': 'text/markdown; charset=utf-8',
     'Cache-Control': `public, s-maxage=${maxAge}, stale-while-revalidate=${maxAge * 24}`,
-    'Last-Modified': lastModified,
+    ...(lastModified ? { 'Last-Modified': lastModified } : {}),
+    ...opts.extra,
   };
 }
 

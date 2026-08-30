@@ -82,15 +82,28 @@ export interface TaxonomyConfig {
   alphaIndexMinPages?: number;
 }
 
-/** Default: `/{tagPath}?sort=…&{facet}=…&letter=…`. Override for a prefixed mount. */
-export function defaultHref(tagPath: string, state: CategoryState): string {
-  const params = new URLSearchParams();
-  if (state.sort) params.set('sort', state.sort);
-  for (const [key, value] of Object.entries(state.filters ?? {})) params.set(key, value);
-  if (state.letter) params.set('letter', state.letter);
-  const query = params.toString();
-  return `/${tagPath}${query ? `?${query}` : ''}`;
+/**
+ * `{prefix}/{tagPath}?sort=…&{facet}=…&letter=…` — the URL contract every chip,
+ * letter and infobox row builds through, so a filtered view has exactly one
+ * address. `prefix` is the mount point: `''` for categories at the root,
+ * `'/wiki'` for a wiki hanging off a larger site.
+ */
+export function hrefBuilder(prefix = ''): (tagPath: string, state: CategoryState) => string {
+  return (tagPath, state) => {
+    const params = new URLSearchParams();
+    if (state.sort) params.set('sort', state.sort);
+    for (const [key, value] of Object.entries(state.filters ?? {})) params.set(key, value);
+    if (state.letter) params.set('letter', state.letter);
+    const query = params.toString();
+    // Trailing slash trimmed so a prefixed mount's root is `/wiki`, not
+    // `/wiki/`; the root mount's own root stays `/`.
+    const path = `${prefix}/${tagPath}`.replace(/\/$/, '') || '/';
+    return `${path}${query ? `?${query}` : ''}`;
+  };
 }
+
+/** Categories mounted at the root. */
+export const defaultHref = hrefBuilder();
 
 export const DEFAULT_ALPHA_INDEX_MIN_PAGES = 40;
 

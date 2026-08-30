@@ -1,7 +1,7 @@
 {
   "name": "wiki-formant",
-  "version": "0.1.4",
-  "description": "The portable half of a wiki: derived taxonomy, a spec-correct MCP transport, markdown twins, and the conditional-GET plumbing agent surfaces need. Zero runtime dependencies.",
+  "version": "0.2.0",
+  "description": "The portable half of a wiki: derived taxonomy, a spec-correct MCP transport, markdown twins, block rendering, rate limiting, and the conditional-GET plumbing agent surfaces need. Zero runtime dependencies.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -16,7 +16,9 @@
     "model-context-protocol",
     "llms-txt",
     "markdown",
-    "agent"
+    "agent",
+    "rate-limit",
+    "plausible"
   ],
   "sideEffects": false,
   "exports": {
@@ -47,6 +49,18 @@
     "./versioning": {
       "types": "./dist/versioning.d.ts",
       "import": "./dist/versioning.js"
+    },
+    "./rate-limit": {
+      "types": "./dist/rate-limit.d.ts",
+      "import": "./dist/rate-limit.js"
+    },
+    "./analytics": {
+      "types": "./dist/analytics.d.ts",
+      "import": "./dist/analytics.js"
+    },
+    "./blocks": {
+      "types": "./dist/blocks.d.ts",
+      "import": "./dist/blocks.js"
     }
   },
   "files": [
