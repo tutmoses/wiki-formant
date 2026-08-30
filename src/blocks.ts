@@ -54,6 +54,12 @@ export interface BlockTreeOptions<B> {
    * for a leaf. An infobox is one group; a columns block is one per column.
    */
   containers?: (block: B) => B[][] | null;
+  /**
+   * What joins blocks *inside* a container. Defaults to a blank line, which is
+   * what markdown needs between paragraphs. Plain-text extraction passes a
+   * single newline: it is flattening for a reader, not typesetting.
+   */
+  groupSeparator?: string;
 }
 
 /**
@@ -62,15 +68,15 @@ export interface BlockTreeOptions<B> {
  * needs the sentences adjacent, not interleaved.
  */
 export function renderBlockTree<B>(blocks: readonly B[], opts: BlockTreeOptions<B>): string {
-  const { atomic, containers } = opts;
+  const { atomic, containers, groupSeparator = '\n\n' } = opts;
   return blocks
     .map(block => {
       const groups = containers?.(block);
       if (!groups) return atomic(block);
       return groups
-        .map(group => group.map(atomic).filter(Boolean).join('\n\n'))
+        .map(group => group.map(atomic).filter(Boolean).join(groupSeparator))
         .filter(Boolean)
-        .join('\n\n');
+        .join(groupSeparator);
     })
     .filter(Boolean)
     .join('\n\n')
