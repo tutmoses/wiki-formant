@@ -47,6 +47,24 @@ Four behaviours worth knowing, because each replaces a plausible wrong answer:
 
 One `href` builder is passed in and used by every chip, letter and sort button. A sort button that drops the active filters is the tell that a project grew a second one.
 
+## Headings
+
+Heading ids, permalink anchors, and the list an "on this page" rail renders — one pass over the HTML you already have.
+
+```ts
+import { injectHeadingIds, headingsFrom } from 'wiki-formant/headings';
+
+const html = injectHeadingIds(page.body);   // ids + anchors, idempotent
+const toc  = headingsFrom(html);            // [{ id, text, level }]
+```
+
+Two behaviours worth knowing:
+
+- **The slug rule is a parameter.** A heading id is a live URL — readers link to `#the-shape-of-a-code`, and so does the page's own permalink anchor. The two wikis this was lifted from had drifted onto different rules, and unifying them would have silently moved every published anchor on whichever one lost. Pass `slug` to keep the rule you already ship.
+- **Deduping is not a parameter.** Two headings with the same text otherwise mint the same id twice, and every link to the second lands on the first. The copy that lacked it had that bug.
+
+`headingsFrom` reads the string, not the rendered DOM — possible only where the body IS a string at render time. A wiki whose content streams in as blocks after mount has to query the DOM, and uses only the injector.
+
 ## MCP
 
 A minimal [Model Context Protocol](https://modelcontextprotocol.io) server over Streamable HTTP, with the transport edges most implementations get wrong.
@@ -135,6 +153,7 @@ export async function GET(request: Request) {
 | Export | From |
 |---|---|
 | `createTaxonomy`, `defaultHref`, `firstLetter`, `toggleFilter` | `wiki-formant/taxonomy` |
+| `injectHeadingIds`, `headingsFrom`, `slugifyHeading` | `wiki-formant/headings` |
 | `mcpResponse`, `mcpGet`, `mcpOptions`, `handleMcp`, `withMcpCors`, `McpToolError`, `MCP_CORS`, `MCP_PROTOCOL_VERSION` | `wiki-formant/mcp` |
 | `htmlToMarkdown`, `inlineToMarkdown`, `tableToMarkdown`, `frontmatter`, `markdownDocument`, `decodeEntities` | `wiki-formant/markdown` |
 | `corpusEtag`, `notModified`, `textHeaders`, `markdownHeaders`, `cleanSnippet`, `pageLine` | `wiki-formant/http` |

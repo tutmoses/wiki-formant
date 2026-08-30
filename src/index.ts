@@ -6,6 +6,7 @@
 
 export * from './taxonomy.js';
 export * from './mcp.js';
+export * from './headings.js';
 export * from './markdown.js';
 export * from './entities.js';
 export * from './http.js';

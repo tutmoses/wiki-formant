@@ -1,6 +1,6 @@
 {
   "name": "wiki-formant",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "The portable half of a wiki: derived taxonomy, a spec-correct MCP transport, markdown twins, block rendering, rate limiting, and the conditional-GET plumbing agent surfaces need. Zero runtime dependencies.",
   "type": "module",
   "license": "MIT",
@@ -33,6 +33,10 @@
     "./mcp": {
       "types": "./dist/mcp.d.ts",
       "import": "./dist/mcp.js"
+    },
+    "./headings": {
+      "types": "./dist/headings.d.ts",
+      "import": "./dist/headings.js"
     },
     "./markdown": {
       "types": "./dist/markdown.d.ts",
