@@ -139,3 +139,16 @@ test('no shared axis means no heading link', () => {
   assert.equal(pages.length, 1, 'siblings are still listed');
   assert.equal(sharedFacet, null, 'but nothing is claimed about why');
 });
+
+test('a project may declare key types this module has never heard of', () => {
+  // One consumer declares 'user' and 'resource_address'. The module only ever
+  // acts on 'select', so enumerating the rest would reject valid consumers.
+  const exotic = createTaxonomy({
+    getMetadataKeys: () => [
+      { key: 'owner', label: 'Owner', type: 'user' },
+      { key: 'vault', label: 'Vault', type: 'resource_address' },
+      { key: 'status', label: 'Status', type: 'select', options: ['A', 'B'] },
+    ],
+  });
+  assert.deepEqual(exotic.facetKeys('anything').map(k => k.key), ['status']);
+});

@@ -13,11 +13,22 @@
 // other a flat category list — so the tree itself is NOT in this module. Supply
 // `getMetadataKeys(tagPath)` and a `href` builder and the rest follows.
 
+/**
+ * The known key types, kept open. `'select'` is the only one this module acts
+ * on — it is what makes a key a facet — and every other value is opaque here.
+ *
+ * Enumerating the rest would be the same mistake as a shared block-type list:
+ * each project owns its own key set, and one of them already declares `'user'`
+ * and `'resource_address'`. The `(string & {})` arm keeps editor completion for
+ * the common four while accepting any project's additions.
+ */
+export type MetadataKeyType = 'text' | 'date' | 'url' | 'select' | (string & {});
+
 /** A metadata key a tag path declares. Only `select` keys become facets. */
 export interface MetadataKeyDefinition {
   key: string;
   label: string;
-  type: 'text' | 'date' | 'url' | 'select';
+  type: MetadataKeyType;
   options?: string[];
 }
 
