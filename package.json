@@ -83,6 +83,10 @@
     "./text": {
       "types": "./dist/text.d.ts",
       "import": "./dist/text.js"
+    },
+    "./validation": {
+      "types": "./dist/validation.d.ts",
+      "import": "./dist/validation.js"
     }
   },
   "files": [
