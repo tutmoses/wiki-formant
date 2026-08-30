@@ -1,0 +1,138 @@
+// well-known.ts — the descriptors an agent finds before it knows anything else
+// about an origin: the A2A Agent Card and the MCP registry's domain proof.
+//
+// All three apps here serve both, and all three had written them out. The
+// registry-auth handler was identical bar a domain named in a comment; the
+// agent cards shared an envelope, a skills mapping and a cache header, and
+// differed only in the fields a card is *supposed* to differ in.
+//
+// Nothing here touches a framework: these return plain values, and the caller
+// wraps them in whatever its router wants. That keeps this package free of a
+// Next dependency and keeps each app's route a two-liner.
+
+// ---- MCP registry domain proof ---------------------------------------------
+
+export interface RegistryAuthRecord {
+  body: string;
+  contentType: string;
+  cacheControl: string;
+}
+
+/**
+ * The `v=MCPv1` record the official MCP registry fetches from
+ * `/.well-known/mcp-registry-auth` to prove domain ownership. `mcp-publisher
+ * login http --domain=<host>` checks the key here against the private key
+ * signing the login, which is what grants publish rights over the reversed-
+ * domain namespace the server's name sits in.
+ *
+ * Returns null when no key is configured, so the caller can 404 rather than
+ * serve a malformed record — a missing key should read as "not configured",
+ * not as a verification failure nobody can explain.
+ *
+ * The key material belongs in an env var rather than the repo: the public half
+ * is harmless to serve but pointless to commit, and keeping it out gives the
+ * private half an obvious home too (a keychain, never git).
+ *
+ *   openssl genpkey -algorithm Ed25519 -out key.pem
+ *   openssl pkey -in key.pem -pubout -outform DER | tail -c 32 | base64
+ */
+export function registryAuthRecord(publicKey?: string, keyType?: string): RegistryAuthRecord | null {
+  if (!publicKey) return null;
+  return {
+    // ed25519 unless a P-384 key was used instead (the LibreSSL-friendly path).
+    body: `v=MCPv1; k=${keyType || 'ed25519'}; p=${publicKey}\n`,
+    contentType: 'text/plain; charset=utf-8',
+    cacheControl: 'no-store',
+  };
+}
+
+// ---- A2A Agent Card ---------------------------------------------------------
+
+/** A day at the edge, a week stale-while-revalidate. A card changes rarely. */
+export const AGENT_CARD_CACHE_CONTROL = 'public, s-maxage=86400, stale-while-revalidate=604800';
+
+export interface AgentSkill {
+  id: string;
+  name: string;
+  description: string;
+  tags: string[];
+  examples?: string[];
+  authentication?: unknown;
+}
+
+/** The shape a tool needs to carry to become a skill. */
+export interface SkillSource {
+  name: string;
+  description: string;
+  skill?: { id: string; tags: string[]; examples?: string[] } | undefined;
+  auth?: unknown;
+}
+
+/**
+ * Skills derived from the MCP tool manifest, so a card can never advertise a
+ * capability the server does not have. `search_pages` becomes "Search Pages".
+ */
+export function skillsFromTools(tools: readonly SkillSource[]): AgentSkill[] {
+  return tools
+    .filter(t => t.skill)
+    .map(t => ({
+      id: t.skill!.id,
+      name: t.name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+      description: t.description,
+      tags: t.skill!.tags,
+      ...(t.skill!.examples ? { examples: t.skill!.examples } : {}),
+      ...(t.auth ? { authentication: t.auth } : {}),
+    }));
+}
+
+export interface AgentCardLicense {
+  name: string;
+  url: string;
+  spdx?: string;
+  /** What the licence covers, e.g. `'content'`. */
+  scope?: string;
+}
+
+export interface AgentCardConfig {
+  name: string;
+  description: string;
+  /** Origin, no trailing slash. Every derived URL below hangs off it. */
+  url: string;
+  version: string;
+  skills: AgentSkill[];
+  license?: AgentCardLicense;
+  /** Defaults to `name`. */
+  organization?: string;
+  /** Defaults to `${url}/llms.txt`. */
+  documentationUrl?: string;
+  /** Defaults to `${url}/api/mcp`. Pass null for an origin with no MCP server. */
+  mcpEndpoint?: string | null;
+  /** Anything this origin advertises that the others do not. */
+  extra?: Record<string, unknown>;
+}
+
+/**
+ * An A2A Agent Card. Serve the same object at both `/.well-known/agent.json`
+ * and `/.well-known/agent-card.json`: v0.3 renamed the path and defined no
+ * fallback in either direction, so a spec-current client probes only the new
+ * one and a client on an older SDK probes only the old one. Serving one path
+ * means half the callers conclude the origin has no agent at all.
+ */
+export function agentCard(config: AgentCardConfig): Record<string, unknown> {
+  const { name, description, url, version, skills, license, organization, documentationUrl, mcpEndpoint, extra } = config;
+  return {
+    name,
+    description,
+    url,
+    version,
+    capabilities: { streaming: false, pushNotifications: false },
+    skills,
+    provider: { organization: organization ?? name, url },
+    documentationUrl: documentationUrl ?? `${url}/llms.txt`,
+    ...(mcpEndpoint === null ? {} : { mcpEndpoint: mcpEndpoint ?? `${url}/api/mcp` }),
+    ...(license ? { license } : {}),
+    ...extra,
+    defaultInputModes: ['text/plain', 'application/json'],
+    defaultOutputModes: ['text/plain', 'application/json', 'text/markdown'],
+  };
+}

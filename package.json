@@ -87,6 +87,14 @@
     "./validation": {
       "types": "./dist/validation.d.ts",
       "import": "./dist/validation.js"
+    },
+    "./well-known": {
+      "types": "./dist/well-known.d.ts",
+      "import": "./dist/well-known.js"
+    },
+    "./conformance": {
+      "types": "./dist/conformance.d.ts",
+      "import": "./dist/conformance.js"
     }
   },
   "files": [
