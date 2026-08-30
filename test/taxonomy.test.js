@@ -152,3 +152,24 @@ test('a project may declare key types this module has never heard of', () => {
   });
   assert.deepEqual(exotic.facetKeys('anything').map(k => k.key), ['status']);
 });
+
+test('metadataRows keeps schema order, drops empty keys, links only facets', () => {
+  const rows = tx.metadataRows('ecosystem', {
+    metadata: { category: 'DeFi', status: '  ', website: 'example.com' },
+  });
+  assert.deepEqual(
+    rows.map(r => [r.key, r.value, r.href]),
+    [
+      ['category', 'DeFi', '/ecosystem?category=DeFi'],
+      // A `url` is declared but not `select`, so it carries no facet href — the
+      // host formats it. A row that linked every key would send the reader to a
+      // filtered set that does not exist.
+      ['website', 'example.com', undefined],
+    ],
+  );
+});
+
+test('metadataRows is empty for a tag path with no schema', () => {
+  assert.deepEqual(tx.metadataRows('flat', { metadata: { category: 'DeFi' } }), []);
+  assert.deepEqual(tx.metadataRows('ecosystem', {}), []);
+});

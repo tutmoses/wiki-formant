@@ -58,6 +58,24 @@ export interface RelatedRanking<T> {
   sharedFacet: SharedFacet | null;
 }
 
+/**
+ * One row of a page's facts panel: a declared key that carries a value, in
+ * schema order. `href` is set exactly when the key is a facet — a `select`
+ * value is precisely a set the category view already filters and counts, so the
+ * row is the way into that set rather than dead text.
+ *
+ * Rows, not markup: the three wikis this was lifted from render the same
+ * selection three ways (an HTML `<table>` string folded into a block, a React
+ * `<aside>`, a markdown twin), and they differ only in how a value is
+ * *formatted* — a `url` gets an external link here, a shortened display there.
+ * What they had all rebuilt, and had already begun to disagree about, is which
+ * keys appear and where each one links.
+ */
+export interface MetadataRow extends MetadataKeyDefinition {
+  value: string;
+  href?: string;
+}
+
 /** State a category URL can carry. `href` receives this and owns the format. */
 export interface CategoryState {
   sort?: string;
@@ -140,6 +158,8 @@ export interface Taxonomy {
     letter?: string,
   ) => Facet[];
   alphaIndex: <T extends FacetablePage>(pages: T[], filters: FacetFilters) => FacetValue[];
+  /** A page's populated metadata keys as facts-panel rows, facet values linked. */
+  metadataRows: (tagPath: string, page: { metadata?: unknown }) => MetadataRow[];
   /** Whether a set has outgrown a grid and needs the A–Z index. */
   needsAlphaIndex: (pageCount: number) => boolean;
   href: (tagPath: string, state: CategoryState) => string;
@@ -217,6 +237,23 @@ export function createTaxonomy(config: TaxonomyConfig): Taxonomy {
           .map(([value, count]) => ({ value, count }))
           .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
         return [{ key: key.key, label: key.label.replace(/:$/, ''), values }];
+      });
+    },
+
+    metadataRows(tagPath, page) {
+      const facets = new Set(facetKeys(tagPath).map(k => k.key));
+      return config.getMetadataKeys(tagPath).flatMap(key => {
+        const value = metaValue(page as FacetablePage, key.key);
+        if (!value) return [];
+        return [
+          {
+            ...key,
+            value,
+            ...(facets.has(key.key)
+              ? { href: href(tagPath, { filters: { [key.key]: value } }) }
+              : {}),
+          },
+        ];
       });
     },
 
