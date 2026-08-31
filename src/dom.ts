@@ -132,3 +132,79 @@ export function sizeTweetEmbeds(root: ParentNode, height: number): void {
     (iframe as HTMLIFrameElement).style.height = `${height}px`;
   }
 }
+
+// ---- tab groups -------------------------------------------------------------
+
+export interface TabGroupClassNames {
+  list?: string;
+  panels?: string;
+  button?: string;
+  panel?: string;
+  /** Added to the open button and its panel. */
+  active?: string;
+}
+
+/**
+ * Turn stored `[data-tabs]` markup into a working tab group.
+ *
+ * The editor stores tabs as nested `[data-tab-item]` divs, which is the right
+ * thing to persist — it survives a markdown twin, a plain-HTML render and a
+ * reader with JavaScript off, which all show every tab's content in order.
+ * Making one of them pressable is a reader-side job, and it belongs beside the
+ * other passes rather than inside a component: it is the same shape as the copy
+ * buttons, and the second wiki to render tabs would otherwise write it again.
+ *
+ * Idempotent via `data-tabs-init`, so a re-render does not rebuild the group and
+ * silently reset it to the first tab.
+ */
+export function activateTabGroups(root: ParentNode, classNames: TabGroupClassNames = {}): void {
+  const {
+    list = 'tabs-list',
+    panels = 'tabs-panels',
+    button = 'tab-button',
+    panel = 'tab-panel',
+    active = 'active',
+  } = classNames;
+
+  for (const group of Array.from(root.querySelectorAll('[data-tabs]:not([data-tabs-init])'))) {
+    const items = group.querySelectorAll('[data-tab-item]');
+    if (!items.length) continue;
+    group.setAttribute('data-tabs-init', '');
+
+    const tabList = document.createElement('div');
+    tabList.className = list;
+    tabList.setAttribute('role', 'tablist');
+    const tabPanels = document.createElement('div');
+    tabPanels.className = panels;
+
+    items.forEach((item, i) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = i === 0 ? `${button} ${active}` : button;
+      btn.setAttribute('role', 'tab');
+      btn.setAttribute('aria-selected', String(i === 0));
+      btn.textContent = item.getAttribute('data-tab-title') || `Tab ${i + 1}`;
+      btn.onclick = () => {
+        for (const b of Array.from(tabList.children)) {
+          b.classList.remove(active);
+          b.setAttribute('aria-selected', 'false');
+        }
+        for (const p of Array.from(tabPanels.children)) p.classList.remove(active);
+        btn.classList.add(active);
+        btn.setAttribute('aria-selected', 'true');
+        tabPanels.children[i]?.classList.add(active);
+      };
+      tabList.appendChild(btn);
+
+      const body = document.createElement('div');
+      body.className = i === 0 ? `${panel} ${active}` : panel;
+      body.setAttribute('role', 'tabpanel');
+      body.innerHTML = item.innerHTML;
+      tabPanels.appendChild(body);
+    });
+
+    group.innerHTML = '';
+    group.appendChild(tabList);
+    group.appendChild(tabPanels);
+  }
+}
