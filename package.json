@@ -1,7 +1,7 @@
 {
   "name": "wiki-formant",
-  "version": "0.6.0",
-  "description": "The portable half of a wiki: derived taxonomy with pressable facet controls, a spec-correct MCP transport, markdown twins, block rendering, link normalisation, freshness, rate limiting, a collapsible sidebar, typeahead and hover-preview hooks, editor nodes, and the conditional-GET plumbing agent surfaces need.",
+  "version": "0.7.0",
+  "description": "The portable half of a wiki: derived taxonomy with pressable facet controls, a spec-correct MCP transport, markdown twins, block rendering, link normalisation, freshness, rate limiting, a collapsible sidebar, typeahead and hover-preview hooks, editor nodes, server-side analytics for both the agent and human lanes, and the conditional-GET plumbing agent surfaces need.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -23,6 +23,7 @@
     "freshness",
     "facets-ui",
     "typeahead",
+    "search-analytics",
     "tiptap"
   ],
   "sideEffects": false,

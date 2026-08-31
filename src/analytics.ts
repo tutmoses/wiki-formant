@@ -1,10 +1,15 @@
-// analytics.ts — server-side Plausible events for agent surfaces.
+// analytics.ts — server-side Plausible events for a wiki's agent and human lanes.
 //
 // The proxy counts an "AI Bot Visit" by matching user agents, which cannot see
 // inside a JSON-RPC envelope. So an MCP call is only countable by tool name at
 // the route, and that extraction — from a body that is untrusted and may be a
 // batch — is the part worth sharing. Every wiki in the workspace had its own
 // copy of it, differing only in the default hostname.
+//
+// `searchQueryProps` is the human-side twin: the same shape problem, from the
+// other direction. A search box is untrusted free text on every wiki, and the
+// normalisation that makes it aggregatable — and keeps an empty field from
+// firing an event — is the part worth sharing rather than re-deriving.
 //
 // Deferral stays with the caller: `after()` in a route handler,
 // `event.waitUntil` in a proxy. Both are framework calls, and importing one
@@ -85,6 +90,44 @@ export function mcpCallProps(
   const tool = typeof first?.params?.name === 'string' ? first.params.name : undefined;
   const ua = (request.headers.get('user-agent') || 'unknown').slice(0, 80);
   return { ...(server ? { server } : {}), method, ...(tool ? { tool } : {}), ua };
+}
+
+export interface SearchQueryInput {
+  /** The settled query the typeahead debounce actually dispatched. */
+  query: string;
+  /** How many rows came back. Zero is the interesting case. */
+  results: number;
+  /** Which search box, when a site has more than one. */
+  surface?: string;
+}
+
+/**
+ * Props for a "Search Query" event — the human-side twin of `mcpCallProps`.
+ *
+ * A wiki instruments its agent surface and then counts every question an agent
+ * asks while recording none of the questions a person asks. The queries that
+ * return nothing are the valuable ones: they name a gap in the corpus in the
+ * reader's own words, which is otherwise only ever guessed at.
+ *
+ * Returns `null` for a query with no content, so an empty field cannot fire an
+ * event. The text is untrusted, so it is collapsed, lowercased for aggregation
+ * and truncated — the same 64-character bound search itself applies, which
+ * keeps the prop and the query that produced it the same string.
+ */
+export function searchQueryProps({
+  query,
+  results,
+  surface,
+}: SearchQueryInput): Record<string, string> | null {
+  const q = (query ?? '').replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 64);
+  if (!q) return null;
+  return {
+    q,
+    // A string because Plausible props are strings; `results == "0"` is the
+    // filter that yields the gap list.
+    results: String(Math.max(0, Math.trunc(results) || 0)),
+    ...(surface ? { surface } : {}),
+  };
 }
 
 /** The hostname of a site URL, for the `domain` a Plausible property is filed under. */

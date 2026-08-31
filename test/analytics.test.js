@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mcpCallProps, plausibleDomain } from '../dist/analytics.js';
+import { mcpCallProps, plausibleDomain, searchQueryProps } from '../dist/analytics.js';
 
 const req = (headers = {}, url = 'https://x.test/api/mcp') => ({
   url,
@@ -58,4 +58,39 @@ test('the domain is the hostname, and a bad URL falls back rather than throwing'
   assert.equal(plausibleDomain('https://radix.wiki/some/path', 'fallback.test'), 'radix.wiki');
   assert.equal(plausibleDomain(undefined, 'https://caper.network'), 'caper.network');
   assert.equal(plausibleDomain('not a url', 'acuiq.com'), 'acuiq.com');
+});
+
+test('a search query is normalised so the same question aggregates as one row', () => {
+  assert.deepEqual(searchQueryProps({ query: '  How   Do I  Vote ', results: 3 }), {
+    q: 'how do i vote',
+    results: '3',
+  });
+});
+
+test('a zero-result query is recorded, because that is the row worth having', () => {
+  const props = searchQueryProps({ query: 'how do i get my money out', results: 0 });
+  assert.equal(props.results, '0');
+  assert.equal(props.q, 'how do i get my money out');
+});
+
+test('an empty or whitespace-only field cannot fire an event', () => {
+  assert.equal(searchQueryProps({ query: '', results: 0 }), null);
+  assert.equal(searchQueryProps({ query: '   ', results: 0 }), null);
+  assert.equal(searchQueryProps({ query: undefined, results: 0 }), null);
+});
+
+test('the query is bounded to the same 64 characters search itself applies', () => {
+  const props = searchQueryProps({ query: 'a'.repeat(500), results: 1 });
+  assert.equal(props.q.length, 64);
+});
+
+test('the surface is recorded only when a site names one', () => {
+  assert.equal('surface' in searchQueryProps({ query: 'x', results: 1 }), false);
+  assert.equal(searchQueryProps({ query: 'x', results: 1, surface: 'wiki' }).surface, 'wiki');
+});
+
+test('a nonsense result count cannot leave a nonsense prop', () => {
+  assert.equal(searchQueryProps({ query: 'x', results: -4 }).results, '0');
+  assert.equal(searchQueryProps({ query: 'x', results: 2.7 }).results, '2');
+  assert.equal(searchQueryProps({ query: 'x', results: NaN }).results, '0');
 });

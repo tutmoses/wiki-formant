@@ -220,6 +220,30 @@ The ones that take config take it because that is exactly where the two copies d
 
 `createTabs` returns `TabGroup` and `TabItem` together: `tabGroup`'s content expression is `tabItem+`, so registering one without the other leaves a node type the schema cannot satisfy. A pasted short map link inserts immediately with `about:blank` and swaps its `src` when the redirect resolves — pasting must not block on a network hop, and the node has to exist for the reader to see anything happen.
 
+## Analytics
+
+Two lanes, one events helper. `mcpCallProps` reads a tool name out of a JSON-RPC
+envelope that is untrusted and may be a batch; `searchQueryProps` normalises a
+search box's free text so the same question aggregates as one row. Sending stays
+with the caller — `plausibleEvent` builds the request, and the framework's own
+deferral (`after()` in a route or server action, `event.waitUntil` in a proxy)
+decides when it goes, so this package keeps its zero-dependency guarantee.
+
+```ts
+const props = searchQueryProps({ query, results: rows.length, surface: 'wiki' });
+// null for an empty field, so a blank search cannot fire an event
+if (props) after(() => plausibleEvent({ domain }, 'Search Query', url, props, headers, {
+  // a person triggered this, so it joins their session rather than landing
+  // as the fixed bot-tracker pseudo-visitor
+  userAgent: headers.get('user-agent') ?? undefined,
+}));
+```
+
+Instrumenting the agent lane and not the human one is the easy mistake: it
+leaves a wiki able to say what every crawler asked for and nothing about what
+its readers asked for. The queries that return zero rows are the valuable ones —
+they name a gap in the corpus in the reader's own words.
+
 ## API
 
 | Export | From |
@@ -231,6 +255,7 @@ The ones that take config take it because that is exactly where the two copies d
 | `corpusEtag`, `notModified`, `textHeaders`, `markdownHeaders`, `cleanSnippet`, `pageLine` | `wiki-formant/http` |
 | `parsePagination`, `paginatedResponse`, `toOffset` | `wiki-formant/pagination` |
 | `parseVersion`, `formatVersion`, `incrementVersion`, `bump`, `compareVersions` | `wiki-formant/versioning` |
+| `plausibleEvent`, `mcpCallProps`, `searchQueryProps`, `plausibleDomain` | `wiki-formant/analytics` |
 | `useCollapsibleSidebar`, `SidebarProvider`, `useSidebar`, `TableOfContents`, `useTypeahead`, `useLinkPreview`, `useClickOutside` | `wiki-formant/react` |
 | `resolveSidebarOpen`, `sidebarBootScript`, `SIDEBAR_ATTRIBUTE` | `wiki-formant/sidebar` |
 | `addCopyButtons`, `activateTabGroups`, `tweetEmbedSrc`, `onTweetResize`, `hydrateTweetEmbeds`, `sizeTweetEmbeds`, `TWITTER_ORIGIN` | `wiki-formant/dom` |
