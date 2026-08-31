@@ -173,3 +173,75 @@ test('metadataRows is empty for a tag path with no schema', () => {
   assert.deepEqual(tx.metadataRows('flat', { metadata: { category: 'DeFi' } }), []);
   assert.deepEqual(tx.metadataRows('ecosystem', {}), []);
 });
+
+// ---- controls ---------------------------------------------------------------
+// The rows a view renders. Each case pins a defect one of the three wikis had
+// shipped from rebuilding this arithmetic locally.
+
+const many = Array.from({ length: 45 }, (_, i) =>
+  page(`${String.fromCharCode(65 + (i % 26))}page${i}`, { category: i % 2 ? 'DeFi' : 'Gaming' }),
+);
+
+test('facetControls carries the active letter and sort through every chip', () => {
+  const [facet] = tx.facetControls('ecosystem', PAGES, {
+    sort: 'title',
+    filters: { status: 'Active' },
+    letter: 'A',
+  });
+  const chip = facet.options[0];
+  // A chip that rebuilt the URL from its own axis alone drops the other two.
+  assert.match(chip.href, /sort=title/);
+  assert.match(chip.href, /letter=A/);
+});
+
+test('facetControls marks the active chip and makes it its own off-switch', () => {
+  const groups = tx.facetControls('ecosystem', PAGES, { filters: { category: 'DeFi' } });
+  const category = groups.find(g => g.key === 'category');
+  const active = category.options.find(o => o.value === 'DeFi');
+  assert.equal(active.active, true);
+  // Pressing the active chip clears the axis rather than re-setting it.
+  assert.doesNotMatch(active.href, /category=DeFi/);
+});
+
+test('alphaControls leads with a reset control', () => {
+  const controls = tx.alphaControls('ecosystem', many, {});
+  assert.equal(controls[0].reset, true);
+  assert.equal(controls[0].label, 'All');
+  assert.equal(controls[0].active, true);
+  // Counted over the whole filtered set, not over one bucket.
+  assert.equal(controls[0].count, many.length);
+});
+
+test('alphaControls is empty below the index threshold', () => {
+  // The set still fits on a screen; an index would be chrome with no job.
+  assert.deepEqual(tx.alphaControls('ecosystem', PAGES, {}), []);
+});
+
+test('alphaControls re-press clears the letter, and the reset goes inactive', () => {
+  const controls = tx.alphaControls('ecosystem', many, { letter: 'B' });
+  const b = controls.find(c => c.value === 'B');
+  assert.equal(b.active, true);
+  assert.doesNotMatch(b.href, /letter=/);
+  assert.equal(controls[0].active, false);
+});
+
+test('alphaControls keeps the active filters on every letter', () => {
+  const controls = tx.alphaControls('ecosystem', many, { filters: { category: 'DeFi' } });
+  for (const c of controls) assert.match(c.href, /category=DeFi/);
+});
+
+test('resolveLetter drops a letter with no bucket, so the grid is never blank', () => {
+  assert.equal(tx.resolveLetter(many, {}, 'B'), 'B');
+  // `?letter=Q` on a set holding no Q would otherwise empty the grid with
+  // nothing marked active to explain why.
+  assert.equal(tx.resolveLetter([page('Alpha', {})], {}, 'Q'), undefined);
+  assert.equal(tx.resolveLetter(many, {}, undefined), undefined);
+});
+
+test('controls survive destructuring off the taxonomy', () => {
+  // caper does exactly this. A method that leaned on `this` would throw here.
+  const { facetControls, alphaControls, resolveLetter } = tx;
+  assert.ok(facetControls('ecosystem', PAGES, {}).length);
+  assert.ok(alphaControls('ecosystem', many, {}).length);
+  assert.equal(resolveLetter(many, {}, 'B'), 'B');
+});

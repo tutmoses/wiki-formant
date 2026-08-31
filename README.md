@@ -47,6 +47,23 @@ Four behaviours worth knowing, because each replaces a plausible wrong answer:
 
 One `href` builder is passed in and used by every chip, letter and sort button. A sort button that drops the active filters is the tell that a project grew a second one.
 
+### The controls, not just the counts
+
+`buildFacets` and `alphaIndex` hand back numbers; something still has to turn each one into a pressable thing with a destination. That step was rebuilt in all three wikis, and by the time this was written they no longer agreed on what the row *contains*: one shipped no A–Z index at all, one had no way back to the unfiltered set, and two marked the active chip with `aria-pressed` on an `<a>` — which is not a toggle button and does not take that attribute.
+
+```ts
+const state  = { sort, filters, letter: taxonomy.resolveLetter(all, filters, query.letter) };
+const groups = taxonomy.facetControls('ecosystem', all, state);  // [{key, label, options}]
+const letters = taxonomy.alphaControls('ecosystem', all, state); // [] below the threshold
+```
+
+Every control arrives as `{value, label, count, href, active}`, its `href` already built through your one builder with **every other axis carried along** — the arithmetic that, done by hand, drops the reader's letter the first time they press a chip.
+
+- **The reset control leads the row**, flagged `reset`, so a consumer that maps the array cannot ship a narrowed view with nothing to press to widen it.
+- **`alphaControls` returns `[]` below the index threshold**, folding in `needsAlphaIndex` — one call is either the index you needed or nothing, rather than a decision each caller makes and one caller forgets.
+- **`resolveLetter` drops a letter no page starts with.** A stray `?letter=Q` would otherwise empty the grid with no control marked to explain why.
+
+
 ## Headings
 
 Heading ids, permalink anchors, and the list an "on this page" rail renders — one pass over the HTML you already have.
@@ -148,6 +165,59 @@ export async function GET(request: Request) {
 
 `parseVersion` / `bump` / `compareVersions` handle revision semver tolerantly — a page always has a version, even when the column holds `null` or junk.
 
+## React
+
+`wiki-formant/react` is the one part that needs React, so it is the one part behind its own subpath, and React is an *optional* peer. What is shared is behaviour; every class name and icon is passed in, because these wikis style their rails differently and always will.
+
+`SidebarProvider` / `useSidebar` hold the rail's collapse state — remembered across loads, defaulted from the viewport only when the reader has never chosen. Pair it with `sidebarBootScript` from `wiki-formant/sidebar` (framework-free, so a server component can stamp it into `<head>`) or a remembered-closed rail paints open and animates shut on every load. `TableOfContents` is the "on this page" list, with scroll-spy, reading either headings you already know or the rendered article.
+
+`useTypeahead` is the search field's state machine. Five surfaces across the three wikis had three implementations and no two agreed on what a search field does; this is their union, because each had a piece the others lacked:
+
+```ts
+const { query, setQuery, items, highlight, setHighlight, onKeyDown, reset } =
+  useTypeahead({ fetch: searchPages, onPick: page => router.push(page.href) });
+```
+
+- **A request-id guard**, so a slow response cannot paint over a newer one. Two of the five surfaces had none: type fast enough and you are reading results for a query you have already replaced.
+- **Keyboard navigation.** Two surfaces had none — including the header dropdown of a wiki whose search *is* its primary navigation.
+- **Abort and a per-query cache**, which only the third had. The cache is per mount, so a stale result cannot outlive the page.
+
+`fetch` must be referentially stable; it is an effect dependency. Its `signal` is optional to implement — forward it from a REST fetcher, ignore it in a server action.
+
+`useLinkPreview` is the Wikipedia-style hover card: one delegated listener rather than a component per link, which is what makes it viable over an article holding hundreds of anchors. Two wikis had written the same ninety lines — same intent delay, same grace period for the cursor to cross into the card, same clamp arithmetic, same cache. They differed in three things, and those three are the options: which anchors are eligible, what fetches a preview, and how tall the card is.
+
+`useClickOutside` is fifteen lines and was in all three. Only one had the `offsetParent` check, and without it a container hidden at the current breakpoint still answers outside-clicks — so on a phone, a tap anywhere dismisses the popover the reader is looking at, because the hidden desktop copy got there first.
+
+## Rendered-article passes
+
+`wiki-formant/dom` holds what runs against an article element after it is in the document. Not React, so not in `react.tsx`.
+
+```ts
+addCopyButtons(el);            // every <pre> gets one, once
+hydrateTweetEmbeds(el);        // placeholders get a live src
+const off = onTweetResize(h => sizeTweetEmbeds(el, h));
+```
+
+`addCopyButton` was **byte-identical** in two BlockRenderers, down to the SVG path data. Its idempotence guard now lives inside the function rather than in a `pre:not(:has(…))` at the call site, where it can be — and was — retyped.
+
+`TWITTER_ORIGIN` is written down once. It is both the embed host and the allow-list `onTweetResize` checks before believing a posted height, and it had been spelled out at four call sites across two repos. Any page can `postMessage`; only the embed host may size the embed.
+
+## Editor nodes
+
+`wiki-formant/tiptap` carries the custom nodes both wiki editors had written twice: `Iframe`, `YouTube` (the stock extension plus the paste rule it does not ship with), `TwitterEmbed`, `createMapEmbed`, `createCodeBlock` and `createTabs`. The four `@tiptap/*` packages are optional peers, so a consumer taking only the taxonomy still installs a package with no runtime dependencies.
+
+```ts
+const CodeBlock = createCodeBlock({
+  langs: CODE_LANGS, defaultLang: DEFAULT_LANG,
+  classNames: { button: 'lang-btn', option: 'lang-option', optionActive: 'text-accent' },
+  icons: { chevron: open => <ChevronDown className={open ? 'rotate-180' : ''} /> },
+});
+```
+
+The ones that take config take it because that is exactly where the two copies differed — class tokens, the language list, and the API route a shortened map URL has to be resolved through. Injecting them is what lets one wiki keep `text-jupiter` and the other `text-accent` without either forking the node, and it keeps this file from dragging an icon library in behind it.
+
+`createTabs` returns `TabGroup` and `TabItem` together: `tabGroup`'s content expression is `tabItem+`, so registering one without the other leaves a node type the schema cannot satisfy. A pasted short map link inserts immediately with `about:blank` and swaps its `src` when the redirect resolves — pasting must not block on a network hop, and the node has to exist for the reader to see anything happen.
+
 ## API
 
 | Export | From |
@@ -159,8 +229,12 @@ export async function GET(request: Request) {
 | `corpusEtag`, `notModified`, `textHeaders`, `markdownHeaders`, `cleanSnippet`, `pageLine` | `wiki-formant/http` |
 | `parsePagination`, `paginatedResponse`, `toOffset` | `wiki-formant/pagination` |
 | `parseVersion`, `formatVersion`, `incrementVersion`, `bump`, `compareVersions` | `wiki-formant/versioning` |
+| `useCollapsibleSidebar`, `SidebarProvider`, `useSidebar`, `TableOfContents`, `useTypeahead`, `useLinkPreview`, `useClickOutside` | `wiki-formant/react` |
+| `resolveSidebarOpen`, `sidebarBootScript`, `SIDEBAR_ATTRIBUTE` | `wiki-formant/sidebar` |
+| `addCopyButtons`, `tweetEmbedSrc`, `onTweetResize`, `hydrateTweetEmbeds`, `sizeTweetEmbeds`, `TWITTER_ORIGIN` | `wiki-formant/dom` |
+| `Iframe`, `YouTube`, `TwitterEmbed`, `createMapEmbed`, `createCodeBlock`, `createTabs` | `wiki-formant/tiptap` |
 
-All are also re-exported from the package root.
+Everything above `wiki-formant/react` is also re-exported from the package root. The React, sidebar, DOM and tiptap subpaths are not: they carry `'use client'` or reach for a browser global, and the root has to stay importable from a route handler.
 
 ## Licence
 

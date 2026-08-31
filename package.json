@@ -1,7 +1,7 @@
 {
   "name": "wiki-formant",
-  "version": "0.5.0",
-  "description": "The portable half of a wiki: derived taxonomy, a spec-correct MCP transport, markdown twins, block rendering, link normalisation, freshness, rate limiting, a collapsible sidebar, and the conditional-GET plumbing agent surfaces need.",
+  "version": "0.6.0",
+  "description": "The portable half of a wiki: derived taxonomy with pressable facet controls, a spec-correct MCP transport, markdown twins, block rendering, link normalisation, freshness, rate limiting, a collapsible sidebar, typeahead and hover-preview hooks, editor nodes, and the conditional-GET plumbing agent surfaces need.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -20,7 +20,10 @@
     "rate-limit",
     "plausible",
     "links",
-    "freshness"
+    "freshness",
+    "facets-ui",
+    "typeahead",
+    "tiptap"
   ],
   "sideEffects": false,
   "exports": {
@@ -103,6 +106,14 @@
     "./react": {
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js"
+    },
+    "./dom": {
+      "types": "./dist/dom.d.ts",
+      "import": "./dist/dom.js"
+    },
+    "./tiptap": {
+      "types": "./dist/tiptap.d.ts",
+      "import": "./dist/tiptap.js"
     }
   },
   "files": [
@@ -117,16 +128,37 @@
     "prepublishOnly": "npm run build && node --test 'test/*.test.js'"
   },
   "devDependencies": {
+    "@tiptap/core": "^2.10.0",
+    "@tiptap/extension-code-block": "^2.10.0",
+    "@tiptap/extension-youtube": "^2.10.0",
+    "@tiptap/pm": "^2.10.0",
+    "@tiptap/react": "^2.10.0",
     "@types/node": "^22.0.0",
-    "typescript": "^5.9.0",
+    "@types/react": "^19.0.0",
     "react": "^19.2.4",
-    "@types/react": "^19.0.0"
+    "typescript": "^5.9.0"
   },
   "peerDependencies": {
-    "react": ">=18"
+    "react": ">=18",
+    "@tiptap/core": ">=2.10",
+    "@tiptap/react": ">=2.10",
+    "@tiptap/extension-youtube": ">=2.10",
+    "@tiptap/extension-code-block": ">=2.10"
   },
   "peerDependenciesMeta": {
     "react": {
+      "optional": true
+    },
+    "@tiptap/core": {
+      "optional": true
+    },
+    "@tiptap/react": {
+      "optional": true
+    },
+    "@tiptap/extension-youtube": {
+      "optional": true
+    },
+    "@tiptap/extension-code-block": {
       "optional": true
     }
   }

@@ -38,6 +38,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent,
   type ReactNode,
 } from 'react';
 
@@ -395,4 +396,346 @@ export function TableOfContents({
       )}
     </div>
   );
+}
+
+// ---- outside clicks ---------------------------------------------------------
+
+/**
+ * Calls `onClose` on any mousedown outside the returned ref's element.
+ *
+ * The `offsetParent` check is the whole reason this is shared. All three wikis
+ * had written this hook; only one had that line, and without it a container
+ * that is `display: none` at the current breakpoint still claims outside-clicks
+ * — so a tap anywhere on a phone dismisses a popover the reader is looking at,
+ * because the hidden desktop copy of it answered first.
+ *
+ * `onClose` is an effect dependency: wrap it in `useCallback` or hoist it, or
+ * the listener is torn down and rebuilt on every render.
+ */
+export function useClickOutside<T extends HTMLElement>(onClose: () => void) {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const el = ref.current;
+      if (el && el.offsetParent !== null && !el.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+  return ref;
+}
+
+// ---- typeahead --------------------------------------------------------------
+
+export interface TypeaheadOptions<T> {
+  /**
+   * Runs the search. MUST be referentially stable — a module function, a server
+   * action, or something wrapped in `useCallback` — because it is an effect
+   * dependency and an inline arrow re-runs the search on every render.
+   *
+   * The `signal` is optional to implement: a REST fetcher should forward it, a
+   * server action simply declares one parameter and ignores it.
+   */
+  fetch: (query: string, signal: AbortSignal) => Promise<T[]>;
+  onPick: (item: T) => void;
+  /** Runs after Escape has cleared the list, for surface-level dismissal. */
+  onEscape?: () => void;
+  /** Debounce, in ms. */
+  delay?: number;
+  /** Queries shorter than this never reach `fetch`. */
+  minLength?: number;
+  /** Remember results per query for this mount. */
+  cache?: boolean;
+}
+
+export interface TypeaheadState<T> {
+  query: string;
+  setQuery: (query: string) => void;
+  debouncedQuery: string;
+  items: T[];
+  highlight: number;
+  setHighlight: (index: number) => void;
+  isSearching: boolean;
+  onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
+  /** Drop the results, keep the query. For an outside click. */
+  clearItems: () => void;
+  /** Drop everything. For a pick, or a closing popover. */
+  reset: () => void;
+}
+
+/**
+ * The debounced-search state machine behind every typeahead on these sites.
+ *
+ * Five surfaces across the three wikis had three implementations, and no two
+ * agreed on what a search field does. This is their union, because each had a
+ * piece the others were missing:
+ *
+ *   - a **request-id guard**, so a slow response cannot paint over a newer one.
+ *     Two of the five surfaces had no guard at all: type fast enough and the
+ *     results you are reading are for a query you have already replaced.
+ *   - **keyboard navigation**. Two surfaces had none — the header dropdown of a
+ *     wiki whose search is its primary navigation was mouse-only.
+ *   - **abort and a per-query cache**, which only the third had. The cache is
+ *     per mount, not module-level, so a stale result cannot outlive the page.
+ *
+ * The debounce is inlined rather than pulled from a package: this one is nine
+ * lines, and the point of the package is to have no runtime dependencies.
+ */
+export function useTypeahead<T>({
+  fetch,
+  onPick,
+  onEscape,
+  delay = 200,
+  minLength = 1,
+  cache = true,
+}: TypeaheadOptions<T>): TypeaheadState<T> {
+  const [query, setQuery] = useState('');
+  const [debounced, setDebounced] = useState('');
+  const [items, setItems] = useState<T[]>([]);
+  const [highlight, setHighlight] = useState(0);
+  const [isSearching, setIsSearching] = useState(false);
+  const requestId = useRef(0);
+  const cached = useRef(new Map<string, T[]>());
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(query), delay);
+    return () => clearTimeout(timer);
+  }, [query, delay]);
+
+  useEffect(() => {
+    const q = debounced.trim();
+    if (q.length < minLength) {
+      // Bump the id so an in-flight request for a longer query cannot land
+      // after the field has been cleared.
+      requestId.current++;
+      setItems([]);
+      setIsSearching(false);
+      return;
+    }
+
+    const hit = cache ? cached.current.get(q) : undefined;
+    if (hit) {
+      requestId.current++;
+      setItems(hit);
+      setHighlight(0);
+      setIsSearching(false);
+      return;
+    }
+
+    const id = ++requestId.current;
+    const controller = new AbortController();
+    setIsSearching(true);
+
+    fetch(q, controller.signal).then(
+      rows => {
+        if (id !== requestId.current) return;
+        if (cache) cached.current.set(q, rows);
+        setItems(rows);
+        setHighlight(0);
+        setIsSearching(false);
+      },
+      () => {
+        // An abort is the expected path for every superseded query, so it must
+        // not surface as an error. A real failure reads as "no results".
+        if (id !== requestId.current) return;
+        setItems([]);
+        setIsSearching(false);
+      },
+    );
+
+    return () => controller.abort();
+  }, [debounced, fetch, minLength, cache]);
+
+  const clearItems = useCallback(() => setItems([]), []);
+
+  const reset = useCallback(() => {
+    requestId.current++;
+    setQuery('');
+    setDebounced('');
+    setItems([]);
+    setHighlight(0);
+    setIsSearching(false);
+  }, []);
+
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      setItems([]);
+      onEscape?.();
+      return;
+    }
+    if (!items.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlight(h => (h + 1) % items.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlight(h => (h - 1 + items.length) % items.length);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const target = items[highlight];
+      if (target) onPick(target);
+    }
+  };
+
+  return {
+    query,
+    setQuery,
+    debouncedQuery: debounced,
+    items,
+    highlight,
+    setHighlight,
+    isSearching,
+    onKeyDown,
+    clearItems,
+    reset,
+  };
+}
+
+// ---- link preview -----------------------------------------------------------
+
+export interface LinkPreviewOptions<T> {
+  /**
+   * Which anchors get a card. Both wikis scope this to the article container
+   * (`a.closest('.prose-content')`) as well as testing the href, and the scope
+   * is exactly the part that differs — so the whole predicate is yours.
+   */
+  eligible: (anchor: HTMLAnchorElement) => boolean;
+  /** Resolve a preview for a href, or null for "no card". REST or server action. */
+  fetch: (href: string) => Promise<T | null>;
+  /** Must match the class on the element you spread `cardProps` onto. */
+  cardClassName?: string;
+  cardWidth?: number;
+  /** Used to decide whether the card flips above the link. */
+  cardHeight?: number;
+  /** Hover this long before fetching, in ms. */
+  showDelay?: number;
+  /** Grace period for the cursor to travel from link to card, in ms. */
+  hideDelay?: number;
+  /** Minimum gap from the viewport edge, in px. */
+  margin?: number;
+}
+
+export interface LinkPreviewState<T> {
+  /** The resolved preview, or null when no card should render. */
+  preview: T | null;
+  /** Spread onto your card element: position, and the keep-open handlers. */
+  cardProps: {
+    style: CSSProperties;
+    onMouseEnter: () => void;
+    onMouseLeave: () => void;
+  };
+}
+
+/**
+ * Wikipedia-style hover cards over a rendered article.
+ *
+ * One delegated listener on `document` rather than a component per link, which
+ * is what makes this viable over an article holding hundreds of anchors. Two
+ * wikis had written the same ~90 lines: the same 350ms intent delay, the same
+ * 200ms grace so the cursor can cross the gap into the card, the same
+ * viewport-clamp arithmetic, the same per-href cache. They differed in exactly
+ * three things, and those three are the options above.
+ */
+export function useLinkPreview<T>({
+  eligible,
+  fetch,
+  cardClassName = 'link-preview-card',
+  cardWidth = 320,
+  cardHeight = 240,
+  showDelay = 350,
+  hideDelay = 200,
+  margin = 8,
+}: LinkPreviewOptions<T>): LinkPreviewState<T> {
+  const [card, setCard] = useState<{ data: T; left: number; top: number; above: boolean } | null>(
+    null,
+  );
+  const cache = useRef(new Map<string, T | null>());
+  const showTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const activeHref = useRef<string | null>(null);
+
+  // The handlers below are rebuilt whenever these change, so they are read from
+  // a ref instead — a caller passing an inline `eligible` arrow would otherwise
+  // tear down and rebind the document listeners on every render.
+  const opts = useRef({ eligible, fetch });
+  opts.current = { eligible, fetch };
+
+  const hide = useCallback(() => {
+    hideTimer.current = setTimeout(() => {
+      activeHref.current = null;
+      setCard(null);
+    }, hideDelay);
+  }, [hideDelay]);
+
+  useEffect(() => {
+    const clearTimers = () => {
+      clearTimeout(showTimer.current);
+      clearTimeout(hideTimer.current);
+    };
+
+    const onOver = (e: MouseEvent) => {
+      const anchor = (e.target as HTMLElement | null)?.closest('a') as HTMLAnchorElement | null;
+      if (!anchor || !opts.current.eligible(anchor)) return;
+      const href = (anchor.getAttribute('href') ?? '').replace(/[#?].*$/, '');
+      if (!href) return;
+      // Re-entering the link the card is already for: cancel the pending hide
+      // rather than refetching and re-placing an identical card.
+      if (activeHref.current === href) {
+        clearTimeout(hideTimer.current);
+        return;
+      }
+      clearTimers();
+      activeHref.current = href;
+
+      showTimer.current = setTimeout(async () => {
+        let data = cache.current.get(href);
+        if (data === undefined) {
+          try {
+            data = await opts.current.fetch(href);
+          } catch {
+            data = null;
+          }
+          cache.current.set(href, data);
+        }
+        // The cursor may have moved on during the fetch.
+        if (activeHref.current !== href || data === null) return;
+        const rect = anchor.getBoundingClientRect();
+        const above = rect.bottom + cardHeight > window.innerHeight && rect.top > cardHeight;
+        setCard({
+          data,
+          left: Math.max(margin, Math.min(rect.left, window.innerWidth - cardWidth - margin)),
+          top: above ? rect.top - margin : rect.bottom + margin,
+          above,
+        });
+      }, showDelay);
+    };
+
+    const onOut = (e: MouseEvent) => {
+      // Moving into the card itself is not leaving.
+      if ((e.relatedTarget as HTMLElement | null)?.closest(`.${cardClassName}`)) return;
+      clearTimers();
+      hide();
+    };
+
+    document.addEventListener('mouseover', onOver);
+    document.addEventListener('mouseout', onOut);
+    return () => {
+      clearTimers();
+      document.removeEventListener('mouseover', onOver);
+      document.removeEventListener('mouseout', onOut);
+    };
+  }, [cardClassName, cardWidth, cardHeight, showDelay, margin, hide]);
+
+  return {
+    preview: card?.data ?? null,
+    cardProps: {
+      style: {
+        left: card?.left,
+        top: card?.top,
+        transform: card?.above ? 'translateY(-100%)' : undefined,
+      },
+      onMouseEnter: () => clearTimeout(hideTimer.current),
+      onMouseLeave: hide,
+    },
+  };
 }

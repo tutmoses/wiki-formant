@@ -76,6 +76,41 @@ export interface MetadataRow extends MetadataKeyDefinition {
   href?: string;
 }
 
+/**
+ * One pressable control on a browsing axis, with its destination already built.
+ *
+ * The three wikis each rendered the same taxonomy output their own way and had
+ * already begun to disagree about what the row CONTAINS rather than how it
+ * looks: one shipped no A–Z index at all, one had no way back to the unfiltered
+ * set, and two marked an active chip with `aria-pressed` on an `<a>` — which is
+ * not a toggle button and does not take that attribute. The decisions are here;
+ * the markup stays theirs.
+ */
+export interface Control {
+  /** The value this control selects. Empty on the reset control. */
+  value: string;
+  /** What to render. Same as `value` except on the reset control. */
+  label: string;
+  /** Pages reachable through this control, counted under the sibling state. */
+  count: number;
+  /** Built through the one `href` builder, so no control drops a sibling axis. */
+  href: string;
+  active: boolean;
+  /**
+   * True on the single control that clears its axis. It leads the row rather
+   * than being appended, so a consumer that maps the array cannot ship a
+   * narrowed view with nothing to press to widen it.
+   */
+  reset?: boolean;
+}
+
+/** One facet's controls, ready to render as a labelled row. */
+export interface FacetControlGroup {
+  key: string;
+  label: string;
+  options: Control[];
+}
+
 /** State a category URL can carry. `href` receives this and owns the format. */
 export interface CategoryState {
   sort?: string;
@@ -158,6 +193,37 @@ export interface Taxonomy {
     letter?: string,
   ) => Facet[];
   alphaIndex: <T extends FacetablePage>(pages: T[], filters: FacetFilters) => FacetValue[];
+  /**
+   * `buildFacets` with every chip's destination and active state resolved.
+   * Prefer this to `buildFacets` in a view: the href arithmetic is the part
+   * that was being rebuilt, and getting it wrong drops the reader's letter or
+   * sort on the next press.
+   */
+  facetControls: <T extends FacetablePage>(
+    tagPath: string,
+    pages: T[],
+    state?: CategoryState,
+  ) => FacetControlGroup[];
+  /**
+   * The A–Z row, reset control first, or `[]` for a set that still fits on a
+   * screen. Folds in the `needsAlphaIndex` threshold so a consumer cannot show
+   * an index it did not need or, as one did, omit one it did.
+   */
+  alphaControls: <T extends FacetablePage>(
+    tagPath: string,
+    pages: T[],
+    state?: CategoryState,
+  ) => Control[];
+  /**
+   * A `?letter=` narrowed to a bucket that exists. A letter with no pages under
+   * the active filters would otherwise empty the grid with no control marked to
+   * explain it.
+   */
+  resolveLetter: <T extends FacetablePage>(
+    pages: T[],
+    filters: FacetFilters,
+    letter?: string,
+  ) => string | undefined;
   /** A page's populated metadata keys as facts-panel rows, facet values linked. */
   metadataRows: (tagPath: string, page: { metadata?: unknown }) => MetadataRow[];
   /** Whether a set has outgrown a grid and needs the A–Z index. */
@@ -192,12 +258,61 @@ export function createTaxonomy(config: TaxonomyConfig): Taxonomy {
     return pages.filter(p => matches(p, filters, letter));
   };
 
+  const needsAlphaIndex = (pageCount: number) => pageCount >= minPages;
+
+  /**
+   * Facet values with counts. Each facet is counted over the set narrowed by
+   * every *other* active filter, so its own options stay switchable rather
+   * than collapsing to the one already chosen.
+   *
+   * Values are read from the data, never from the declared `options`: a key
+   * that declares four and holds seven would otherwise hide three behind a
+   * bar claiming to cover everything. Render what is there and the drift
+   * becomes visible instead of silent.
+   */
+  const buildFacets = <T extends FacetablePage>(
+    tagPath: string,
+    pages: T[],
+    filters: FacetFilters,
+    letter?: string,
+  ): Facet[] =>
+    facetKeys(tagPath).flatMap(key => {
+      const others = Object.fromEntries(Object.entries(filters).filter(([k]) => k !== key.key));
+      const counts = new Map<string, number>();
+      for (const page of filterPages(pages, others, letter)) {
+        const value = metaValue(page, key.key);
+        if (value) counts.set(value, (counts.get(value) ?? 0) + 1);
+      }
+      // A single-valued facet is no choice, so it stays hidden — unless it is
+      // the active one. An infobox row can set a filter the chips never
+      // offered, and without its chip the reader lands on a narrowed list
+      // with no way to widen it.
+      if (counts.size < 2 && !(key.key in filters)) return [];
+      const values = [...counts]
+        .map(([value, count]) => ({ value, count }))
+        .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+      return [{ key: key.key, label: key.label.replace(/:$/, ''), values }];
+    });
+
+  /** A–Z buckets present in the set, `#` last. */
+  const alphaIndex = <T extends FacetablePage>(pages: T[], filters: FacetFilters): FacetValue[] => {
+    const counts = new Map<string, number>();
+    for (const page of filterPages(pages, filters)) {
+      const letter = firstLetter(page.title);
+      counts.set(letter, (counts.get(letter) ?? 0) + 1);
+    }
+    return [...counts]
+      .map(([value, count]) => ({ value, count }))
+      .sort((a, b) => (a.value === '#' ? 1 : b.value === '#' ? -1 : a.value.localeCompare(b.value)));
+  };
+
   return {
     facetKeys,
     href,
     filterPages,
-
-    needsAlphaIndex: (pageCount: number) => pageCount >= minPages,
+    needsAlphaIndex,
+    buildFacets,
+    alphaIndex,
 
     facetFilters(tagPath, params) {
       const filters: FacetFilters = {};
@@ -206,38 +321,6 @@ export function createTaxonomy(config: TaxonomyConfig): Taxonomy {
         if (typeof value === 'string' && value) filters[key.key] = value;
       }
       return filters;
-    },
-
-    /**
-     * Facet values with counts. Each facet is counted over the set narrowed by
-     * every *other* active filter, so its own options stay switchable rather
-     * than collapsing to the one already chosen.
-     *
-     * Values are read from the data, never from the declared `options`: a key
-     * that declares four and holds seven would otherwise hide three behind a
-     * bar claiming to cover everything. Render what is there and the drift
-     * becomes visible instead of silent.
-     */
-    buildFacets(tagPath, pages, filters, letter) {
-      return facetKeys(tagPath).flatMap(key => {
-        const others = Object.fromEntries(
-          Object.entries(filters).filter(([k]) => k !== key.key),
-        );
-        const counts = new Map<string, number>();
-        for (const page of filterPages(pages, others, letter)) {
-          const value = metaValue(page, key.key);
-          if (value) counts.set(value, (counts.get(value) ?? 0) + 1);
-        }
-        // A single-valued facet is no choice, so it stays hidden — unless it is
-        // the active one. An infobox row can set a filter the chips never
-        // offered, and without its chip the reader lands on a narrowed list
-        // with no way to widen it.
-        if (counts.size < 2 && !(key.key in filters)) return [];
-        const values = [...counts]
-          .map(([value, count]) => ({ value, count }))
-          .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
-        return [{ key: key.key, label: key.label.replace(/:$/, ''), values }];
-      });
     },
 
     metadataRows(tagPath, page) {
@@ -257,18 +340,56 @@ export function createTaxonomy(config: TaxonomyConfig): Taxonomy {
       });
     },
 
-    /** A–Z buckets present in the set, `#` last. */
-    alphaIndex(pages, filters) {
-      const counts = new Map<string, number>();
-      for (const page of filterPages(pages, filters)) {
-        const letter = firstLetter(page.title);
-        counts.set(letter, (counts.get(letter) ?? 0) + 1);
-      }
-      return [...counts]
-        .map(([value, count]) => ({ value, count }))
-        .sort((a, b) =>
-          a.value === '#' ? 1 : b.value === '#' ? -1 : a.value.localeCompare(b.value),
-        );
+    facetControls(tagPath, pages, state = {}) {
+      const { sort, filters = {}, letter } = state;
+      return buildFacets(tagPath, pages, filters, letter).map(facet => ({
+        key: facet.key,
+        label: facet.label,
+        options: facet.values.map(({ value, count }) => ({
+          value,
+          label: value,
+          count,
+          // The letter and the sort ride along: a chip that rebuilt the URL from
+          // its own axis alone is how a reader loses their place on every press.
+          href: href(tagPath, {
+            sort,
+            filters: toggleFilter(filters, facet.key, value),
+            letter,
+          }),
+          active: filters[facet.key] === value,
+        })),
+      }));
+    },
+
+    alphaControls(tagPath, pages, state = {}) {
+      const { sort, filters = {}, letter } = state;
+      if (!needsAlphaIndex(pages.length)) return [];
+      const letters = alphaIndex(pages, filters);
+      if (!letters.length) return [];
+      const active = letters.some(l => l.value === letter) ? letter : undefined;
+      return [
+        {
+          value: '',
+          label: 'All',
+          count: filterPages(pages, filters).length,
+          href: href(tagPath, { sort, filters }),
+          active: !active,
+          reset: true,
+        },
+        ...letters.map(({ value, count }) => ({
+          value,
+          label: value,
+          count,
+          // Re-pressing the active letter clears it, matching `toggleFilter`.
+          href: href(tagPath, { sort, filters, letter: active === value ? undefined : value }),
+          active: active === value,
+        })),
+      ];
+    },
+
+    resolveLetter(pages, filters, letter) {
+      if (!letter) return undefined;
+      return alphaIndex(pages, filters).some(l => l.value === letter) ? letter : undefined;
     },
 
     /**
