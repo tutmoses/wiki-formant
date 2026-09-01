@@ -795,21 +795,36 @@ export interface TableSortState<T, K extends string> {
  */
 export function useTableSort<T, K extends string>(
   rows: readonly T[],
-  config: { defaultKey: K; comparators: Record<K, (a: T, b: T) => number>; defaultDirection?: SortDirection },
+  config: {
+    defaultKey: K;
+    comparators: Record<K, (a: T, b: T) => number>;
+    /**
+     * Which way a column sorts when it is first pressed. A function because the
+     * answer is per column, not per table: a name column wants A–Z and a
+     * numeric one wants largest first, and a table that opens every column
+     * descending puts Z at the top of its only text column.
+     */
+    defaultDirection?: SortDirection | ((key: K) => SortDirection);
+  },
 ): TableSortState<T, K> {
   const { defaultKey, comparators, defaultDirection = 'desc' } = config;
+  const directionFor = useCallback(
+    (key: K): SortDirection =>
+      typeof defaultDirection === 'function' ? defaultDirection(key) : defaultDirection,
+    [defaultDirection],
+  );
   const [sortKey, setSortKey] = useState<K>(defaultKey);
-  const [direction, setDirection] = useState<SortDirection>(defaultDirection);
+  const [direction, setDirection] = useState<SortDirection>(() => directionFor(defaultKey));
 
   const toggle = useCallback(
     (key: K) => {
       if (key === sortKey) setDirection(d => (d === 'desc' ? 'asc' : 'desc'));
       else {
         setSortKey(key);
-        setDirection(defaultDirection);
+        setDirection(directionFor(key));
       }
     },
-    [sortKey, defaultDirection],
+    [sortKey, directionFor],
   );
 
   const sorted = useMemo(() => {
