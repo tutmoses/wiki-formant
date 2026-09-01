@@ -21,3 +21,6 @@ export * from './maps.js';
 export * from './freshness.js';
 export * from './combobox.js';
 export * from './crawlers.js';
+export * from './revisions.js';
+export * from './feed.js';
+export * from './license.js';

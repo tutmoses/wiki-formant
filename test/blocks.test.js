@@ -7,8 +7,7 @@ import {
   referencesToMarkdown,
   statsToMarkdown,
   linkGridToMarkdown,
-  linkList,
-} from '../dist/blocks.js';
+  linkList, mapBlockTree, mapBlockTreeAsync, someBlock } from '../dist/blocks.js';
 
 // ---- the container walk ----
 
@@ -103,4 +102,58 @@ test('a flat link list is one bullet per link', () => {
     '- [A](/a)\n- [B](/b)',
   );
   assert.equal(linkList([]), '');
+});
+
+// ---- mapBlockTree / someBlock ------------------------------------------------
+
+const shape = {
+  containers: (b) =>
+    b.type === 'infobox' ? [b.blocks]
+    : b.type === 'columns' ? b.columns.map((c) => c.blocks)
+    : null,
+  rebuild: (b, groups) =>
+    b.type === 'infobox' ? { ...b, blocks: groups[0] }
+    : { ...b, columns: b.columns.map((c, i) => ({ ...c, blocks: groups[i] })) },
+};
+
+const tree = [
+  { id: 'a', type: 'content', text: 'top' },
+  { id: 'b', type: 'infobox', blocks: [{ id: 'c', type: 'content', text: 'inside' }] },
+  { id: 'd', type: 'columns', columns: [
+    { id: 'l', blocks: [{ id: 'e', type: 'content', text: 'left' }] },
+    { id: 'r', blocks: [{ id: 'f', type: 'code', text: 'right' }] },
+  ] },
+];
+
+test('a transform reaches every leaf and keeps the shape', () => {
+  const out = mapBlockTree(tree, (b) => ({ ...b, text: b.text.toUpperCase() }), shape);
+  assert.equal(out[0].text, 'TOP');
+  assert.equal(out[1].blocks[0].text, 'INSIDE');
+  assert.equal(out[2].columns[0].blocks[0].text, 'LEFT');
+  assert.equal(out[2].columns[1].blocks[0].text, 'RIGHT');
+  // Container identity and sibling metadata survive.
+  assert.equal(out[1].type, 'infobox');
+  assert.equal(out[2].columns[1].id, 'r');
+});
+
+test('the input tree is not mutated', () => {
+  mapBlockTree(tree, (b) => ({ ...b, text: 'x' }), shape);
+  assert.equal(tree[1].blocks[0].text, 'inside');
+  assert.equal(tree[2].columns[0].blocks[0].text, 'left');
+});
+
+test('BUG: a predicate must see inside containers', () => {
+  // The copy this replaces checked the top level only, so a code block nested in
+  // an infobox or a column shipped without the highlighter the page needed.
+  assert.equal(someBlock(tree, (b) => b.type === 'code', shape.containers), true);
+  assert.equal(someBlock(tree, (b) => b.type === 'nothing', shape.containers), false);
+  const nested = [{ id: 'x', type: 'infobox', blocks: [{ id: 'y', type: 'code', text: '' }] }];
+  assert.equal(someBlock(nested, (b) => b.type === 'code', shape.containers), true);
+});
+
+test('the async twin walks the same tree', async () => {
+  const out = await mapBlockTreeAsync(tree, async (b) => ({ ...b, text: `${b.text}!` }), shape);
+  assert.equal(out[0].text, 'top!');
+  assert.equal(out[1].blocks[0].text, 'inside!');
+  assert.equal(out[2].columns[1].blocks[0].text, 'right!');
 });

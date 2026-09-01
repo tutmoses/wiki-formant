@@ -84,6 +84,79 @@ export function renderBlockTree<B>(blocks: readonly B[], opts: BlockTreeOptions<
     .trim();
 }
 
+// ---- the same walk, for transforms and predicates ---------------------------
+
+/**
+ * How a container exposes and rebuilds its nested groups.
+ *
+ * `renderBlockTree` only ever reads groups, so it takes `containers` alone.
+ * A transform has to put the mapped blocks back where it found them, which is
+ * the second half — and the half every hand-rolled copy of this walk wrote out
+ * per block type, at six call sites across two repos.
+ */
+export interface BlockTreeShape<B> {
+  /** Nested groups in document order, or `null` for a leaf. */
+  containers: (block: B) => B[][] | null;
+  /** Rebuild a container from its mapped groups. */
+  rebuild: (block: B, groups: B[][]) => B;
+}
+
+/**
+ * Every block in the tree, transformed, with the tree's shape preserved.
+ *
+ * The three-branch walk this replaces — columns to `columns[].blocks`, infobox
+ * to `.blocks`, everything else atomic — was written by hand for heading
+ * injection, syntax highlighting, server-side data resolution, feed rendering
+ * and twice more besides. Each copy was correct and each had to be found again
+ * whenever a container type was added.
+ */
+export function mapBlockTree<B>(
+  blocks: readonly B[],
+  map: (block: B) => B,
+  shape: BlockTreeShape<B>,
+): B[] {
+  return blocks.map(block => {
+    const groups = shape.containers(block);
+    if (!groups) return map(block);
+    return shape.rebuild(block, groups.map(group => group.map(map)));
+  });
+}
+
+/** The async twin. Highlighting and data resolution both await per leaf. */
+export async function mapBlockTreeAsync<B>(
+  blocks: readonly B[],
+  map: (block: B) => Promise<B>,
+  shape: BlockTreeShape<B>,
+): Promise<B[]> {
+  return Promise.all(
+    blocks.map(async block => {
+      const groups = shape.containers(block);
+      if (!groups) return map(block);
+      const mapped = await Promise.all(groups.map(group => Promise.all(group.map(map))));
+      return shape.rebuild(block, mapped);
+    }),
+  );
+}
+
+/**
+ * Whether any leaf satisfies `predicate`, containers included.
+ *
+ * The copy this replaces asked "does this page hold a code block?" to decide
+ * whether to ship a highlighter, and answered by checking the top level only —
+ * so a code block inside an infobox shipped unhighlighted.
+ */
+export function someBlock<B>(
+  blocks: readonly B[],
+  predicate: (block: B) => boolean,
+  containers: (block: B) => B[][] | null,
+): boolean {
+  return blocks.some(block => {
+    const groups = containers(block);
+    if (!groups) return predicate(block);
+    return groups.some(group => someBlock(group, predicate, containers));
+  });
+}
+
 // ---- the shared leaf renderers ----------------------------------------------
 
 /**

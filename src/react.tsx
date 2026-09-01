@@ -30,6 +30,7 @@
 import { resolveSidebarOpen, SIDEBAR_ATTRIBUTE } from './sidebar.js';
 import { comboboxAria, type ComboboxAria } from './combobox.js';
 import {
+  Component,
   createContext,
   createElement,
   useCallback,
@@ -471,7 +472,7 @@ export interface TypeaheadState<T> {
    * with a desktop and a mobile field renders both into the same document, and
    * one id set across the two duplicates every option id.
    */
-  combobox: (listKey?: string) => ComboboxAria;
+  combobox: (listKey?: string, open?: boolean) => ComboboxAria;
 }
 
 /**
@@ -592,7 +593,8 @@ export function useTypeahead<T>({
   // makes a second typeahead on the same page legal.
   const baseId = useId();
   const combobox = useCallback(
-    (listKey?: string) => comboboxAria({ baseId, listKey, count: items.length, highlight }),
+    (listKey?: string, open?: boolean) =>
+      comboboxAria({ baseId, listKey, count: items.length, highlight, open }),
     [baseId, items.length, highlight],
   );
 
@@ -758,4 +760,151 @@ export function useLinkPreview<T>({
       onMouseLeave: hide,
     },
   };
+}
+
+// ---- table sort -------------------------------------------------------------
+
+export type SortDirection = 'asc' | 'desc';
+
+export interface TableSortState<T, K extends string> {
+  sorted: T[];
+  sortKey: K;
+  direction: SortDirection;
+  /** Spread onto a header cell. `active` is what drives `aria-sort`. */
+  headerProps: (key: K) => {
+    sortKey: K;
+    active: boolean;
+    direction: SortDirection;
+    onSort: (key: K) => void;
+    'aria-sort': 'ascending' | 'descending' | 'none';
+  };
+  toggle: (key: K) => void;
+}
+
+/**
+ * One active column, direction toggling on re-click, every table the same.
+ *
+ * One repo had this as a hook; the other inlined the identical state machine in
+ * two chart tables, differing only in the `useState` seed and the comparator
+ * payload. The comparator record replaces the `if`-chain those copies used, so
+ * adding a column is a map entry rather than another branch.
+ *
+ * `aria-sort` is emitted here because only one of the two header components had
+ * it, and a sortable column that never announces its direction is a button whose
+ * effect a screen reader cannot observe.
+ */
+export function useTableSort<T, K extends string>(
+  rows: readonly T[],
+  config: { defaultKey: K; comparators: Record<K, (a: T, b: T) => number>; defaultDirection?: SortDirection },
+): TableSortState<T, K> {
+  const { defaultKey, comparators, defaultDirection = 'desc' } = config;
+  const [sortKey, setSortKey] = useState<K>(defaultKey);
+  const [direction, setDirection] = useState<SortDirection>(defaultDirection);
+
+  const toggle = useCallback(
+    (key: K) => {
+      if (key === sortKey) setDirection(d => (d === 'desc' ? 'asc' : 'desc'));
+      else {
+        setSortKey(key);
+        setDirection(defaultDirection);
+      }
+    },
+    [sortKey, defaultDirection],
+  );
+
+  const sorted = useMemo(() => {
+    const comparator = comparators[sortKey];
+    if (!comparator) return [...rows];
+    const multiplier = direction === 'asc' ? 1 : -1;
+    return [...rows].sort((a, b) => multiplier * comparator(a, b));
+  }, [rows, sortKey, direction, comparators]);
+
+  const headerProps = useCallback(
+    (key: K) => {
+      const active = key === sortKey;
+      return {
+        sortKey: key,
+        active,
+        direction,
+        onSort: toggle,
+        'aria-sort': (active ? (direction === 'asc' ? 'ascending' : 'descending') : 'none') as
+          | 'ascending'
+          | 'descending'
+          | 'none',
+      };
+    },
+    [sortKey, direction, toggle],
+  );
+
+  return { sorted, sortKey, direction, headerProps, toggle };
+}
+
+// ---- copy to clipboard ------------------------------------------------------
+
+/**
+ * "Copied", then not, after a beat. Six call sites across three repos wrote the
+ * same three statements, and four of the six had no rejection handler — so a
+ * denied clipboard permission left the button claiming success. The imperative
+ * twin in `wiki-formant/dom` has handled that since it was extracted.
+ *
+ * The key form is for a surface with several copyable things and one indicator:
+ * `copied === 'cite'` rather than a boolean per button.
+ */
+export function useCopy<K extends string = string>(revertAfter = 2000): {
+  copied: K | null;
+  copy: (text: string, key?: K) => Promise<boolean>;
+} {
+  const [copied, setCopied] = useState<K | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // A component unmounted inside the revert window would otherwise set state on
+  // a dead tree.
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  const copy = useCallback(
+    async (text: string, key?: K) => {
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        return false;
+      }
+      setCopied((key ?? 'copied') as K);
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => setCopied(null), revertAfter);
+      return true;
+    },
+    [revertAfter],
+  );
+
+  return { copied, copy };
+}
+
+// ---- error boundary ---------------------------------------------------------
+
+/**
+ * The one thing hooks cannot express, so it is worth owning once.
+ *
+ * `fallback` is a render prop taking a `retry` closure, which is the better of
+ * the two shapes this was lifted from: the other hardcoded its own "Try again"
+ * button and so could not be restyled or relabelled by a caller. Recovery is the
+ * caller's, and the boundary only decides when to offer it.
+ */
+export class ErrorBoundary extends Component<
+  { children: ReactNode; fallback: (retry: () => void) => ReactNode; onError?: (error: unknown) => void },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    this.props.onError?.(error);
+  }
+
+  render() {
+    if (this.state.failed) return this.props.fallback(() => this.setState({ failed: false }));
+    return this.props.children;
+  }
 }

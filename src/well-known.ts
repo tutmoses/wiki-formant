@@ -136,3 +136,51 @@ export function agentCard(config: AgentCardConfig): Record<string, unknown> {
     defaultOutputModes: ['text/plain', 'application/json', 'text/markdown'],
   };
 }
+
+// ---- MCP Server Card --------------------------------------------------------
+
+/** The registry manifest (`server.json`) fields a card projects. */
+export interface ServerManifest {
+  name: string;
+  title?: string;
+  description?: string;
+  version: string;
+  websiteUrl?: string;
+  remotes?: ReadonlyArray<Record<string, unknown>>;
+}
+
+export const SERVER_CARD_SCHEMA =
+  'https://static.modelcontextprotocol.io/schemas/draft/server-card.schema.json';
+
+/**
+ * The card served at `<mcp-url>/server-card`.
+ *
+ * Status: the Server Card extension is a DRAFT (SEP-1649 / SEP-2127) whose
+ * location has already moved once, from `/.well-known/mcp.json` to that path.
+ * It costs nothing to keep correct, because every field is projected from the
+ * registry manifest that already single-sources the version. If the draft moves
+ * again, move the route; if it dies, delete it.
+ *
+ * Projection is the point. One repo retyped `title` and `description` as
+ * literals beside the manifest it was already importing, so it carried two
+ * copies of its own description with nothing comparing them; a third retyped
+ * them again in a different route. Passing the manifest makes that unspellable.
+ *
+ * Cards deliberately omit tool listings — that is what `tools/list` is for.
+ */
+export function serverCard(
+  manifest: ServerManifest,
+  protocolVersion: string,
+): Record<string, unknown> {
+  return {
+    $schema: SERVER_CARD_SCHEMA,
+    name: manifest.name,
+    ...(manifest.title ? { title: manifest.title } : {}),
+    ...(manifest.description ? { description: manifest.description } : {}),
+    version: manifest.version,
+    ...(manifest.websiteUrl ? { websiteUrl: manifest.websiteUrl } : {}),
+    ...(manifest.remotes
+      ? { remotes: manifest.remotes.map(r => ({ ...r, supportedProtocolVersions: [protocolVersion] })) }
+      : {}),
+  };
+}

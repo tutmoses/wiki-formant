@@ -58,3 +58,17 @@ test('ids are addressable from outside, for scroll-into-view', () => {
   assert.equal(listId('r1', 'mobile'), 'r1-mobile');
   assert.equal(optionId('r1', 'mobile', 2), 'r1-mobile-opt-2');
 });
+
+test('BUG: a surface that hides its list is not expanded', () => {
+  // The hook knows how many results it holds; only the surface knows whether it
+  // is rendering them. A header that closes its dropdown on blur keeps the items
+  // — so without this the field claims an expanded list that is not in the
+  // document, and points aria-activedescendant at a row that is not there.
+  const closed = comboboxAria({ baseId: 'r1', count: 3, highlight: 1, open: false });
+  assert.equal(closed.inputProps['aria-expanded'], false);
+  assert.equal(closed.inputProps['aria-activedescendant'], undefined);
+  // Omitted means "the items decide", which is the common case.
+  assert.equal(comboboxAria({ baseId: 'r1', count: 3, highlight: 1 }).inputProps['aria-expanded'], true);
+  // And open:true still cannot invent an expansion over an empty list.
+  assert.equal(comboboxAria({ baseId: 'r1', count: 0, highlight: 0, open: true }).inputProps['aria-expanded'], false);
+});

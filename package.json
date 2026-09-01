@@ -1,6 +1,6 @@
 {
   "name": "wiki-formant",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "The portable half of a wiki: derived taxonomy with pressable facet controls, a spec-correct MCP transport, markdown twins, block rendering, link normalisation, freshness, rate limiting, a collapsible sidebar, typeahead and hover-preview hooks, editor nodes, server-side analytics for both the agent and human lanes, and the conditional-GET plumbing agent surfaces need.",
   "type": "module",
   "license": "MIT",
@@ -79,6 +79,18 @@
     "./crawlers": {
       "types": "./dist/crawlers.d.ts",
       "import": "./dist/crawlers.js"
+    },
+    "./revisions": {
+      "types": "./dist/revisions.d.ts",
+      "import": "./dist/revisions.js"
+    },
+    "./feed": {
+      "types": "./dist/feed.d.ts",
+      "import": "./dist/feed.js"
+    },
+    "./license": {
+      "types": "./dist/license.d.ts",
+      "import": "./dist/license.js"
     },
     "./links": {
       "types": "./dist/links.d.ts",

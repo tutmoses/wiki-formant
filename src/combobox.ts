@@ -33,6 +33,16 @@ export interface ComboboxInput {
   count: number;
   /** Index of the highlighted row. */
   highlight: number;
+  /**
+   * Whether the surface is actually showing its list. Defaults to `count > 0`.
+   *
+   * The hook knows how many results it holds; only the surface knows whether it
+   * is rendering them. A header that hides its dropdown on blur while the hook
+   * still holds items would otherwise claim `aria-expanded` for a list that is
+   * not in the document, and point `aria-activedescendant` at a row that is not
+   * there — which is the dangling reference this module exists to prevent.
+   */
+  open?: boolean;
 }
 
 export interface ComboboxInputProps {
@@ -79,14 +89,14 @@ export function listId(baseId: string, listKey?: string): string {
  * than no attribute: the reader announces nothing and the field still claims to
  * have an active option.
  */
-export function comboboxAria({ baseId, listKey, count, highlight }: ComboboxInput): ComboboxAria {
+export function comboboxAria({ baseId, listKey, count, highlight, open }: ComboboxInput): ComboboxAria {
   const list = listId(baseId, listKey);
-  const open = count > 0;
-  const active = open && highlight >= 0 && highlight < count;
+  const expanded = (open ?? true) && count > 0;
+  const active = expanded && highlight >= 0 && highlight < count;
   return {
     inputProps: {
       role: 'combobox',
-      'aria-expanded': open,
+      'aria-expanded': expanded,
       'aria-controls': list,
       'aria-autocomplete': 'list',
       'aria-activedescendant': active ? optionId(baseId, listKey, highlight) : undefined,

@@ -242,6 +242,62 @@ and a crawler obeys only its most-specific matching group, so an agent with no
 group of its own falls through to `*`. Three wikis were measuring five crawlers
 they had never addressed.
 
+## Revisions
+
+What changed between two versions of a page, and therefore which semver bump to
+ask for. Both wikis had written it and `extractBlocks` was byte-identical
+between the copies; they differed only in what each had learned since.
+
+```ts
+const diff = computeRevisionDiff({
+  currentVersion: page.version,
+  oldContent, newContent, oldTitle, newTitle,
+  containers: b =>
+    b.type === 'infobox' ? [{ path: 'blocks', blocks: b.blocks }]
+    : b.type === 'columns' ? b.columns.map((c, i) => ({ path: `columns.${i}.blocks`, blocks: c.blocks }))
+    : null,
+});
+```
+
+- **Blocks match by id**, so a block that moved is one `moved` and not a removal
+  plus an addition.
+- **Container keys are never diffed as attributes.** They are walked as their own
+  entries, and comparing them here would report an infobox as edited every time
+  anything inside it changed — turning a prose edit into a structural bump.
+- **The path segment is a parameter**, because `root.1.columns.0.blocks.2` is
+  what a reviewing UI anchors on and only the consumer knows how its containers
+  are addressed.
+
+One copy also built two Maps keyed by a recursive `JSON.stringify` of every
+block, on every save, and never read either one. Matching is by id and always
+was. That half is not here.
+
+## Feeds
+
+Three repos, four feeds, 47 of 64 significant lines identical — including,
+verbatim in two of them, the comment explaining why the apostrophe escapes
+numerically. `renderFeed` is the union.
+
+```ts
+return new Response(renderFeed(channel, items), { headers: FEED_HEADERS });
+```
+
+**`lastBuildDate` comes from the newest item, not the clock.** One copy stamped
+`new Date()` on every request, telling every poller the feed had changed when it
+had not — the recrawl the conditional-GET helpers exist to prevent. An empty feed
+carries no build date rather than a fictional one.
+
+## Licence declarations
+
+S10 wants a licence on every surface, and each repo satisfied that by writing the
+same block again. What is genuinely per-project is the *scope* — which half of a
+site the grant covers and what it excludes — so that is the parameter.
+
+```ts
+const license = ccBy40({ siteName: 'AcuiQ', siteUrl: SITE_URL });
+const block = licenseBlock({ license, scope: 'The protocol compilation and prose', excludes });
+```
+
 ## Rendered-article passes
 
 `wiki-formant/dom` holds what runs against an article element after it is in the document. Not React, so not in `react.tsx`.
@@ -308,11 +364,15 @@ they name a gap in the corpus in the reader's own words.
 | `htmlToMarkdown`, `inlineToMarkdown`, `tableToMarkdown`, `frontmatter`, `markdownDocument`, `decodeEntities` | `wiki-formant/markdown` |
 | `corpusEtag`, `notModified`, `textHeaders`, `markdownHeaders`, `cleanSnippet`, `pageLine` | `wiki-formant/http` |
 | `parsePagination`, `paginatedResponse`, `toOffset` | `wiki-formant/pagination` |
+| `mapBlockTree`, `mapBlockTreeAsync`, `someBlock`, `renderBlockTree` | `wiki-formant/blocks` |
 | `parseVersion`, `formatVersion`, `incrementVersion`, `bump`, `compareVersions` | `wiki-formant/versioning` |
 | `plausibleEvent`, `mcpCallProps`, `searchQueryProps`, `plausibleDomain` | `wiki-formant/analytics` |
 | `comboboxAria`, `listId`, `optionId` | `wiki-formant/combobox` |
+| `computeRevisionDiff`, `diffBlocks`, `extractBlocks`, `classifyChanges`, `changeSummary` | `wiki-formant/revisions` |
+| `renderFeed`, `renderItem`, `escXml`, `cdata`, `clampWords`, `absolutise`, `FEED_HEADERS` | `wiki-formant/feed` |
+| `ccBy40`, `licenseBlock`, `licenseLines`, `licenseNote` | `wiki-formant/license` |
 | `AI_CRAWLERS`, `detectAiBot`, `aiCrawlerTokens`, `aiCrawlerRules` | `wiki-formant/crawlers` |
-| `useCollapsibleSidebar`, `SidebarProvider`, `useSidebar`, `TableOfContents`, `useTypeahead`, `useLinkPreview`, `useClickOutside` | `wiki-formant/react` |
+| `useCollapsibleSidebar`, `SidebarProvider`, `useSidebar`, `TableOfContents`, `useTypeahead`, `useLinkPreview`, `useClickOutside`, `useTableSort`, `useCopy`, `ErrorBoundary` | `wiki-formant/react` |
 | `resolveSidebarOpen`, `sidebarBootScript`, `SIDEBAR_ATTRIBUTE` | `wiki-formant/sidebar` |
 | `addCopyButtons`, `activateTabGroups`, `tweetEmbedSrc`, `onTweetResize`, `hydrateTweetEmbeds`, `sizeTweetEmbeds`, `TWITTER_ORIGIN` | `wiki-formant/dom` |
 | `Iframe`, `YouTube`, `TwitterEmbed`, `createMapEmbed`, `createCodeBlock`, `createTabs` | `wiki-formant/tiptap` |
