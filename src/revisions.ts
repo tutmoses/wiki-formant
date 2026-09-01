@@ -96,10 +96,20 @@ export function extractBlocks<B>(
 export function diffAttributes<B extends DiffBlock>(
   oldBlock: B,
   newBlock: B,
-  nestedKeys: readonly string[],
+  containers: (block: B) => BlockGroup<B>[] | null,
 ): Record<string, { from: unknown; to: unknown }> | undefined {
   const diffs: Record<string, { from: unknown; to: unknown }> = {};
-  const skip = new Set<string>(['id', 'type', ...nestedKeys]);
+  // Derived from these two blocks rather than from the tree, so a container
+  // nested inside another container is still exempted. Deriving it once from
+  // the top level would miss a columns block that only ever appears inside an
+  // infobox, and report it as edited whenever anything under it moved.
+  const skip = new Set<string>(['id', 'type']);
+  for (const block of [oldBlock, newBlock]) {
+    for (const group of containers(block) ?? []) {
+      const head = group.path.split('.')[0];
+      if (head) skip.add(head);
+    }
+  }
   for (const key of new Set([...Object.keys(oldBlock), ...Object.keys(newBlock)])) {
     if (skip.has(key)) continue;
     const from = (oldBlock as unknown as Record<string, unknown>)[key];
@@ -118,7 +128,6 @@ export function diffBlocks<B extends DiffBlock, L = unknown>(
   newBlocks: readonly B[],
   opts: DiffOptions<B, L>,
 ): BlockChange<L>[] {
-  const nestedKeys = nestedKeysOf(oldBlocks, newBlocks, opts.containers);
   const changes: BlockChange<L>[] = [];
   const oldFlat = extractBlocks(oldBlocks, opts.containers);
   const newFlat = extractBlocks(newBlocks, opts.containers);
@@ -144,7 +153,7 @@ export function diffBlocks<B extends DiffBlock, L = unknown>(
       });
     }
 
-    const attributes = diffAttributes(oldItem.block, newItem.block, nestedKeys);
+    const attributes = diffAttributes(oldItem.block, newItem.block, opts.containers);
     if (attributes) {
       changes.push({
         id,
@@ -180,22 +189,6 @@ export function diffBlocks<B extends DiffBlock, L = unknown>(
   }
 
   return changes;
-}
-
-/** The keys a container holds its children under, so they are not diffed twice. */
-function nestedKeysOf<B>(
-  oldBlocks: readonly B[],
-  newBlocks: readonly B[],
-  containers: (block: B) => BlockGroup<B>[] | null,
-): string[] {
-  const keys = new Set<string>();
-  for (const block of [...oldBlocks, ...newBlocks]) {
-    for (const group of containers(block) ?? []) {
-      const head = group.path.split('.')[0];
-      if (head) keys.add(head);
-    }
-  }
-  return [...keys];
 }
 
 /**

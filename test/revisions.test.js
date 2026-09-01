@@ -123,3 +123,18 @@ test('a null version still bumps, because a page always has one', () => {
   });
   assert.deepEqual(diff.version, { major: 1, minor: 1, patch: 0 });
 });
+
+test('BUG: a container nested inside another is still exempt from attribute diffing', () => {
+  // The exempt keys are derived per block pair, not once from the top level. A
+  // columns block that only ever appears inside an infobox would otherwise have
+  // its `columns` key compared as an attribute, and be reported as edited every
+  // time anything inside one of its columns changed.
+  const nested = (t) => [{
+    id: 'i', type: 'infobox', blocks: [
+      { id: 'c', type: 'columns', columns: [{ id: 'l', blocks: [text('a', t)] }] },
+    ],
+  }];
+  const changes = diffBlocks(nested('one'), nested('two'), opts);
+  assert.deepEqual(changes.map(c => c.id), ['a']);
+  assert.equal(changes[0].path, 'root.0.blocks.0.columns.0.blocks.0');
+});
