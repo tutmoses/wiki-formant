@@ -905,13 +905,22 @@ export function useCopy<K extends string = string>(revertAfter = 2000): {
  * caller's, and the boundary only decides when to offer it.
  */
 export class ErrorBoundary extends Component<
-  { children: ReactNode; fallback: (retry: () => void) => ReactNode; onError?: (error: unknown) => void },
-  { failed: boolean }
+  {
+    children: ReactNode;
+    /**
+     * `error` is passed as well as `retry` because a fallback that cannot see
+     * what failed can only say "something went wrong" — which is what one of
+     * the copies this replaced said, while the other had the message and used it.
+     */
+    fallback: (retry: () => void, error: unknown) => ReactNode;
+    onError?: (error: unknown) => void;
+  },
+  { failed: boolean; error: unknown }
 > {
-  state = { failed: false };
+  state: { failed: boolean; error: unknown } = { failed: false, error: null };
 
-  static getDerivedStateFromError() {
-    return { failed: true };
+  static getDerivedStateFromError(error: unknown) {
+    return { failed: true, error };
   }
 
   componentDidCatch(error: unknown) {
@@ -919,7 +928,9 @@ export class ErrorBoundary extends Component<
   }
 
   render() {
-    if (this.state.failed) return this.props.fallback(() => this.setState({ failed: false }));
+    if (this.state.failed) {
+      return this.props.fallback(() => this.setState({ failed: false, error: null }), this.state.error);
+    }
     return this.props.children;
   }
 }
