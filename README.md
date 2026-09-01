@@ -188,6 +188,60 @@ const { query, setQuery, items, highlight, setHighlight, onKeyDown, reset } =
 
 `useClickOutside` is fifteen lines and was in all three. Only one had the `offsetParent` check, and without it a container hidden at the current breakpoint still answers outside-clicks — so on a phone, a tap anywhere dismisses the popover the reader is looking at, because the hidden desktop copy got there first.
 
+### The listbox contract
+
+`useTypeahead` shared the state machine across five surfaces and left the ARIA
+behind, so all five drifted into different wrongness: one put `aria-selected` on
+a plain `<button>`, which is not a role that takes it; one gave the rows
+`role="option"` and the container no `role="listbox"`, so the options had no
+owner; two had no roles at all; one used a `data-highlighted` attribute, which
+nothing reads. None of the five set `aria-activedescendant`, which is the
+attribute that announces the highlighted row as the reader arrows through it.
+
+```tsx
+const { items, highlight, setHighlight, combobox } = useTypeahead({ fetch, onPick });
+const { inputProps, listProps, optionProps } = combobox();
+
+<input {...inputProps} />
+<ul {...listProps}>
+  {items.map((item, i) => (
+    <li key={item.id} {...optionProps(i)} onMouseEnter={() => setHighlight(i)}>…</li>
+  ))}
+</ul>
+```
+
+- **`aria-activedescendant` is omitted, never emptied.** An id resolving to no
+  element is worse than no attribute: the field claims an active option and the
+  reader announces nothing.
+- **`combobox(listKey)` takes a key** because one hook often feeds two rendered
+  lists — a header with a desktop field and a mobile one puts both in the same
+  document, and a single id set duplicates every option id.
+
+The arithmetic is `wiki-formant/combobox`, which imports nothing, so the rules
+are unit-tested without a DOM.
+
+## AI crawlers
+
+Every wiki kept this roster twice — once in the proxy, keyed by user-agent, to
+count an `AI Bot Visit`; once in `robots.ts`, as the agents that get their own
+group. Both copies were byte-identical across three repos, and they were
+different lists.
+
+```ts
+import { detectAiBot, aiCrawlerRules } from 'wiki-formant/crawlers';
+
+const bot = detectAiBot(request.headers.get('user-agent'));   // label, or null
+const rules = aiCrawlerRules({ allow: '/', disallow, aiAllow });
+```
+
+Only one direction of that difference was deliberate: `Applebot-Extended` never
+fetches a page, so it belongs in robots and not in the matcher. The other
+direction was not. Bytespider, CCBot, cohere-ai, Claude-Web and
+Meta-ExternalFetcher were matched by every proxy and named by no robots.txt —
+and a crawler obeys only its most-specific matching group, so an agent with no
+group of its own falls through to `*`. Three wikis were measuring five crawlers
+they had never addressed.
+
 ## Rendered-article passes
 
 `wiki-formant/dom` holds what runs against an article element after it is in the document. Not React, so not in `react.tsx`.
@@ -256,6 +310,8 @@ they name a gap in the corpus in the reader's own words.
 | `parsePagination`, `paginatedResponse`, `toOffset` | `wiki-formant/pagination` |
 | `parseVersion`, `formatVersion`, `incrementVersion`, `bump`, `compareVersions` | `wiki-formant/versioning` |
 | `plausibleEvent`, `mcpCallProps`, `searchQueryProps`, `plausibleDomain` | `wiki-formant/analytics` |
+| `comboboxAria`, `listId`, `optionId` | `wiki-formant/combobox` |
+| `AI_CRAWLERS`, `detectAiBot`, `aiCrawlerTokens`, `aiCrawlerRules` | `wiki-formant/crawlers` |
 | `useCollapsibleSidebar`, `SidebarProvider`, `useSidebar`, `TableOfContents`, `useTypeahead`, `useLinkPreview`, `useClickOutside` | `wiki-formant/react` |
 | `resolveSidebarOpen`, `sidebarBootScript`, `SIDEBAR_ATTRIBUTE` | `wiki-formant/sidebar` |
 | `addCopyButtons`, `activateTabGroups`, `tweetEmbedSrc`, `onTweetResize`, `hydrateTweetEmbeds`, `sizeTweetEmbeds`, `TWITTER_ORIGIN` | `wiki-formant/dom` |

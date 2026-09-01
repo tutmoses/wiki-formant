@@ -72,6 +72,14 @@
       "types": "./dist/blocks.d.ts",
       "import": "./dist/blocks.js"
     },
+    "./combobox": {
+      "types": "./dist/combobox.d.ts",
+      "import": "./dist/combobox.js"
+    },
+    "./crawlers": {
+      "types": "./dist/crawlers.d.ts",
+      "import": "./dist/crawlers.js"
+    },
     "./links": {
       "types": "./dist/links.d.ts",
       "import": "./dist/links.js"

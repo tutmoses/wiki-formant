@@ -82,3 +82,19 @@ test('versions compare by precedence, not by string', () => {
   assert.ok(compareVersions('1.10.0', '1.9.0') > 0);
   assert.equal(compareVersions('2.0.0', '2.0.0'), 0);
 });
+
+test('BUG: a route can cap page size below the package maximum', () => {
+  // The cap is per-route: a route whose rows are whole pages caps lower than one
+  // whose rows are titles. Without `max` the consumer that caps at 50 kept its
+  // own clamp, and then disagreed with itself — 50 in the REST route, 100 in the
+  // MCP tool beside it, over the same corpus.
+  const at = (qs, opts) => parsePagination(new URLSearchParams(qs), opts);
+  assert.equal(at('pageSize=80', { max: 50 }).pageSize, 50);
+  assert.equal(at('pageSize=80').pageSize, 80);
+  assert.equal(at('pageSize=200').pageSize, 100);
+  // A default above the cap is the cap, not the default.
+  assert.equal(at('', { pageSize: 80, max: 50 }).pageSize, 50);
+  // Junk still falls back, and the fallback still respects the cap.
+  assert.equal(at('pageSize=banana', { max: 50 }).pageSize, 20);
+  assert.equal(at('page=0', { max: 50 }).page, 1);
+});

@@ -238,7 +238,15 @@ export async function conditionalGetChecks(t: Tester, paths: readonly string[]):
   for (const path of paths) {
     const fresh = await fetch(`${t.base}/${path}`);
     const etag = fresh.headers.get('etag');
+    // Both validators, not just the one the 304 is driven by. A crawler that
+    // sends If-Modified-Since rather than If-None-Match — and several do — gets
+    // a full render on every pass from a response that carries no Last-Modified,
+    // and the ETag check alone would call that surface conformant. acuiq2's
+    // suite asserted this locally; adopting the shared check should not have
+    // been a trade.
+    const lastModified = fresh.headers.get('last-modified');
     const revalidated = etag ? await fetch(`${t.base}/${path}`, { headers: { 'If-None-Match': etag } }) : null;
     t.check(`${path} 304`, !!etag && revalidated?.status === 304, `etag=${etag} revalidate=${revalidated?.status}`);
+    t.check(`${path} last-modified`, !!lastModified, `${fresh.status} ${lastModified}`);
   }
 }

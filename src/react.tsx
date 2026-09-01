@@ -28,12 +28,14 @@
 //      sync afterwards, so CSS has one source of truth either side of hydration.
 
 import { resolveSidebarOpen, SIDEBAR_ATTRIBUTE } from './sidebar.js';
+import { comboboxAria, type ComboboxAria } from './combobox.js';
 import {
   createContext,
   createElement,
   useCallback,
   useContext,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -461,6 +463,15 @@ export interface TypeaheadState<T> {
   clearItems: () => void;
   /** Drop everything. For a pick, or a closing popover. */
   reset: () => void;
+  /**
+   * The listbox contract, ready to spread: `inputProps` on the field,
+   * `listProps` on the results container, `optionProps(i)` on each row.
+   *
+   * Pass a `listKey` when one hook feeds more than one rendered list — a header
+   * with a desktop and a mobile field renders both into the same document, and
+   * one id set across the two duplicates every option id.
+   */
+  combobox: (listKey?: string) => ComboboxAria;
 }
 
 /**
@@ -577,6 +588,14 @@ export function useTypeahead<T>({
     }
   };
 
+  // The ids have to be stable per mount and unique per surface; `useId` is what
+  // makes a second typeahead on the same page legal.
+  const baseId = useId();
+  const combobox = useCallback(
+    (listKey?: string) => comboboxAria({ baseId, listKey, count: items.length, highlight }),
+    [baseId, items.length, highlight],
+  );
+
   return {
     query,
     setQuery,
@@ -588,6 +607,7 @@ export function useTypeahead<T>({
     onKeyDown,
     clearItems,
     reset,
+    combobox,
   };
 }
 
