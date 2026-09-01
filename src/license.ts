@@ -38,6 +38,13 @@ export interface LicenseBlockOptions {
    * consumer of this so far grants over some of what it serves and not all.
    */
   scope?: string;
+  /**
+   * Agreement for the scope sentence. A scope naming one thing ("This content")
+   * takes `is`; one naming several ("The knowledge base and essays") takes
+   * `are`. Not inferred, because "content" and "prose" are singular nouns that
+   * look plural to any rule simple enough to be worth writing.
+   */
+  scopeVerb?: 'is' | 'are';
   /** Sentences appended after the identifiers — carve-outs, caveats, terms. */
   excludes?: readonly string[];
   /** `Licence` where the site's prose says so. Defaults to `License`. */
@@ -54,13 +61,14 @@ export interface LicenseBlockOptions {
 export function licenseLines({
   license,
   scope = 'This content',
+  scopeVerb = 'is',
   excludes = [],
   heading = 'License & Attribution',
 }: LicenseBlockOptions): string[] {
   return [
     `## ${heading}`,
     '',
-    `${scope} is licensed under the ${license.name} (${license.spdx}): ${license.url}`,
+    `${scope} ${scopeVerb} licensed under the ${license.name} (${license.spdx}): ${license.url}`,
     '',
     'You may ingest, embed, and redistribute this content in RAG systems, fine-tuning',
     'datasets, or other derivative works, including commercially. Attribution at the',

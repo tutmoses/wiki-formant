@@ -87,3 +87,13 @@ test('the channel carries its licence when it has one', () => {
   const out = renderFeed({ ...channel, copyright: 'CC BY 4.0 & friends' }, []);
   assert.ok(out.includes('<copyright>CC BY 4.0 &amp; friends</copyright>'));
 });
+
+test('a channel may date itself by a rule only it can express', () => {
+  // One consumer dates from the later of each item's published and updated
+  // stamps, so an edit to an old article still moves the feed. That is stronger
+  // than "the newest item" and not derivable from the items alone.
+  const out = renderFeed({ ...channel, lastBuild: new Date('2026-09-09T00:00:00Z') }, [
+    item({ date: new Date('2026-03-01T00:00:00Z') }),
+  ]);
+  assert.ok(out.includes('<lastBuildDate>Wed, 09 Sep 2026 00:00:00 GMT</lastBuildDate>'));
+});

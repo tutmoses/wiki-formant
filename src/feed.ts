@@ -92,6 +92,13 @@ export interface FeedChannel {
   language?: string;
   /** Channel-level licence, so the grant travels with the feed. */
   copyright?: string;
+  /**
+   * Overrides the derived build date. One consumer dates its channel from the
+   * later of each item's published and updated stamps, so an edit to an old
+   * article still moves the feed — a stronger rule than "the newest item", and
+   * one only that consumer's row shape can express.
+   */
+  lastBuild?: Date | null;
 }
 
 /**
@@ -102,10 +109,9 @@ export interface FeedChannel {
  * exist to prevent. An empty feed has no build date rather than a fictional one.
  */
 export function renderFeed(channel: FeedChannel, items: readonly FeedItem[]): string {
-  const newest = items.reduce<Date | null>(
-    (max, item) => (!max || item.date > max ? item.date : max),
-    null,
-  );
+  const newest =
+    channel.lastBuild ??
+    items.reduce<Date | null>((max, item) => (!max || item.date > max ? item.date : max), null);
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">',

@@ -12,6 +12,14 @@ test('the grant is the same one in every repo, credited to the caller', () => {
   assert.equal(licenseNote(license), 'Creative Commons Attribution 4.0 International (CC-BY-4.0): https://creativecommons.org/licenses/by/4.0/');
 });
 
+test('the scope sentence agrees with its subject', () => {
+  // "content" and "prose" are singular nouns that look plural to any rule simple
+  // enough to be worth writing, so the agreement is stated rather than inferred.
+  assert.ok(licenseBlock({ license, scope: 'This content' }).includes('This content is licensed'));
+  assert.ok(licenseBlock({ license, scope: 'The base and the essays', scopeVerb: 'are' })
+    .includes('The base and the essays are licensed'));
+});
+
 test('scope is stated rather than implied', () => {
   // Every consumer grants over some of what it serves and not all of it, so the
   // scope sentence is the part that must not be shared.
