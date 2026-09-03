@@ -1,6 +1,6 @@
 {
   "name": "wiki-formant",
-  "version": "0.9.4",
+  "version": "0.10.0",
   "description": "The portable half of a wiki: derived taxonomy with pressable facet controls, a spec-correct MCP transport, markdown twins, block rendering, link normalisation, freshness, rate limiting, a collapsible sidebar, typeahead and hover-preview hooks, editor nodes, server-side analytics for both the agent and human lanes, and the conditional-GET plumbing agent surfaces need.",
   "type": "module",
   "license": "MIT",
@@ -135,6 +135,10 @@
     "./tiptap": {
       "types": "./dist/tiptap.d.ts",
       "import": "./dist/tiptap.js"
+    },
+    "./rola": {
+      "types": "./dist/rola.d.ts",
+      "import": "./dist/rola.js"
     }
   },
   "files": [
@@ -149,6 +153,7 @@
     "prepublishOnly": "npm run build && node --test 'test/*.test.js'"
   },
   "devDependencies": {
+    "@radixdlt/rola": "^2.1.0",
     "@tiptap/core": "^2.10.0",
     "@tiptap/extension-code-block": "^2.10.0",
     "@tiptap/extension-youtube": "^2.10.0",
@@ -156,15 +161,18 @@
     "@tiptap/react": "^2.10.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
+    "jose": "^6.2.10",
     "react": "^19.2.4",
     "typescript": "^5.9.0"
   },
   "peerDependencies": {
-    "react": ">=18",
     "@tiptap/core": ">=2.10",
-    "@tiptap/react": ">=2.10",
+    "@tiptap/extension-code-block": ">=2.10",
     "@tiptap/extension-youtube": ">=2.10",
-    "@tiptap/extension-code-block": ">=2.10"
+    "@tiptap/react": ">=2.10",
+    "react": ">=18",
+    "jose": ">=5",
+    "@radixdlt/rola": ">=2"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -180,6 +188,12 @@
       "optional": true
     },
     "@tiptap/extension-code-block": {
+      "optional": true
+    },
+    "jose": {
+      "optional": true
+    },
+    "@radixdlt/rola": {
       "optional": true
     }
   }
