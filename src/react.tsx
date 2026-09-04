@@ -28,6 +28,7 @@
 //      sync afterwards, so CSS has one source of truth either side of hydration.
 
 import { resolveSidebarOpen, SIDEBAR_ATTRIBUTE } from './sidebar.js';
+import type { WikiLinkComponent } from './react-server.js';
 import { comboboxAria, type ComboboxAria } from './combobox.js';
 import {
   Component,
@@ -934,3 +935,139 @@ export class ErrorBoundary extends Component<
     return this.props.children;
   }
 }
+
+// ---- the rail itself --------------------------------------------------------
+
+/** One entry in the rail's section list, with its href already built. */
+export interface RailSection {
+  href: string;
+  title: string;
+  glyph: string;
+  blurb?: string;
+}
+
+export interface WikiRailProps {
+  /**
+   * The router's link component.
+   *
+   * The rail takes it as a prop rather than importing one. This package has no
+   * `next` peer dependency and is not getting one — but a rail that falls back
+   * to a bare `<a>` turns every navigation into a full page load, which is the
+   * whole reason a wiki has a persistent rail. So the router stays the
+   * consumer's and arrives through the door.
+   */
+  link: WikiLinkComponent;
+  /** The path being rendered, for the active marker. */
+  activePath: string;
+  /** The wiki root's href. */
+  homeHref: string;
+  /** The wiki's sections with their hrefs already built, resolved server-side. */
+  sections: RailSection[];
+  /**
+   * The article's headings, empty on the home and section views.
+   *
+   * Passing them is what lets `TableOfContents` skip its DOM scan and run no
+   * MutationObserver. A wiki whose block content streams in after the rail
+   * mounts leaves this empty and lets the scan do its job.
+   */
+  headings?: TocHeading[];
+  label?: string;
+  toggleLabel?: string;
+  homeLabel?: string;
+  homeGlyph?: string;
+  sectionsLabel?: string;
+  tocLabel?: string;
+}
+
+/**
+ * The persistent left rail: home, table of contents, sections.
+ *
+ * Three wikis had hand-rendered the same tree with the same `wiki-rail__*`
+ * classes and then drifted on the details — one lost the scroll wrapper, one
+ * labelled neither `<nav>`, one appended the sections above the contents. The
+ * class names are NOT props: they are the shared convention the three
+ * stylesheets already implement, and making them configurable would only let
+ * that convention fork again. Every string a reader sees is a prop, because
+ * those genuinely differ.
+ *
+ * Sections only, never the pages under them. The front page lists every page
+ * under each section and a section page lists its own; mirroring that here
+ * would make the rail a second copy of what is on screen.
+ */
+export function WikiRail({
+  link: Link,
+  activePath,
+  homeHref,
+  sections,
+  headings = [],
+  label = 'Wiki',
+  toggleLabel = 'Wiki menu',
+  homeLabel = 'Wiki home',
+  homeGlyph = '📖',
+  sectionsLabel = 'Sections',
+  tocLabel = 'On this page',
+}: WikiRailProps) {
+  const { open, toggle } = useSidebar();
+
+  const item = (href: string, active: boolean) =>
+    `wiki-rail__item${active ? ' wiki-rail__item--active' : ''}`;
+
+  return (
+    <aside className="wiki-sidebar" aria-label={label}>
+      <button type="button" className="wiki-rail__toggle" onClick={toggle} aria-expanded={open}>
+        <span className="wiki-rail__glyph" aria-hidden>
+          {open ? '▾' : '▸'}
+        </span>
+        {toggleLabel}
+      </button>
+      <div className="wiki-rail__scroll">
+        <nav className="wiki-rail__group">
+          <Link href={homeHref} className={item(homeHref, activePath === homeHref)}>
+            <span className="wiki-rail__glyph" aria-hidden>
+              {homeGlyph}
+            </span>
+            {homeLabel}
+          </Link>
+        </nav>
+
+        <TableOfContents
+          headings={headings.map(h => ({ id: h.id, text: h.text, level: h.level }))}
+          indentRem={0}
+          offsetVar="--spacing-lg"
+          offsetFallback={24}
+          classNames={{
+            root: 'wiki-rail__group wiki-rail__group--toc',
+            button: 'wiki-rail__toc-btn',
+            label: 'wiki-rail__label',
+            list: 'wiki-rail__toc-list',
+            item: 'wiki-rail__toc-item',
+            itemActive: 'wiki-rail__toc-item--active',
+          }}
+          label={tocLabel}
+        />
+
+        <nav className="wiki-rail__group" aria-label={sectionsLabel}>
+          <span className="wiki-rail__label">{sectionsLabel}</span>
+          {sections.map(section => (
+            <Link
+              key={section.href}
+              href={section.href}
+              title={section.blurb}
+              className={item(
+                section.href,
+                activePath === section.href || activePath.startsWith(`${section.href}/`),
+              )}
+            >
+              <span className="wiki-rail__glyph" aria-hidden>
+                {section.glyph}
+              </span>
+              {section.title}
+            </Link>
+          ))}
+        </nav>
+      </div>
+    </aside>
+  );
+}
+
+export type { WikiLinkComponent, WikiLinkProps } from './react-server.js';

@@ -1,7 +1,7 @@
 {
   "name": "wiki-formant",
-  "version": "0.10.0",
-  "description": "The portable half of a wiki: derived taxonomy with pressable facet controls, a spec-correct MCP transport, markdown twins, block rendering, link normalisation, freshness, rate limiting, a collapsible sidebar, typeahead and hover-preview hooks, editor nodes, server-side analytics for both the agent and human lanes, and the conditional-GET plumbing agent surfaces need.",
+  "version": "0.11.0",
+  "description": "The portable half of a wiki: derived taxonomy with pressable facet controls, a spec-correct MCP transport, markdown twins, block rendering, link normalisation, freshness, rate limiting, a collapsible rail and a server-rendered facet bar and breadcrumb trail, typeahead and hover-preview hooks, editor nodes, x402 payment gating for an MCP envelope, server-side analytics for both the agent and human lanes, a dead-className check as a bin, and the conditional-GET plumbing agent surfaces need.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -24,7 +24,9 @@
     "facets-ui",
     "typeahead",
     "search-analytics",
-    "tiptap"
+    "tiptap",
+    "x402",
+    "breadcrumbs"
   ],
   "sideEffects": false,
   "exports": {
@@ -128,6 +130,10 @@
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js"
     },
+    "./react-server": {
+      "types": "./dist/react-server.d.ts",
+      "import": "./dist/react-server.js"
+    },
     "./dom": {
       "types": "./dist/dom.d.ts",
       "import": "./dist/dom.js"
@@ -139,10 +145,18 @@
     "./rola": {
       "types": "./dist/rola.d.ts",
       "import": "./dist/rola.js"
+    },
+    "./x402": {
+      "types": "./dist/x402.d.ts",
+      "import": "./dist/x402.js"
     }
   },
+  "bin": {
+    "check-classes": "./bin/check-classes.mjs"
+  },
   "files": [
-    "dist"
+    "dist",
+    "bin"
   ],
   "engines": {
     "node": ">=20"
@@ -172,7 +186,12 @@
     "@tiptap/react": ">=2.10",
     "react": ">=18",
     "jose": ">=5",
-    "@radixdlt/rola": ">=2"
+    "@radixdlt/rola": ">=2",
+    "@x402/core": "*",
+    "@x402/evm": "*",
+    "@x402/next": "*",
+    "@x402/extensions": "*",
+    "viem": "*"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -194,6 +213,21 @@
       "optional": true
     },
     "@radixdlt/rola": {
+      "optional": true
+    },
+    "@x402/core": {
+      "optional": true
+    },
+    "@x402/evm": {
+      "optional": true
+    },
+    "@x402/next": {
+      "optional": true
+    },
+    "@x402/extensions": {
+      "optional": true
+    },
+    "viem": {
       "optional": true
     }
   }

@@ -220,6 +220,31 @@ const { inputProps, listProps, optionProps } = combobox();
 The arithmetic is `wiki-formant/combobox`, which imports nothing, so the rules
 are unit-tested without a DOM.
 
+## Server components
+
+`wiki-formant/react` carries `'use client'`, and that is a module-level boundary: anything exported from it hydrates in the consumer's tree whether or not it uses a hook. `wiki-formant/react-server` is the same React, without the directive — for the parts of a wiki that are pure functions of their props and should ship no JavaScript at all.
+
+`FacetBar` renders the rows `createTaxonomy` already produces. This is why the taxonomy exports a rows model rather than markup: the rows could always cross the boundary and, until this subpath existed, the markup could not, so all three wikis hand-rendered it and two put `aria-pressed` on an `<a>`. `Breadcrumbs` renders the trail and its `BreadcrumbList` JSON-LD together, because a trail whose structured data is written somewhere else is a trail that will one day disagree with its own markup — which is the case Google penalises. It takes a `base` origin: structured-data URLs must be absolute and a package cannot know the site.
+
+`WikiRail` stays in `wiki-formant/react`, because it calls `useSidebar` and genuinely is a client component. It renders the whole `wiki-rail__*` tree — scroll wrapper, both labelled `<nav>`s, the table of contents between them — where three wikis had drifted on which of those they had.
+
+All three take the router's link component as a prop:
+
+```tsx
+import Link from 'next/link';
+<FacetBar link={Link} facets={facets} letters={letters} />
+```
+
+There is no `next` peer dependency here and there is not going to be one, but a rail that falls back to a bare `<a>` turns every press into a full page load — which is the whole reason a wiki has a persistent rail. So the router arrives through the door.
+
+## Payment gating
+
+`wiki-formant/x402` gates an MCP envelope on payment, for a wiki that charges for a bulk export over HTTP and would otherwise hand the same bytes over free through the equivalent MCP tool. Payment travels in-band — `params._meta["x402/payment"]` in, `result._meta["x402/payment-response"]` out — because one HTTP 402 cannot answer a batch of twenty in which one call is priced and nineteen are not.
+
+`gatePaidCalls` returns what `handleMcp` should dispatch and a `finish` that puts the answer back together. The ordering is the part worth owning once: verify before dispatch, settle only after a non-error answer, splice the challenges back into the caller's original order. A tool that raises cancels rather than settles — the caller pays for an answer, not an attempt.
+
+It imports nothing. `@x402/core`, `@x402/evm`, `@x402/extensions`, `@x402/next` and `viem` are optional peers, and the resource server arrives as a structural port instead of an import, so a wiki that never imports this subpath never resolves any of them. Which surfaces cost what, the prices and the terms text stay with the caller: those are policy, and this is the envelope surgery.
+
 ## AI crawlers
 
 Every wiki kept this roster twice — once in the proxy, keyed by user-agent, to
@@ -372,12 +397,24 @@ they name a gap in the corpus in the reader's own words.
 | `renderFeed`, `renderItem`, `escXml`, `cdata`, `clampWords`, `absolutise`, `FEED_HEADERS` | `wiki-formant/feed` |
 | `ccBy40`, `licenseBlock`, `licenseLines`, `licenseNote` | `wiki-formant/license` |
 | `AI_CRAWLERS`, `detectAiBot`, `aiCrawlerTokens`, `aiCrawlerRules` | `wiki-formant/crawlers` |
-| `useCollapsibleSidebar`, `SidebarProvider`, `useSidebar`, `TableOfContents`, `useTypeahead`, `useLinkPreview`, `useClickOutside`, `useTableSort`, `useCopy`, `ErrorBoundary` | `wiki-formant/react` |
+| `useCollapsibleSidebar`, `SidebarProvider`, `useSidebar`, `TableOfContents`, `useTypeahead`, `useLinkPreview`, `useClickOutside`, `useTableSort`, `useCopy`, `ErrorBoundary`, `WikiRail` | `wiki-formant/react` |
+| `FacetBar`, `Breadcrumbs` | `wiki-formant/react-server` |
+| `gatePaidCalls` | `wiki-formant/x402` |
 | `resolveSidebarOpen`, `sidebarBootScript`, `SIDEBAR_ATTRIBUTE` | `wiki-formant/sidebar` |
 | `addCopyButtons`, `activateTabGroups`, `tweetEmbedSrc`, `onTweetResize`, `hydrateTweetEmbeds`, `sizeTweetEmbeds`, `TWITTER_ORIGIN` | `wiki-formant/dom` |
 | `Iframe`, `YouTube`, `TwitterEmbed`, `createMapEmbed`, `createCodeBlock`, `createTabs` | `wiki-formant/tiptap` |
 
-Everything above `wiki-formant/react` is also re-exported from the package root. The React, sidebar, DOM and tiptap subpaths are not: they carry `'use client'` or reach for a browser global, and the root has to stay importable from a route handler.
+Everything above `wiki-formant/react` is also re-exported from the package root. The React, sidebar, DOM, tiptap, react-server and x402 subpaths are not: they carry `'use client'`, reach for a browser global, or need a peer the root must not assume, and the root has to stay importable from a route handler.
+
+## A bin
+
+`check-classes` fails a build on a `className` token that resolves to nothing, and counts the inverse fault — 3+ Tailwind utilities inline, which is a component class that was never named. Both sets are derived from the emitted stylesheets rather than listed, so nothing has to be maintained per project. Run it from a repo root after a build:
+
+```sh
+npx check-classes                # exit 1 on any dead token
+npx check-classes --warn         # report and exit 0
+npx check-classes --compositions # also fail on the inline compositions
+```
 
 ## Licence
 

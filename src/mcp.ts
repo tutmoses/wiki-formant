@@ -120,7 +120,9 @@ export class McpToolError extends Error {
   }
 }
 
-type RpcRequest = { jsonrpc: '2.0'; id: string | number | null; method: string; params?: unknown };
+/** One entry in a JSON-RPC envelope. Exported because `wiki-formant/x402`
+ *  gates the envelope before `handleMcp` ever sees it. */
+export type RpcRequest = { jsonrpc: '2.0'; id: string | number | null; method: string; params?: unknown };
 type RpcId = string | number | null;
 
 const DEFAULT_MAX_BATCH = 20;
