@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { corpusEtag, notModified, textHeaders, markdownHeaders, descriptorHeaders, descriptorResponse, cleanSnippet, pageLine } from '../dist/http.js';
-import { parsePagination, paginatedResponse, toOffset } from '../dist/pagination.js';
+import { parsePagination, paginatedResponse, listEnvelope, toOffset } from '../dist/pagination.js';
 import { parseVersion, formatVersion, bump, compareVersions } from '../dist/versioning.js';
 
 test('an ETag is stable for the same corpus revision and moves when it changes', () => {
@@ -155,4 +155,16 @@ test('a descriptor carries a validator and answers a conditional GET', async () 
     etag,
   );
   assert.match(descriptorHeaders('W/"x"')['Content-Type'], /application\/json/);
+});
+
+test('a listing envelope tells an agent there is more and what to send', () => {
+  const first = listEnvelope(['a', 'b'], 45, 1, 20);
+  assert.equal(first.totalPages, 3);
+  assert.equal(first.hasMore, true);
+  assert.equal(first.nextPage, 2);
+  const last = listEnvelope(['x'], 45, 3, 20);
+  assert.equal(last.hasMore, false);
+  assert.equal(last.nextPage, undefined, 'a nextPage that does not exist is worse than none');
+  // An empty result is one page of nothing, not zero pages.
+  assert.equal(listEnvelope([], 0, 1, 20).totalPages, 1);
 });

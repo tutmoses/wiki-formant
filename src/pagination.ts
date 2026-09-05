@@ -50,6 +50,31 @@ export function paginatedResponse<T>(
   return { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
 }
 
+/**
+ * The envelope an MCP listing answers with.
+ *
+ * `paginatedResponse` names its array `items` because a REST caller reads the
+ * shape from a spec. A tool result is read by a model, which has no spec and
+ * will simply stop at twenty rows unless the envelope says otherwise — so this
+ * one states `totalPages`, whether there is more, and the exact number to pass
+ * back. Two wikis returning the same rows disagreed on precisely that: one
+ * carried the three fields, the other returned `total/page/pageSize` and left
+ * every agent to infer the rest.
+ */
+export function listEnvelope<T>(
+  pages: T[],
+  total: number,
+  page: number,
+  pageSize: number,
+): {
+  total: number; page: number; pageSize: number; totalPages: number;
+  hasMore: boolean; nextPage?: number; pages: T[];
+} {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const hasMore = page < totalPages;
+  return { total, page, pageSize, totalPages, hasMore, ...(hasMore ? { nextPage: page + 1 } : {}), pages };
+}
+
 /** The `skip`/`take` an ORM wants, from the same clamped pair. */
 export function toOffset({ page, pageSize }: Pagination): { skip: number; take: number } {
   return { skip: (page - 1) * pageSize, take: pageSize };
