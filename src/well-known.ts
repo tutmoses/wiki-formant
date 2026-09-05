@@ -93,6 +93,13 @@ export interface AgentCardLicense {
   scope?: string;
 }
 
+/**
+ * The A2A revision these cards are written to. Required since v0.3 — a card
+ * without it is not a card a spec-current client will accept, and all three
+ * origins here were serving one.
+ */
+export const A2A_PROTOCOL_VERSION = '0.3.0';
+
 export interface AgentCardConfig {
   name: string;
   description: string;
@@ -120,16 +127,24 @@ export interface AgentCardConfig {
  */
 export function agentCard(config: AgentCardConfig): Record<string, unknown> {
   const { name, description, url, version, skills, license, organization, documentationUrl, mcpEndpoint, extra } = config;
+  const endpoint = mcpEndpoint === null ? url : (mcpEndpoint ?? `${url}/api/mcp`);
   return {
+    protocolVersion: A2A_PROTOCOL_VERSION,
     name,
     description,
-    url,
+    // The endpoint, not the homepage. A card's `url` is where a client sends
+    // its first call, and every card here pointed at an HTML page — so a client
+    // that believed the card got markup back, or a 405. MCP is JSON-RPC over
+    // HTTP POST, so an A2A caller arriving at it is answered in a shape it can
+    // parse: a -32601 naming every method the server does implement.
+    url: endpoint,
+    preferredTransport: 'JSONRPC',
     version,
     capabilities: { streaming: false, pushNotifications: false },
     skills,
     provider: { organization: organization ?? name, url },
     documentationUrl: documentationUrl ?? `${url}/llms.txt`,
-    ...(mcpEndpoint === null ? {} : { mcpEndpoint: mcpEndpoint ?? `${url}/api/mcp` }),
+    ...(mcpEndpoint === null ? {} : { mcpEndpoint: endpoint }),
     ...(license ? { license } : {}),
     ...extra,
     defaultInputModes: ['text/plain', 'application/json'],

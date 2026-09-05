@@ -88,3 +88,32 @@ test('the cache header is a day at the edge, a week stale', () => {
   assert.match(AGENT_CARD_CACHE_CONTROL, /s-maxage=86400/);
   assert.match(AGENT_CARD_CACHE_CONTROL, /stale-while-revalidate=604800/);
 });
+
+test('a card carries the fields a spec-current A2A client requires', () => {
+  const card = agentCard({
+    name: 'Test Wiki',
+    description: 'A wiki.',
+    url: 'https://example.com',
+    version: '1.0.0',
+    skills: [],
+  });
+  for (const key of [
+    'protocolVersion', 'name', 'description', 'url', 'preferredTransport',
+    'version', 'capabilities', 'skills', 'defaultInputModes', 'defaultOutputModes',
+  ]) {
+    assert.ok(card[key] !== undefined, `a card without ${key} is rejected by a v0.3 client`);
+  }
+  // `url` is where a client sends its first call. The homepage answers HTML.
+  assert.equal(card.url, 'https://example.com/api/mcp');
+  assert.equal(card.preferredTransport, 'JSONRPC');
+  assert.equal(card.provider.url, 'https://example.com');
+});
+
+test('an origin with no MCP server still names a callable url', () => {
+  const card = agentCard({
+    name: 'Test', description: 'x', url: 'https://example.com', version: '1.0.0',
+    skills: [], mcpEndpoint: null,
+  });
+  assert.equal(card.mcpEndpoint, undefined);
+  assert.equal(card.url, 'https://example.com');
+});

@@ -1,7 +1,7 @@
 {
   "name": "wiki-formant",
-  "version": "0.11.0",
-  "description": "The portable half of a wiki: derived taxonomy with pressable facet controls, a spec-correct MCP transport, markdown twins, block rendering, link normalisation, freshness, rate limiting, a collapsible rail and a server-rendered facet bar and breadcrumb trail, typeahead and hover-preview hooks, editor nodes, x402 payment gating for an MCP envelope, server-side analytics for both the agent and human lanes, a dead-className check as a bin, and the conditional-GET plumbing agent surfaces need.",
+  "version": "0.12.0",
+  "description": "The portable half of a wiki: derived taxonomy with pressable facet controls, a version-negotiating MCP transport, markdown twins, block rendering, link normalisation, freshness, rate limiting, a collapsible rail and a server-rendered facet bar and breadcrumb trail, typeahead and hover-preview hooks, editor nodes, x402 payment gating for an MCP envelope, server-side analytics for both the agent and human lanes, a dead-className check as a bin, and the conditional-GET plumbing agent surfaces need.",
   "type": "module",
   "license": "MIT",
   "repository": {

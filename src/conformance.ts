@@ -15,11 +15,18 @@
 export interface Rpc {
   result?: {
     content?: Array<{ text?: string }>;
+    structuredContent?: unknown;
     isError?: boolean;
-    tools?: Array<{ name: string }>;
+    tools?: Array<{
+      name: string;
+      description?: string;
+      annotations?: Record<string, unknown>;
+    }>;
     resources?: Array<{ uri: string }>;
+    resourceTemplates?: Array<{ uriTemplate?: string }>;
     contents?: Array<{ text?: string }>;
     serverInfo?: { version?: string };
+    protocolVersion?: string;
     capabilities?: Record<string, unknown>;
     instructions?: string;
   };
@@ -139,6 +146,26 @@ export async function transportChecks(
   });
   t.check('initialize', !!init.result?.serverInfo && !!init.result?.instructions, JSON.stringify(init.result?.serverInfo ?? init.error));
 
+  // The version a server answers is the version its clients get. Asking for one
+  // and never looking at the reply is how three servers sat pinned to
+  // 2025-03-26 — forfeiting structured output, tool titles and `_meta` — while
+  // every suite reported green.
+  const echoed = await t.rpc('initialize', {
+    protocolVersion: CURRENT_PROTOCOL,
+    capabilities: {},
+    clientInfo: { name: clientName, version: '1' },
+  });
+  t.check(
+    'protocol negotiated',
+    echoed.result?.protocolVersion === CURRENT_PROTOCOL,
+    `asked ${CURRENT_PROTOCOL}, got ${echoed.result?.protocolVersion}`,
+  );
+  t.check(
+    'downgrades gracefully',
+    (init.result?.protocolVersion ?? '').length > 0,
+    `asked 2024-11-05, got ${init.result?.protocolVersion}`,
+  );
+
   console.log(`\n=== transport ===`);
 
   const opt = await fetch(t.endpoint, { method: 'OPTIONS' });
@@ -148,6 +175,16 @@ export async function transportChecks(
       opt.headers.get('access-control-allow-origin') === '*' &&
       (opt.headers.get('access-control-allow-headers') ?? '').includes('Mcp-Protocol-Version'),
     `${opt.status} ACAO=${opt.headers.get('access-control-allow-origin')}`,
+  );
+  // Allow-Headers governs what a browser may send; Expose-Headers what it may
+  // read. Without the second, a browser client cannot see `Retry-After` on a
+  // 429 and a rate limit reads to it as a hang.
+  t.check(
+    'CORS exposes response headers',
+    ['Mcp-Protocol-Version', 'Retry-After'].every(h =>
+      (opt.headers.get('access-control-expose-headers') ?? '').includes(h),
+    ),
+    `expose=${opt.headers.get('access-control-expose-headers')}`,
   );
 
   const get = await fetch(t.endpoint);
@@ -186,8 +223,44 @@ export async function transportChecks(
     `${JSON.stringify(caps)} expected=[${expectedCapabilities.join(', ')}]`,
   );
 
+  // Declaring `resources` makes a client ask for templates. -32601 to a method
+  // the capability implies reads as a broken server, not as "none registered".
+  if ('resources' in caps) {
+    const templates = await t.rpc('resources/templates/list');
+    t.check(
+      'resources/templates/list',
+      Array.isArray(templates.result?.resourceTemplates),
+      templates.error ? `-${templates.error.code}` : `${templates.result?.resourceTemplates?.length} templates`,
+    );
+  }
+
+  const versioned = await fetch(t.endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'MCP-Protocol-Version': CURRENT_PROTOCOL },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }),
+  });
+  t.recordCall();
+  t.check(
+    'MCP-Protocol-Version echoed',
+    versioned.headers.get('mcp-protocol-version') === CURRENT_PROTOCOL,
+    `sent ${CURRENT_PROTOCOL}, got ${versioned.headers.get('mcp-protocol-version')}`,
+  );
+
+  // Batching was removed in 2025-06-18. A server that keeps honouring it under
+  // a version that forbids it is telling the client something untrue.
+  const batched = await fetch(t.endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'MCP-Protocol-Version': CURRENT_PROTOCOL },
+    body: JSON.stringify([{ jsonrpc: '2.0', id: 1, method: 'ping' }]),
+  });
+  t.recordCall();
+  t.check('batch refused at 2025-06-18', batched.status === 400, `${batched.status}`);
+
   return init;
 }
+
+/** The newest protocol revision `wiki-formant/mcp` speaks. */
+export const CURRENT_PROTOCOL = '2025-06-18';
 
 /**
  * One service, many descriptors — server.json, the two agent-card paths, the
@@ -224,29 +297,161 @@ export async function versionCoherence(
  */
 export async function agentCardParity(t: Tester): Promise<void> {
   const [a, b] = await Promise.all([
-    fetch(`${t.base}/.well-known/agent-card.json`).then(r => r.json()),
-    fetch(`${t.base}/.well-known/agent.json`).then(r => r.json()),
+    fetch(`${t.base}/.well-known/agent-card.json`).then(r => r.json() as Promise<Record<string, unknown>>),
+    fetch(`${t.base}/.well-known/agent.json`).then(r => r.json() as Promise<Record<string, unknown>>),
   ]);
   t.check('agent card parity', JSON.stringify(a) === JSON.stringify(b), 'agent.json === agent-card.json');
+
+  // A card missing a required field is a card a spec-current client rejects, and
+  // parity alone happily reports two identical unusable ones.
+  const required = [
+    'protocolVersion',
+    'name',
+    'description',
+    'url',
+    'preferredTransport',
+    'version',
+    'capabilities',
+    'skills',
+    'defaultInputModes',
+    'defaultOutputModes',
+  ];
+  const missing = required.filter(k => a[k] === undefined);
+  t.check('agent card complete', missing.length === 0, missing.length ? `missing: ${missing.join(', ')}` : `A2A ${a.protocolVersion}`);
+
+  // `url` is where a client sends its first call. Pointed at the homepage it
+  // gets HTML back, which is the failure that looks like a broken agent.
+  const endpoint = String(a.url ?? '');
+  const probe = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }),
+  });
+  t.recordCall();
+  t.check(
+    'agent card url is callable',
+    (probe.headers.get('content-type') ?? '').includes('json'),
+    `POST ${endpoint} -> ${probe.status} ${probe.headers.get('content-type')}`,
+  );
 }
 
 /**
- * A corpus export that costs a full render should answer a conditional GET with
- * a 304. Checks each path serves an ETag and honours it on the way back.
+ * Any surface an agent recrawls should answer a conditional GET with a 304.
+ *
+ * Point this at every such surface, not only the corpus exports. Aimed solely
+ * at the `llms.*` family — the paths that already had validators — it reported
+ * green across three origins whose markdown twins, agent cards and OpenAPI
+ * documents carried no ETag at all. A check that only looks where it knows it
+ * will pass is a check that measures nothing.
  */
 export async function conditionalGetChecks(t: Tester, paths: readonly string[]): Promise<void> {
   for (const path of paths) {
-    const fresh = await fetch(`${t.base}/${path}`);
+    const url = path.startsWith('http') ? path : `${t.base}/${path.replace(/^\//, '')}`;
+    const label = path.replace(t.base, '');
+    const fresh = await fetch(url);
     const etag = fresh.headers.get('etag');
     // Both validators, not just the one the 304 is driven by. A crawler that
     // sends If-Modified-Since rather than If-None-Match — and several do — gets
     // a full render on every pass from a response that carries no Last-Modified,
-    // and the ETag check alone would call that surface conformant. acuiq2's
-    // suite asserted this locally; adopting the shared check should not have
-    // been a trade.
+    // and the ETag check alone would call that surface conformant.
     const lastModified = fresh.headers.get('last-modified');
-    const revalidated = etag ? await fetch(`${t.base}/${path}`, { headers: { 'If-None-Match': etag } }) : null;
-    t.check(`${path} 304`, !!etag && revalidated?.status === 304, `etag=${etag} revalidate=${revalidated?.status}`);
-    t.check(`${path} last-modified`, !!lastModified, `${fresh.status} ${lastModified}`);
+    const revalidated = etag ? await fetch(url, { headers: { 'If-None-Match': etag } }) : null;
+    t.check(`${label} 304`, !!etag && revalidated?.status === 304, `etag=${etag} revalidate=${revalidated?.status}`);
+    t.check(`${label} last-modified`, !!lastModified, `${fresh.status} ${lastModified}`);
+    // A list is what a client that holds two revisions actually sends, and the
+    // weak prefix is what a proxy adds in transit. Exact string equality passes
+    // the check above and fails both of these.
+    if (etag) {
+      const listed = await fetch(url, { headers: { 'If-None-Match': `W/"stale-x", ${etag}` } });
+      t.check(`${label} 304 (etag list)`, listed.status === 304, `${listed.status}`);
+    }
+  }
+}
+
+/**
+ * Every tool carries behavioural hints, and the ones that write say so.
+ *
+ * Without them a client that auto-approves read-only calls has no way to tell a
+ * lookup from one that signs a transaction — and two of the three servers here
+ * shipped write tools with no annotations at all.
+ */
+export async function annotationChecks(
+  t: Tester,
+  opts: { writes?: readonly string[] } = {},
+): Promise<void> {
+  const tools = (await t.rpc('tools/list')).result?.tools ?? [];
+  const writes = new Set(opts.writes ?? []);
+  const unannotated = tools.filter(x => x.annotations?.readOnlyHint === undefined);
+  t.check(
+    'tools annotated',
+    unannotated.length === 0,
+    unannotated.length ? `missing readOnlyHint: ${unannotated.map(x => x.name).join(', ')}` : `${tools.length} tools`,
+  );
+  const mislabelled = tools.filter(x => writes.has(x.name) && x.annotations?.readOnlyHint !== false);
+  t.check(
+    'writes not marked read-only',
+    mislabelled.length === 0,
+    mislabelled.length ? mislabelled.map(x => x.name).join(', ') : `${writes.size} write tools`,
+  );
+  const thin = tools.filter(x => (x.description ?? '').length < 120);
+  t.check(
+    'descriptions carry a usage note',
+    thin.length === 0,
+    thin.length ? thin.map(x => `${x.name}:${(x.description ?? '').length}ch`).join(' ') : `min ${Math.min(...tools.map(x => (x.description ?? '').length))}ch`,
+  );
+}
+
+/**
+ * The orientation calls stay inside a context window.
+ *
+ * A tool that passes a metadata column straight through is one stored blob away
+ * from returning 350 KB — around 90k tokens — from the first call an agent
+ * makes. Nothing in a pass/fail table notices that unless something weighs the
+ * answer, so this weighs it.
+ */
+export async function payloadBudget(
+  t: Tester,
+  calls: ReadonlyArray<{ name: string; args?: Record<string, unknown> }>,
+  maxBytes = 120_000,
+): Promise<void> {
+  for (const { name, args } of calls) {
+    const text = (await t.call(name, args ?? {})).result?.content?.[0]?.text ?? '';
+    t.check(
+      `${name} within budget`,
+      text.length <= maxBytes,
+      `${text.length.toLocaleString()} chars (max ${maxBytes.toLocaleString()})`,
+    );
+  }
+}
+
+/**
+ * The default `User-agent: *` group may reach everything the descriptors
+ * advertise.
+ *
+ * An origin whose card names an MCP endpoint its own robots.txt disallows to
+ * every unnamed crawler is telling two different stories to the same caller.
+ */
+export async function robotsChecks(t: Tester, paths: readonly string[]): Promise<void> {
+  const body = await (await fetch(`${t.base}/robots.txt`)).text();
+  const rules: Array<{ allow: boolean; path: string }> = [];
+  let inStar = false;
+  for (const raw of body.split('\n')) {
+    const line = raw.replace(/#.*$/, '').trim();
+    const [field, ...rest] = line.split(':');
+    if (!field || !rest.length) continue;
+    const key = field.trim().toLowerCase();
+    const value = rest.join(':').trim();
+    if (key === 'user-agent') inStar = value === '*';
+    else if (inStar && (key === 'allow' || key === 'disallow') && value) {
+      rules.push({ allow: key === 'allow', path: value });
+    }
+  }
+  for (const path of paths) {
+    // Longest match wins, Allow breaking a tie — the rule every major crawler
+    // implements.
+    const match = rules
+      .filter(r => path.startsWith(r.path.replace(/\*$/, '')))
+      .sort((a, b) => b.path.length - a.path.length || Number(b.allow) - Number(a.allow))[0];
+    t.check(`robots allows ${path}`, !match || match.allow, match ? `${match.allow ? 'Allow' : 'Disallow'}: ${match.path}` : 'no matching rule');
   }
 }

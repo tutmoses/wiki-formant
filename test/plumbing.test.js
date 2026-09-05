@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { corpusEtag, notModified, textHeaders, markdownHeaders, cleanSnippet, pageLine } from '../dist/http.js';
+import { corpusEtag, notModified, textHeaders, markdownHeaders, descriptorHeaders, descriptorResponse, cleanSnippet, pageLine } from '../dist/http.js';
 import { parsePagination, paginatedResponse, toOffset } from '../dist/pagination.js';
 import { parseVersion, formatVersion, bump, compareVersions } from '../dist/versioning.js';
 
@@ -97,4 +97,62 @@ test('BUG: a route can cap page size below the package maximum', () => {
   // Junk still falls back, and the fallback still respects the cap.
   assert.equal(at('pageSize=banana', { max: 50 }).pageSize, 20);
   assert.equal(at('page=0', { max: 50 }).page, 1);
+});
+
+// --- conditional GET, the way real clients send it ---------------------------
+
+const withHeaders = h => new Request('https://x/llms.txt', { headers: h });
+const LM = 'Fri, 04 Sep 2026 19:13:04 GMT';
+
+test('If-None-Match matches a list, and weakly', () => {
+  const tag = 'W/"abc-1"';
+  // A client that holds two revisions sends both. Exact string equality on the
+  // whole field value calls this stale and re-renders the corpus.
+  assert.equal(notModified(withHeaders({ 'if-none-match': `W/"old-9", ${tag}` }), tag, LM)?.status, 304);
+  // A proxy that strips or adds the weak prefix must not cost a full render.
+  assert.equal(notModified(withHeaders({ 'if-none-match': '"abc-1"' }), tag, LM)?.status, 304);
+  assert.equal(notModified(withHeaders({ 'if-none-match': '*' }), tag, LM)?.status, 304);
+  assert.equal(notModified(withHeaders({ 'if-none-match': 'W/"nope"' }), tag, LM), null);
+});
+
+test('If-Modified-Since is compared as a date, and ignored beside an ETag', () => {
+  const tag = 'W/"abc-1"';
+  // Later than the stamp we hold: the client is not behind.
+  assert.equal(notModified(withHeaders({ 'if-modified-since': 'Sat, 05 Sep 2026 00:00:00 GMT' }), tag, LM)?.status, 304);
+  assert.equal(notModified(withHeaders({ 'if-modified-since': 'Thu, 03 Sep 2026 00:00:00 GMT' }), tag, LM), null);
+  // RFC 9110: a present If-None-Match wins outright, even when it does not match.
+  assert.equal(
+    notModified(withHeaders({ 'if-none-match': 'W/"nope"', 'if-modified-since': LM }), tag, LM),
+    null,
+  );
+});
+
+test('a markdown twin can carry a validator', () => {
+  const h = markdownHeaders(LM, { etag: 'W/"page-1"' });
+  assert.equal(h.ETag, 'W/"page-1"');
+  assert.equal(h['Last-Modified'], LM);
+  assert.match(h['Content-Type'], /text\/markdown/);
+  // Still optional, for a corpus with no row timestamp to offer.
+  assert.equal(markdownHeaders().ETag, undefined);
+});
+
+test('a descriptor carries a validator and answers a conditional GET', async () => {
+  const card = { name: 'x', version: '1.0.0' };
+  const first = descriptorResponse(new Request('https://x/.well-known/agent-card.json'), card);
+  const etag = first.headers.get('ETag');
+  assert.ok(etag, 'a descriptor must be revalidatable');
+  assert.match(first.headers.get('Cache-Control'), /max-age/);
+  assert.deepEqual(JSON.parse(await first.text()), card);
+
+  const again = descriptorResponse(
+    new Request('https://x/.well-known/agent-card.json', { headers: { 'if-none-match': etag } }),
+    card,
+  );
+  assert.equal(again.status, 304);
+  // The tag moves exactly when the document does.
+  assert.notEqual(
+    descriptorResponse(new Request('https://x/'), { ...card, version: '1.0.1' }).headers.get('ETag'),
+    etag,
+  );
+  assert.match(descriptorHeaders('W/"x"')['Content-Type'], /application\/json/);
 });

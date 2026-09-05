@@ -95,8 +95,21 @@ test('an unknown method is -32601 and lists what does exist', async () => {
   const { error } = await (await post(rpc('tools/explode'))).json();
   assert.equal(error.code, -32601);
   assert.ok(error.data.supportedMethods.includes('tools/call'));
-  // Undeclared capabilities must not be advertised in the method list either.
-  assert.ok(!error.data.supportedMethods.includes('prompts/list'));
+  // Undeclared capabilities must not advertise the method that reads them.
+  assert.ok(!error.data.supportedMethods.includes('prompts/get'));
+});
+
+test('every method the list advertises is actually dispatched', async () => {
+  const { error } = await (await post(rpc('tools/explode'))).json();
+  for (const method of error.data.supportedMethods) {
+    if (method === 'initialize' || method === 'tools/call') continue;
+    const res = await (await post(rpc(method))).json();
+    assert.notEqual(
+      res.error?.code,
+      -32601,
+      `"${method}" is advertised but answers -32601`,
+    );
+  }
 });
 
 test('a caller-fixable argument mistake is a tool result, not -32603', async () => {
@@ -216,4 +229,97 @@ test('object params and arrays of objects validate', async () => {
   const text = bad.result.content[0].text;
   assert.match(text, /"content" must contain only objects/);
   assert.match(text, /"metadata" must be a object; received array/);
+});
+
+// --- protocol negotiation ----------------------------------------------------
+
+test('initialize echoes a version we speak, and offers the newest otherwise', async () => {
+  const spoken = await (await post(rpc('initialize', { protocolVersion: '2025-03-26' }))).json();
+  assert.equal(spoken.result.protocolVersion, '2025-03-26');
+
+  const unknown = await (await post(rpc('initialize', { protocolVersion: '1999-01-01' }))).json();
+  assert.equal(unknown.result.protocolVersion, MCP_PROTOCOL_VERSION);
+});
+
+const postAt = (body, version) =>
+  mcpResponse(
+    new Request('https://x/api/mcp', {
+      method: 'POST',
+      headers: version ? { 'MCP-Protocol-Version': version } : {},
+      body: JSON.stringify(body),
+    }),
+    config,
+  );
+
+test('the negotiated version comes back on every response', async () => {
+  assert.equal((await postAt(rpc('ping'), '2025-06-18')).headers.get('MCP-Protocol-Version'), '2025-06-18');
+  // No header means 2025-03-26, which is what the spec says to assume.
+  assert.equal((await postAt(rpc('ping'))).headers.get('MCP-Protocol-Version'), '2025-03-26');
+});
+
+test('batching is refused at 2025-06-18 and honoured below it', async () => {
+  const removed = await postAt([rpc('ping')], '2025-06-18');
+  assert.equal(removed.status, 400);
+  assert.equal((await removed.json()).error.code, -32600);
+
+  const kept = await postAt([rpc('ping')], '2025-03-26');
+  assert.equal(kept.status, 200);
+  assert.equal((await kept.json()).length, 1);
+});
+
+test('CORS exposes the headers a browser client has to read', async () => {
+  const expose = mcpOptions().headers.get('Access-Control-Expose-Headers');
+  assert.match(expose, /Mcp-Protocol-Version/);
+  assert.match(expose, /Retry-After/);
+});
+
+// --- structured output, _meta and the envelope gate --------------------------
+
+const richConfig = {
+  ...config,
+  tools: [
+    {
+      name: 'lookup',
+      title: 'Look something up',
+      description: 'Returns a shaped answer.',
+      inputSchema: { type: 'object', properties: {} },
+      outputSchema: { type: 'object', properties: { hits: { type: 'number', description: 'count' } } },
+      handler: async (_args, ctx) => {
+        ctx.setMeta('x402/payment-response', { settled: true, saw: ctx.meta.token ?? null });
+        return { hits: 2 };
+      },
+    },
+  ],
+};
+
+test('a tool with an outputSchema advertises it and answers structured', async () => {
+  const listed = await handleMcp(rpc('tools/list'), richConfig);
+  assert.equal(listed.result.tools[0].title, 'Look something up');
+  assert.deepEqual(listed.result.tools[0].outputSchema.properties.hits.type, 'number');
+
+  const called = await handleMcp(
+    rpc('tools/call', { name: 'lookup', arguments: {}, _meta: { token: 'abc' } }),
+    richConfig,
+  );
+  assert.deepEqual(called.result.structuredContent, { hits: 2 });
+  // The text block stays, because a client that ignored outputSchema still has
+  // to be able to read the answer.
+  assert.match(called.result.content[0].text, /"hits": 2/);
+  assert.deepEqual(called.result._meta['x402/payment-response'], { settled: true, saw: 'abc' });
+});
+
+test('a gate can withhold an entry and merge its own answer back', async () => {
+  const gated = {
+    ...config,
+    gate: async body => ({
+      body: [],
+      empty: true,
+      finish: async () => ({ jsonrpc: '2.0', id: body.id, error: { code: 402, message: 'Payment required' } }),
+    }),
+  };
+  const res = await mcpResponse(
+    new Request('https://x/api/mcp', { method: 'POST', body: JSON.stringify(rpc('tools/call', { name: 'search' })) }),
+    gated,
+  );
+  assert.equal((await res.json()).error.code, 402);
 });

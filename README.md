@@ -120,9 +120,28 @@ What it gets right:
 - **Malformed JSON is `-32700` with a `400`**, never a 500.
 - **`GET` is an explicit 405 with CORS headers.** A framework's automatic 405 carries none, so a browser client cannot even read the refusal.
 - **The preflight allow-list includes `Accept` and `Mcp-Protocol-Version`.** One missing entry fails the preflight rather than the POST, which presents as "the server is down".
-- **Batches are capped** (default 20) with a teaching error, because the rate limiter charges one token per HTTP request before the body is parsed.
+- **Batches are capped** (default 20) with a teaching error, because the rate limiter charges one token per HTTP request before the body is parsed. Under 2025-06-18 they are refused outright, because the revision removed them.
+- **The protocol version is negotiated, not asserted.** `initialize` echoes what the client asked for when it is one of `2025-06-18`, `2025-03-26` or `2024-11-05`, and offers the newest otherwise; every response carries the negotiated version back in `MCP-Protocol-Version`. Answering a constant is legal and still costs the caller structured output, tool titles and `_meta` without ever saying so.
+- **`Access-Control-Expose-Headers` is set.** Allow-Headers governs what a browser may send, Expose-Headers what it may read — without the second a browser client cannot see `Retry-After` on a 429, and a rate limit presents as a hang.
+- **`mcpRateLimited(retryAfterSec)` is a JSON-RPC envelope.** A 429 whose body is `{"error": "..."}` is a string where the client's parser expects `{code, message}`, on the one response an agent meets exactly when it is working hard.
+
+### Structured output, `_meta`, and the envelope gate
+
+Declare an `outputSchema` and the result carries `structuredContent` beside the text block, so a client reads the answer rather than scraping prose for it. A handler's second argument is its context:
+
+```ts
+handler: async (args, ctx) => {
+  ctx.meta;                                      // params._meta, as it arrived
+  ctx.setMeta('x402/payment-response', receipt); // rides back on result._meta
+  return { hits: 2 };
+}
+```
+
+`config.gate` is envelope-level middleware: it may withhold entries before dispatch and merge its own responses back afterwards. A payment gate has to sit there rather than in a handler, because the demand *replaces* the call and the receipt rides on the envelope.
 
 ## Markdown twins
+
+Pass an `etag` and answer `notModified` before rendering: a twin is the single most recrawled URL a page has, so a twin with no validator is a full render on every pass, forever — the same arithmetic that justifies the corpus ETag, applied per page.
 
 `htmlToMarkdown` preserves the structure an agent cites by — headings, lists, tables, code, emphasis — rather than flattening to prose. Tables convert first so the generic rules cannot eat their markup, ordered lists number per list, pipes inside cells are escaped, and a headerless table gets a synthesised header because GFM has no other form.
 
@@ -135,7 +154,7 @@ return new Response(
       license: { spdx: 'CC-BY-4.0', url: 'https://creativecommons.org/licenses/by/4.0/' } },
     blocksToMarkdown(page.content), // your block types, your function
   ),
-  { headers: markdownHeaders(lastModified) },
+  { headers: markdownHeaders(lastModified, { etag }) },
 );
 ```
 
@@ -387,7 +406,7 @@ they name a gap in the corpus in the reader's own words.
 | `injectHeadingIds`, `headingsFrom`, `slugifyHeading` | `wiki-formant/headings` |
 | `mcpResponse`, `mcpGet`, `mcpOptions`, `handleMcp`, `withMcpCors`, `McpToolError`, `MCP_CORS`, `MCP_PROTOCOL_VERSION` | `wiki-formant/mcp` |
 | `htmlToMarkdown`, `inlineToMarkdown`, `tableToMarkdown`, `frontmatter`, `markdownDocument`, `decodeEntities` | `wiki-formant/markdown` |
-| `corpusEtag`, `notModified`, `textHeaders`, `markdownHeaders`, `cleanSnippet`, `pageLine` | `wiki-formant/http` |
+| `corpusEtag`, `notModified`, `textHeaders`, `markdownHeaders`, `descriptorHeaders`, `descriptorResponse`, `cleanSnippet`, `pageLine` | `wiki-formant/http` |
 | `parsePagination`, `paginatedResponse`, `toOffset` | `wiki-formant/pagination` |
 | `mapBlockTree`, `mapBlockTreeAsync`, `someBlock`, `renderBlockTree` | `wiki-formant/blocks` |
 | `parseVersion`, `formatVersion`, `incrementVersion`, `bump`, `compareVersions` | `wiki-formant/versioning` |

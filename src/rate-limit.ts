@@ -89,6 +89,26 @@ export function retryMessage(retryAfterSec: number): string {
   return `Too many requests. Try again in ${retryAfterSec}s.`;
 }
 
+/**
+ * The 429 a plain JSON route owes a caller over budget.
+ *
+ * Web-standard `Response`, so it returns unchanged from a Next route handler.
+ * The three surfaces here each kept their own near-identical `limitRoute`; the
+ * bucket had been lifted but the refusal it produces had not, so the wording,
+ * the `Retry-After` and the cacheability were three separate decisions. An MCP
+ * endpoint wants `mcpRateLimited` from `wiki-formant/mcp` instead — that one
+ * has to be a JSON-RPC envelope.
+ */
+export function rateLimitedResponse(retryAfterSec: number): Response {
+  return Response.json(
+    { error: retryMessage(retryAfterSec), retryAfterSec },
+    {
+      status: 429,
+      headers: { 'Retry-After': String(retryAfterSec), 'Cache-Control': 'no-store' },
+    },
+  );
+}
+
 /** Test seam: the bucket map is module state and outlives a single test. */
 export function resetRateLimits(): void {
   buckets.clear();
