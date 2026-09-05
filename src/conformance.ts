@@ -448,11 +448,20 @@ export async function payloadBudget(
   maxBytes = 120_000,
 ): Promise<void> {
   for (const { name, args } of calls) {
-    const text = (await t.call(name, args ?? {})).result?.content?.[0]?.text ?? '';
+    const answer = await t.call(name, args ?? {});
+    const text = answer.result?.content?.[0]?.text ?? '';
+    // An empty answer is not a small one. The first draft compared only the
+    // length, so a call that failed outright — a cold connection pool timing
+    // out, in the run that caught this — reported `PASS 0 chars` and the check
+    // measured nothing. A budget that green-lights a call that never returned
+    // is the exact failure it exists to catch.
+    const answered = text.length > 0 && !answer.error && !answer.result?.isError;
     t.check(
       `${name} within budget`,
-      text.length <= maxBytes,
-      `${text.length.toLocaleString()} chars (max ${maxBytes.toLocaleString()})`,
+      answered && text.length <= maxBytes,
+      answered
+        ? `${text.length.toLocaleString()} chars (max ${maxBytes.toLocaleString()})`
+        : `no answer to weigh: ${answer.error ? `-${answer.error.code} ${answer.error.message}` : answer.result?.isError ? `isError: ${text.slice(0, 80)}` : 'empty result'}`,
     );
   }
 }
