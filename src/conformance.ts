@@ -369,6 +369,39 @@ export async function conditionalGetChecks(t: Tester, paths: readonly string[]):
 }
 
 /**
+ * A JSON descriptor is revalidatable — an agent card, an OpenAPI document, a
+ * registry manifest, a server card.
+ *
+ * Separate from `conditionalGetChecks` because the contract genuinely differs:
+ * a descriptor is built from code, not from rows, so it has no honest
+ * `Last-Modified` to offer. A stamp taken at cold start would move without the
+ * document moving, which is worse than none. The body-derived ETag is the whole
+ * validator, and it is enough.
+ */
+export async function descriptorChecks(t: Tester, paths: readonly string[]): Promise<void> {
+  for (const path of paths) {
+    const url = path.startsWith('http') ? path : `${t.base}/${path.replace(/^\//, '')}`;
+    const label = path.replace(t.base, '');
+    const fresh = await fetch(url);
+    const etag = fresh.headers.get('etag');
+    const json = (fresh.headers.get('content-type') ?? '').includes('json');
+    const revalidated = etag ? await fetch(url, { headers: { 'If-None-Match': etag } }) : null;
+    t.check(
+      `${label} revalidates`,
+      !!etag && json && revalidated?.status === 304,
+      `${fresh.status} ${fresh.headers.get('content-type')} etag=${etag} revalidate=${revalidated?.status}`,
+    );
+    // No max-age at all leaves a caller on heuristic freshness, which for a
+    // document with no Last-Modified means it may never refetch at all.
+    t.check(
+      `${label} states a freshness`,
+      /max-age=\d+/.test(fresh.headers.get('cache-control') ?? ''),
+      `cache-control: ${fresh.headers.get('cache-control')}`,
+    );
+  }
+}
+
+/**
  * Every tool carries behavioural hints, and the ones that write say so.
  *
  * Without them a client that auto-approves read-only calls has no way to tell a

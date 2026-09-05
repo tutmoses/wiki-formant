@@ -52,3 +52,19 @@ test('BUG: a named group always carries a disallow', () => {
   assert.equal(rules.length, AI_CRAWLERS.length + 1);
   assert.deepEqual(rules[1], { userAgent: 'GPTBot', allow: ['/', '/llms.txt'], disallow: ['/api/'] });
 });
+
+test('the default group can reach everything the descriptors advertise', () => {
+  const [star] = aiCrawlerRules({
+    allow: '/',
+    disallow: ['/api/', '/admin/'],
+    aiAllow: ['/', '/api/mcp', '/llms.txt'],
+  });
+  assert.equal(star.userAgent, '*');
+  // A card naming /api/mcp beside a robots.txt disallowing it tells two stories
+  // to the same caller; longest-match then resolves it the wrong way.
+  assert.ok(star.allow.includes('/api/mcp'));
+  assert.ok(star.disallow.includes('/admin/'), 'the disallows still apply');
+  // `allow` and `aiAllow` both normally start with '/', and a group listing the
+  // same path twice reads as a mistake in a file people inspect by eye.
+  assert.equal(star.allow.filter(a => a === '/').length, 1);
+});

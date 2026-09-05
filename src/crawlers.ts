@@ -98,11 +98,18 @@ export function aiCrawlerRules(opts: {
   disallow: string | string[];
   aiAllow: string | string[];
 }): RobotsGroup[] {
+  const aiAllow = [opts.aiAllow].flat();
   return [
-    { userAgent: '*', allow: opts.allow, disallow: opts.disallow },
+    // `aiAllow` rides on the default group too, not only on the named roster.
+    // The agent surface an origin advertises has to be reachable by a caller it
+    // has never heard of: two origins here disallowed `/api/` under `*` while
+    // their own agent card named `/api/mcp`, so an MCP client that identified
+    // honestly as itself was told the endpoint was off limits. The roster is
+    // for indexing policy, not for hiding a documented endpoint.
+    { userAgent: '*', allow: [...new Set([...[opts.allow].flat(), ...aiAllow])], disallow: opts.disallow },
     ...aiCrawlerTokens().map(userAgent => ({
       userAgent,
-      allow: opts.aiAllow,
+      allow: aiAllow,
       disallow: opts.disallow,
     })),
   ];

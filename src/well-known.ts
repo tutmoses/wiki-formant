@@ -185,8 +185,10 @@ export const SERVER_CARD_SCHEMA =
  */
 export function serverCard(
   manifest: ServerManifest,
-  protocolVersion: string,
+  /** Every version the transport speaks, not just the newest it prefers. */
+  protocolVersions: string | readonly string[],
 ): Record<string, unknown> {
+  const supported = typeof protocolVersions === 'string' ? [protocolVersions] : [...protocolVersions];
   return {
     $schema: SERVER_CARD_SCHEMA,
     name: manifest.name,
@@ -195,7 +197,7 @@ export function serverCard(
     version: manifest.version,
     ...(manifest.websiteUrl ? { websiteUrl: manifest.websiteUrl } : {}),
     ...(manifest.remotes
-      ? { remotes: manifest.remotes.map(r => ({ ...r, supportedProtocolVersions: [protocolVersion] })) }
+      ? { remotes: manifest.remotes.map(r => ({ ...r, supportedProtocolVersions: supported })) }
       : {}),
   };
 }
