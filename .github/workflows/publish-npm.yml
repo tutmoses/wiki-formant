@@ -123,8 +123,14 @@ jobs:
       # granted above; --provenance stays explicit so that a run which somehow
       # loses that grant fails here rather than quietly shipping an unattested
       # tarball.
+      #
+      # verbose is not debug residue. Every failure path in npm's OIDC exchange
+      # returns quietly and logs only at this level, so at the default one a
+      # rejected exchange is indistinguishable from no exchange — npm falls
+      # back to whatever token .npmrc holds (under setup-node, the placeholder
+      # XXXXX-XXXXX) and the registry answers with a 404 naming the package,
+      # which reads as if the package were missing. Verbose turns that into
+      # "oidc Failed token exchange request" with the registry's own reason.
       - name: Publish
         if: steps.check.outputs.changed == 'true'
-        run: |
-          npm --version
-          npm publish --provenance --access public --loglevel verbose
+        run: npm publish --provenance --access public --loglevel verbose
