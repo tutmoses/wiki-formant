@@ -193,3 +193,39 @@ export function pageLine(opts: {
     : '';
   return `- [${opts.title}](${opts.url})${excerpt}${stamp ? ` _(updated ${stamp})_` : ''}`;
 }
+
+// ---- route factories --------------------------------------------------------
+
+/** The pair every corpus endpoint computes before it decides to render. */
+export interface CorpusValidators {
+  etag: string;
+  lastModified: string;
+}
+
+/**
+ * A GET handler serving `build()` under corpus validators — or a 304 instead.
+ *
+ * The build is not called on a 304, which is the whole point: these are the
+ * most-recrawled and most expensive URLs a wiki serves, and rendering a corpus
+ * to discard it is the cost this exists to avoid.
+ *
+ * `validators` is a thunk rather than a value because it is a query. The depth
+ * or scope it closes over belongs in the seed — three depths sharing one ETag
+ * is legal (a tag is scoped to its URI) and still wrong in the case that
+ * matters: an edit to one depth's own preamble moves no page row, so the tag
+ * would not move and the stale document would be served until something else
+ * in the corpus changed.
+ */
+export function corpusRoute(
+  validators: () => Promise<CorpusValidators> | CorpusValidators,
+  build: () => Promise<string> | string,
+  headers: (etag: string, lastModified: string) => Record<string, string> = textHeaders,
+): (request: Request) => Promise<Response> {
+  return async (request: Request) => {
+    const { etag, lastModified } = await validators();
+    return (
+      notModified(request, etag, lastModified) ??
+      new Response(await build(), { headers: headers(etag, lastModified) })
+    );
+  };
+}

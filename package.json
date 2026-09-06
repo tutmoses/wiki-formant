@@ -1,7 +1,7 @@
 {
   "name": "wiki-formant",
-  "version": "0.13.0",
-  "description": "The portable half of a wiki: derived taxonomy with pressable facet controls, a version-negotiating MCP transport, markdown twins, block rendering, link normalisation, freshness, rate limiting, a collapsible rail and a server-rendered facet bar and breadcrumb trail, typeahead and hover-preview hooks, editor nodes, x402 payment gating for an MCP envelope, server-side analytics for both the agent and human lanes, a dead-className check as a bin, an MCP conformance suite, and the conditional-GET plumbing agent surfaces need.",
+  "version": "0.14.0",
+  "description": "The portable half of a wiki: derived taxonomy with pressable facet controls, a version-negotiating MCP transport, markdown twins, block rendering and the shared block views, the rich-text editor engine, link normalisation, freshness, rate limiting, a collapsible rail shell and a server-rendered facet bar and breadcrumb trail, typeahead and hover-preview hooks, editor nodes, x402 payment gating for an MCP envelope, server-side analytics for both the agent and human lanes, a dead-className check as a bin, an MCP conformance suite, a dead-link probe, and the conditional-GET plumbing agent surfaces need.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -26,7 +26,10 @@
     "search-analytics",
     "tiptap",
     "x402",
-    "breadcrumbs"
+    "breadcrumbs",
+    "block-views",
+    "editor",
+    "link-check"
   ],
   "sideEffects": false,
   "exports": {
@@ -149,6 +152,18 @@
     "./x402": {
       "types": "./dist/x402.d.ts",
       "import": "./dist/x402.js"
+    },
+    "./block-views": {
+      "types": "./dist/block-views.d.ts",
+      "import": "./dist/block-views.js"
+    },
+    "./editor": {
+      "types": "./dist/editor.d.ts",
+      "import": "./dist/editor.js"
+    },
+    "./link-check": {
+      "types": "./dist/link-check.d.ts",
+      "import": "./dist/link-check.js"
     }
   },
   "bin": {
@@ -170,9 +185,17 @@
     "@radixdlt/rola": "^2.1.0",
     "@tiptap/core": "^2.10.0",
     "@tiptap/extension-code-block": "^2.10.0",
+    "@tiptap/extension-image": "^2.27.3",
+    "@tiptap/extension-link": "^2.27.3",
+    "@tiptap/extension-placeholder": "^2.27.3",
+    "@tiptap/extension-table": "^2.27.3",
+    "@tiptap/extension-table-cell": "^2.27.3",
+    "@tiptap/extension-table-header": "^2.27.3",
+    "@tiptap/extension-table-row": "^2.27.3",
     "@tiptap/extension-youtube": "^2.10.0",
     "@tiptap/pm": "^2.10.0",
     "@tiptap/react": "^2.10.0",
+    "@tiptap/starter-kit": "^2.27.3",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "jose": "^6.2.10",
@@ -180,18 +203,26 @@
     "typescript": "^5.9.0"
   },
   "peerDependencies": {
+    "@radixdlt/rola": ">=2",
     "@tiptap/core": ">=2.10",
     "@tiptap/extension-code-block": ">=2.10",
     "@tiptap/extension-youtube": ">=2.10",
     "@tiptap/react": ">=2.10",
-    "react": ">=18",
-    "jose": ">=5",
-    "@radixdlt/rola": ">=2",
     "@x402/core": "*",
     "@x402/evm": "*",
-    "@x402/next": "*",
     "@x402/extensions": "*",
-    "viem": "*"
+    "@x402/next": "*",
+    "jose": ">=5",
+    "react": ">=18",
+    "viem": "*",
+    "@tiptap/starter-kit": ">=2.10",
+    "@tiptap/extension-link": ">=2.10",
+    "@tiptap/extension-image": ">=2.10",
+    "@tiptap/extension-table": ">=2.10",
+    "@tiptap/extension-table-row": ">=2.10",
+    "@tiptap/extension-table-cell": ">=2.10",
+    "@tiptap/extension-table-header": ">=2.10",
+    "@tiptap/extension-placeholder": ">=2.10"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -228,6 +259,30 @@
       "optional": true
     },
     "viem": {
+      "optional": true
+    },
+    "@tiptap/starter-kit": {
+      "optional": true
+    },
+    "@tiptap/extension-link": {
+      "optional": true
+    },
+    "@tiptap/extension-image": {
+      "optional": true
+    },
+    "@tiptap/extension-table": {
+      "optional": true
+    },
+    "@tiptap/extension-table-row": {
+      "optional": true
+    },
+    "@tiptap/extension-table-cell": {
+      "optional": true
+    },
+    "@tiptap/extension-table-header": {
+      "optional": true
+    },
+    "@tiptap/extension-placeholder": {
       "optional": true
     }
   }

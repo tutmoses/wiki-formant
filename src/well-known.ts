@@ -201,3 +201,32 @@ export function serverCard(
       : {}),
   };
 }
+
+/**
+ * The whole `/.well-known/mcp-registry-auth` handler.
+ *
+ * Three repos carried this route byte for byte — the same 404-when-unset guard,
+ * the same three headers — differing only in the domain named in a comment. The
+ * record was already shared; the handler around it was not, which is the half
+ * that actually has behaviour to get wrong. Mount it as
+ * `export const GET = registryAuthHandler()`.
+ *
+ * Key material stays an env var, read by the caller rather than here: a package
+ * that reaches into `process.env` is one that behaves differently depending on
+ * who imported it.
+ *
+ * Unset → 404 rather than a malformed record, so a missing key reads as "not
+ * configured" instead of failing verification for a reason nobody sees.
+ */
+export function registryAuthHandler(
+  publicKey = process.env.MCP_REGISTRY_PUBLIC_KEY,
+  keyType = process.env.MCP_REGISTRY_KEY_TYPE,
+): () => Response {
+  return () => {
+    const record = registryAuthRecord(publicKey, keyType);
+    if (!record) return new Response('Not found', { status: 404 });
+    return new Response(record.body, {
+      headers: { 'Content-Type': record.contentType, 'Cache-Control': record.cacheControl },
+    });
+  };
+}

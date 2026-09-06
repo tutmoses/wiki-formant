@@ -137,7 +137,12 @@ export function FacetBar({
 
 export interface BreadcrumbItem {
   label: string;
-  href: string;
+  /**
+   * Omit to render the crumb as plain text rather than a link — a section that
+   * groups pages but has no page of its own. A crumb with no href is left out
+   * of the `BreadcrumbList` too, since a `ListItem` with no `item` is invalid.
+   */
+  href?: string;
 }
 
 export interface BreadcrumbsProps {
@@ -145,55 +150,128 @@ export interface BreadcrumbsProps {
   /**
    * Origin the JSON-LD `item` URLs are resolved against, without a trailing
    * slash. Structured-data URLs must be absolute — Google rejects relative
-   * paths — and this package cannot know the site it is rendering for.
+   * paths — and this package cannot know the site it is rendering for. Omit it
+   * to render the trail with no structured data at all.
    */
-  base: string;
+  base?: string;
   className?: string;
   /** Defaults to a plain `<a>`, which is what a crumb trail wants. */
   link?: WikiLinkComponent;
+  /**
+   * What the final crumb renders as.
+   *
+   * `h1` is not decoration: on a wiki whose page title IS the last crumb, the
+   * trail and the heading are the same words, and rendering both means either
+   * saying it twice or shipping a page with no h1 at all. The `breadcrumb-h1`
+   * class carries the size difference.
+   */
+  lastAs?: 'span' | 'h1';
+  /**
+   * Fewest crumbs worth rendering. Default 2 — one crumb is not a trail.
+   *
+   * A wiki whose last crumb doubles as the page heading passes 1, because there
+   * the single crumb is not a trail either, it is the title.
+   */
+  minItems?: number;
 }
 
 /**
  * The trail, plus the `BreadcrumbList` that makes it a rich result.
  *
- * The two are emitted together on purpose: a trail whose JSON-LD is written
+ * THE TWO ARE EMITTED TOGETHER ON PURPOSE. A trail whose JSON-LD is written
  * somewhere else is a trail that will one day disagree with its own markup, and
- * Google penalises exactly that.
+ * Google penalises exactly that. Both wikis had proved the point before
+ * adopting this: each rendered its crumbs in a component and built its
+ * `BreadcrumbList` in a different file — a page module in one, a `*-ld.ts` in
+ * the other — and one of them carried a comment noting the risk it was taking.
  *
- * Renders nothing for a single crumb. One item is not a trail, and a
- * `BreadcrumbList` of length one is noise in the index.
+ * Markup is a `<nav>` wrapping an `<ol>`: a breadcrumb trail is an ordered list
+ * and assistive technology announces it as one. The separators are list items
+ * marked `aria-hidden`, so they are not read out as content.
  */
-export function Breadcrumbs({ items, base, className = '', link: Link = Anchor }: BreadcrumbsProps) {
-  if (!items || items.length <= 1) return null;
+export function Breadcrumbs({
+  items,
+  base,
+  className = '',
+  link: Link = Anchor,
+  lastAs = 'span',
+  minItems = 2,
+}: BreadcrumbsProps) {
+  if (!items || items.length < minItems) return null;
 
   const absolute = (path: string) =>
     /^https?:\/\//.test(path) ? path : `${base}${path.startsWith('/') ? path : `/${path}`}`;
 
+  // A one-item list is noise in the index even where the trail is worth
+  // rendering. Every crumb is listed, but only a crumb with an href carries an
+  // `item`: schema.org's documented shape for the page you are already on is a
+  // final `ListItem` with a name and no URL, so dropping it would lose the leaf
+  // the trail exists to name.
+  const structured = base && items.length > 1;
+
   return (
     <>
-      <nav aria-label="Breadcrumb" className={`breadcrumbs ${className}`}>
+      <nav aria-label="Breadcrumb" className={`breadcrumbs ${className}`.trim()}>
         <ol>
-          {items.map((item, i) => (
-            <Fragment key={item.href}>
-              {i > 0 && <li className="separator" aria-hidden="true">/</li>}
-              <li>
-                {i === items.length - 1 ? (
-                  <span className="pl-4" aria-current="page">{item.label}</span>
-                ) : (
-                  <Link href={item.href}>{item.label}</Link>
-                )}
-              </li>
-            </Fragment>
-          ))}
+          {items.map((item, i) => {
+            const isLast = i === items.length - 1;
+            const Last = lastAs === 'h1' ? 'h1' : 'span';
+            return (
+              <Fragment key={item.href ?? `${item.label}-${i}`}>
+                {i > 0 && <li className="separator" aria-hidden="true">/</li>}
+                <li>
+                  {isLast ? (
+                    <Last
+                      className={lastAs === 'h1' ? 'breadcrumb-h1' : 'breadcrumb-current'}
+                      aria-current="page"
+                    >
+                      {item.label}
+                    </Last>
+                  ) : item.href ? (
+                    <Link href={item.href} className="breadcrumb-link" title={item.label}>
+                      {item.label}
+                    </Link>
+                  ) : (
+                    <span className="breadcrumb-current">{item.label}</span>
+                  )}
+                </li>
+              </Fragment>
+            );
+          })}
         </ol>
       </nav>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
-        "@context": "https://schema.org",
-        "@type": "BreadcrumbList",
-        "itemListElement": items.map((item, i) => ({
-          "@type": "ListItem", "position": i + 1, "name": item.label, "item": absolute(item.href)
-        }))
-      }) }} />
+      {structured && (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'BreadcrumbList',
+          itemListElement: items.map((item, i) => ({
+            '@type': 'ListItem',
+            position: i + 1,
+            name: item.label,
+            ...(item.href ? { item: absolute(item.href) } : {}),
+          })),
+        }) }} />
+      )}
     </>
+  );
+}
+
+/**
+ * The standard page-top row: the trail, plus optional right-aligned actions.
+ *
+ * The column it sits in is the one its route declares — the row reads the
+ * page's own max-width by inheritance, so a trail can no longer disagree with
+ * the content it titles.
+ */
+export function BreadcrumbsRow({
+  actions,
+  className = '',
+  ...props
+}: BreadcrumbsProps & { actions?: ReactNode }) {
+  return (
+    <div className={`breadcrumbs-row ${actions ? 'spread' : ''} ${className}`.trim()}>
+      <Breadcrumbs {...props} />
+      {actions}
+    </div>
   );
 }

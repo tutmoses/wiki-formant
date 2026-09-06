@@ -152,3 +152,29 @@ export function withRateLimit<T extends Response>(
 export function resetRateLimits(): void {
   buckets.clear();
 }
+
+// ---- the MCP budget ---------------------------------------------------------
+
+/**
+ * The one MCP rate-limit number, for every surface that states one.
+ *
+ * `.well-known/mcp.json`, the OpenAPI spec, agents.md, llms.txt and the
+ * `initialize` instructions all quote this, so the endpoint enforces exactly
+ * what the documents claim. It is a cross-surface contract, which is why it
+ * lives here rather than three times over: it had already drifted to 200 on one
+ * surface with nothing recorded about why, and that is the state that makes a
+ * number impossible to change safely later — nobody can tell a considered
+ * difference from a stale one.
+ *
+ * A surface with a genuine reason to differ passes its own `RateLimitOptions`.
+ * What it must not do is restate this one.
+ */
+export const MCP_RATE_LIMIT_PER_MIN = 60;
+
+export const MCP_RATE_LIMIT_TEXT = `${MCP_RATE_LIMIT_PER_MIN} requests per minute per IP`;
+
+/** The budget as `mcpResponse` takes it, so a route states it once. */
+export const MCP_RATE_LIMIT: RateLimitOptions = {
+  capacity: MCP_RATE_LIMIT_PER_MIN,
+  refillPerSec: MCP_RATE_LIMIT_PER_MIN / 60,
+};

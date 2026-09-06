@@ -994,6 +994,86 @@ export interface WikiRailProps {
  * under each section and a section page lists its own; mirroring that here
  * would make the rail a second copy of what is on screen.
  */
+// ---- rail shell -------------------------------------------------------------
+
+export interface RailShellProps {
+  children: ReactNode;
+  /**
+   * Class prefix the stylesheet implements: `"wiki-sidebar"` or `"sidebar"`.
+   *
+   * The one thing genuinely per-repo here. Everything else — which three states
+   * exist, what each means, and that the attribute outranks the class — is a
+   * contract both stylesheets already spell out in near-identical comments.
+   */
+  prefix: string;
+  /** Accessible name. A rail with none is an unlabelled landmark. */
+  label?: string;
+  className?: string;
+}
+
+/**
+ * The collapsible rail's outer shell: the landmark, its three states, and the
+ * scroll container, with a tap inside it closing the rail on mobile.
+ *
+ * THE THREE STATES ARE NOT TWO. `--open` / `--closed` is the reader's choice;
+ * `--instant` suppresses the transition until that choice has been read out of
+ * storage. Without the third, a rail the reader left closed renders open and
+ * then *slides shut* on every single load — and because the fix is invisible
+ * once it works, it is the part a reimplementation drops. Both rails that had
+ * this written out locally carried the same paragraph of comment explaining it,
+ * which is how you can tell it was learned twice.
+ *
+ * The class is not authoritative and cannot be: the server cannot read
+ * localStorage, so `sidebarBootScript` stamps `html[data-sidebar]` before first
+ * paint and the stylesheet lets that attribute win. The class is what keeps
+ * React's view in sync afterwards.
+ *
+ * Closing on navigate is scoped to mobile because that is where the rail
+ * OVERLAYS the article — on a desktop it is a column beside it, and collapsing
+ * it on every click would be a rail that folds itself away as you use it.
+ */
+export function RailShell({ children, prefix, label, className }: RailShellProps) {
+  const { open, setOpen, isMobile, ready } = useSidebar();
+
+  const close = useCallback(() => {
+    if (isMobile) setOpen(false);
+  }, [isMobile, setOpen]);
+
+  const classes = [
+    prefix,
+    open ? `${prefix}--open` : `${prefix}--closed`,
+    ready ? '' : `${prefix}--instant`,
+    className ?? '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  return (
+    <aside className={classes} aria-label={label}>
+      <div className={`${prefix}__scroll`} onClick={close}>
+        {children}
+      </div>
+    </aside>
+  );
+}
+
+/**
+ * Is this rail link the one the reader is on?
+ *
+ * `tree` marks a link that owns its descendants — a section that should stay lit
+ * while you read a page inside it. Both rails had this predicate and both
+ * matched on the PATH ONLY, deliberately: `?edit=` and `?history=` are modes a
+ * page enters, not destinations a rail selects, and reading them would drag
+ * `useSearchParams` into a statically-rendered wiki.
+ */
+export function isRailLinkActive(
+  activePath: string,
+  href: string,
+  tree = false,
+): boolean {
+  return tree ? activePath === href || activePath.startsWith(`${href}/`) : activePath === href;
+}
+
 export function WikiRail({
   link: Link,
   activePath,

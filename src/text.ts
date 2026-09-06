@@ -46,6 +46,22 @@ export const BANNER_LABELS: Record<BannerVariant, string> = {
   coi: 'Conflict of interest',
 };
 
+/**
+ * The banner variants as an editor's option list, in the order a writer meets
+ * them: the two that describe a gap first, then the three that describe a flaw.
+ *
+ * Derived from `BANNER_LABELS` rather than restated. Both editors had typed the
+ * same six `{ value, label }` pairs out by hand, which made four places in the
+ * workspace holding the same strings — and an editor whose dropdown disagrees
+ * with the renderer's label is a page whose banner changes wording when you
+ * open it for editing.
+ */
+export const BANNER_VARIANTS: ReadonlyArray<{ value: BannerVariant; label: string }> =
+  (Object.keys(BANNER_LABELS) as BannerVariant[]).map(value => ({
+    value,
+    label: BANNER_LABELS[value],
+  }));
+
 /** A maintenance notice, inline: `[Notice: Needs citations] …`. */
 export function bannerToText(label: string, text?: string | null): string {
   return `[Notice: ${label}]${text ? ' ' + stripHtml(text) : ''}`;
