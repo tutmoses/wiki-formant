@@ -11,18 +11,22 @@
 # fix. A push touching only docs, tests or this workflow still ends as a clean
 # no-op.
 #
-# Auth note: the npm account has 2FA disabled, so this uses a GRANULAR access
-# token with "bypass 2FA" enabled, held as the NPM_TOKEN repository secret.
-# That token is a publishing credential with no second factor in front of it —
-# scope it to this package alone, and rotate it if the repository's collaborator
-# set ever changes. npm removes direct publish from bypass-2FA tokens in
-# January 2027; the replacement is trusted publishing (OIDC), which needs no
-# token and which `id-token: write` below already satisfies once it is
-# configured for this package on npmjs.com.
+# Auth note: this publishes with TRUSTED PUBLISHING (OIDC) — no token. The
+# registry trusts a short-lived token minted by GitHub for this repository and
+# this workflow file, which is why `id-token: write` is the whole credential.
+# The matching half lives on npmjs.com under the package's Settings → Trusted
+# Publisher: owner `tutmoses`, repo `wiki-formant`, workflow `publish-npm.yml`,
+# no environment. Rename this file and publishing breaks until that field is
+# updated — the failure is loud, but it is not obvious.
+#
+# A trusted-publisher config created after 3 Sep 2026 allows `npm stage publish`
+# only unless direct publishing is also ticked. This job publishes directly, so
+# that box has to be on; the staged path would need a human approval with 2FA
+# per release, and this account has 2FA disabled.
 #
 # The trigger is deliberately push-to-main only. Never add a pull_request
-# trigger: that is the path by which a fork could run workflow code with the
-# publishing credential in scope.
+# trigger: that is the path by which a fork could run workflow code with
+# publishing rights in scope.
 
 name: Publish to npm
 
@@ -40,9 +44,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # Required for npm provenance, which signs an attestation tying the
-      # tarball to this commit and workflow. Consumers can verify the package
-      # was built here rather than uploaded from someone's laptop.
+      # This is the publishing credential. It mints the OIDC token the registry
+      # exchanges for publish rights, and it signs the provenance attestation
+      # tying the tarball to this commit and workflow — so consumers can verify
+      # the package was built here rather than uploaded from someone's laptop.
       id-token: write
 
     steps:
@@ -94,6 +99,14 @@ jobs:
       # Build and test explicitly rather than leaning on prepublishOnly, so a
       # failure lands before the credential is ever in scope and reports as its
       # own step instead of as a publish error.
+      # Trusted publishing needs npm >= 11.5.1; the npm bundled with a Node
+      # image is whatever shipped with that Node, and an older one fails at the
+      # last step with a plain 401 that says nothing about OIDC. Pin the floor
+      # rather than trust the image.
+      - name: Use an npm that speaks OIDC
+        if: steps.check.outputs.changed == 'true'
+        run: npm install -g npm@^11.5.1
+
       - name: Install
         if: steps.check.outputs.changed == 'true'
         run: npm ci
@@ -106,8 +119,10 @@ jobs:
         if: steps.check.outputs.changed == 'true'
         run: node --test 'test/*.test.js'
 
+      # No NODE_AUTH_TOKEN. npm mints its own credential from the OIDC token
+      # granted above; --provenance stays explicit so that a run which somehow
+      # loses that grant fails here rather than quietly shipping an unattested
+      # tarball.
       - name: Publish
         if: steps.check.outputs.changed == 'true'
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
