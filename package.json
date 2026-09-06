@@ -1,7 +1,7 @@
 {
   "name": "wiki-formant",
   "version": "0.14.0",
-  "description": "The portable half of a wiki: derived taxonomy with pressable facet controls, a version-negotiating MCP transport, markdown twins, block rendering and the shared block views, the rich-text editor engine, link normalisation, freshness, rate limiting, a collapsible rail shell and a server-rendered facet bar and breadcrumb trail, typeahead and hover-preview hooks, editor nodes, x402 payment gating for an MCP envelope, server-side analytics for both the agent and human lanes, a dead-className check as a bin, an MCP conformance suite, a dead-link probe, and the conditional-GET plumbing agent surfaces need.",
+  "description": "The portable half of a wiki: derived taxonomy and facet controls, a version-negotiating MCP transport, markdown twins, block rendering, a rich-text editor engine, and conditional-GET plumbing.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -16,20 +16,7 @@
     "model-context-protocol",
     "llms-txt",
     "markdown",
-    "agent",
-    "rate-limit",
-    "plausible",
-    "links",
-    "freshness",
-    "facets-ui",
-    "typeahead",
-    "search-analytics",
-    "tiptap",
-    "x402",
-    "breadcrumbs",
-    "block-views",
-    "editor",
-    "link-check"
+    "agent"
   ],
   "sideEffects": false,
   "exports": {
@@ -178,8 +165,7 @@
   },
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
-    "test": "npm run build && node --test 'test/*.test.js'",
-    "prepublishOnly": "npm run build && node --test 'test/*.test.js'"
+    "test": "npm run build && node --test 'test/*.test.js'"
   },
   "devDependencies": {
     "@radixdlt/rola": "^2.1.0",
@@ -208,13 +194,8 @@
     "@tiptap/extension-code-block": ">=2.10",
     "@tiptap/extension-youtube": ">=2.10",
     "@tiptap/react": ">=2.10",
-    "@x402/core": "*",
-    "@x402/evm": "*",
-    "@x402/extensions": "*",
-    "@x402/next": "*",
     "jose": ">=5",
     "react": ">=18",
-    "viem": "*",
     "@tiptap/starter-kit": ">=2.10",
     "@tiptap/extension-link": ">=2.10",
     "@tiptap/extension-image": ">=2.10",
@@ -244,21 +225,6 @@
       "optional": true
     },
     "@radixdlt/rola": {
-      "optional": true
-    },
-    "@x402/core": {
-      "optional": true
-    },
-    "@x402/evm": {
-      "optional": true
-    },
-    "@x402/next": {
-      "optional": true
-    },
-    "@x402/extensions": {
-      "optional": true
-    },
-    "viem": {
       "optional": true
     },
     "@tiptap/starter-kit": {

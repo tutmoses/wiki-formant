@@ -419,30 +419,15 @@ they name a gap in the corpus in the reader's own words.
 
 ## API
 
-| Export | From |
-|---|---|
-| `createTaxonomy`, `defaultHref`, `firstLetter`, `toggleFilter` | `wiki-formant/taxonomy` |
-| `injectHeadingIds`, `headingsFrom`, `slugifyHeading` | `wiki-formant/headings` |
-| `mcpResponse`, `mcpGet`, `mcpOptions`, `handleMcp`, `withMcpCors`, `McpToolError`, `MCP_CORS`, `MCP_PROTOCOL_VERSION` | `wiki-formant/mcp` |
-| `htmlToMarkdown`, `inlineToMarkdown`, `tableToMarkdown`, `frontmatter`, `markdownDocument`, `decodeEntities` | `wiki-formant/markdown` |
-| `corpusEtag`, `notModified`, `textHeaders`, `markdownHeaders`, `descriptorHeaders`, `descriptorResponse`, `cleanSnippet`, `pageLine` | `wiki-formant/http` |
-| `parsePagination`, `paginatedResponse`, `toOffset` | `wiki-formant/pagination` |
-| `mapBlockTree`, `mapBlockTreeAsync`, `someBlock`, `renderBlockTree` | `wiki-formant/blocks` |
-| `parseVersion`, `formatVersion`, `incrementVersion`, `bump`, `compareVersions` | `wiki-formant/versioning` |
-| `plausibleEvent`, `mcpCallProps`, `searchQueryProps`, `plausibleDomain` | `wiki-formant/analytics` |
-| `comboboxAria`, `listId`, `optionId` | `wiki-formant/combobox` |
-| `computeRevisionDiff`, `diffBlocks`, `extractBlocks`, `classifyChanges`, `changeSummary` | `wiki-formant/revisions` |
-| `renderFeed`, `renderItem`, `escXml`, `cdata`, `clampWords`, `absolutise`, `FEED_HEADERS` | `wiki-formant/feed` |
-| `ccBy40`, `licenseBlock`, `licenseLines`, `licenseNote` | `wiki-formant/license` |
-| `AI_CRAWLERS`, `detectAiBot`, `aiCrawlerTokens`, `aiCrawlerRules` | `wiki-formant/crawlers` |
-| `useCollapsibleSidebar`, `SidebarProvider`, `useSidebar`, `TableOfContents`, `useTypeahead`, `useLinkPreview`, `useClickOutside`, `useTableSort`, `useCopy`, `ErrorBoundary`, `WikiRail` | `wiki-formant/react` |
-| `FacetBar`, `Breadcrumbs` | `wiki-formant/react-server` |
-| `gatePaidCalls` | `wiki-formant/x402` |
-| `resolveSidebarOpen`, `sidebarBootScript`, `SIDEBAR_ATTRIBUTE` | `wiki-formant/sidebar` |
-| `addCopyButtons`, `activateTabGroups`, `tweetEmbedSrc`, `onTweetResize`, `hydrateTweetEmbeds`, `sizeTweetEmbeds`, `TWITTER_ORIGIN` | `wiki-formant/dom` |
-| `Iframe`, `YouTube`, `TwitterEmbed`, `createMapEmbed`, `createCodeBlock`, `createTabs` | `wiki-formant/tiptap` |
+Every module has a subpath — `wiki-formant/taxonomy`, `wiki-formant/mcp`, and so on.
+The emitted `.d.ts` files are the reference. There is no hand-maintained symbol list
+here, because the one that used to be here drifted from them.
 
-Everything above `wiki-formant/react` is also re-exported from the package root. The React, sidebar, DOM, tiptap, react-server and x402 subpaths are not: they carry `'use client'`, reach for a browser global, or need a peer the root must not assume, and the root has to stay importable from a route handler.
+The package root re-exports the runtime modules that need no peer dependency and no
+client boundary, so `import … from 'wiki-formant'` stays importable from a route
+handler with nothing else installed. Everything that reaches for React, a browser
+global, tiptap or a wallet — and the tooling modules, which no route imports — is
+subpath-only.
 
 ## A bin
 
