@@ -5,6 +5,8 @@ import {
   clientIp,
   clientKey,
   retryMessage,
+  rateLimitHeaders,
+  withRateLimit,
   resetRateLimits,
 } from '../dist/rate-limit.js';
 
@@ -61,4 +63,26 @@ test('an unidentifiable caller shares one bucket rather than getting a fresh one
 
 test('every surface refuses in the same words', () => {
   assert.equal(retryMessage(12), 'Too many requests. Try again in 12s.');
+});
+
+test('a successful call reports its own headroom, so the 429 is not the first signal', () => {
+  resetRateLimits();
+  const opts = { capacity: 60, refillPerSec: 1 };
+  const first = rateLimitHeaders(rateLimit('h:1', opts), opts);
+  assert.equal(first['RateLimit-Limit'], '60');
+  assert.equal(first['RateLimit-Remaining'], '59');
+  assert.equal(first['RateLimit-Reset'], '1');
+
+  const spent = { ok: false, retryAfterSec: 7 };
+  const over = rateLimitHeaders(spent, opts);
+  assert.equal(over['RateLimit-Remaining'], '0');
+  assert.equal(over['RateLimit-Reset'], '7');
+});
+
+test('withRateLimit sets them on a response already built', () => {
+  resetRateLimits();
+  const opts = { capacity: 10, refillPerSec: 1 };
+  const res = withRateLimit(new Response('ok'), rateLimit('h:2', opts), opts);
+  assert.equal(res.headers.get('RateLimit-Limit'), '10');
+  assert.equal(res.headers.get('RateLimit-Remaining'), '9');
 });

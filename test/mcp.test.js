@@ -308,6 +308,60 @@ test('a tool with an outputSchema advertises it and answers structured', async (
   assert.deepEqual(called.result._meta['x402/payment-response'], { settled: true, saw: 'abc' });
 });
 
+test('every object answer carries structuredContent, schema or no schema', async () => {
+  // `search` declares no outputSchema. Gating on one is what left thirty-two
+  // live tools returning JSON as prose only.
+  const called = await handleMcp(rpc('tools/call', { name: 'search', arguments: { q: 'x' } }), config);
+  assert.equal(typeof called.result.structuredContent, 'object');
+  assert.match(called.result.content[0].text, /\{/);
+});
+
+test('a string answer carries no structuredContent', async () => {
+  const prose = {
+    ...config,
+    tools: [{ ...config.tools[0], handler: async () => 'plain text, not a record' }],
+  };
+  const called = await handleMcp(rpc('tools/call', { name: 'search', arguments: { q: 'x' } }), prose);
+  assert.equal(called.result.structuredContent, undefined);
+  assert.equal(called.result.content[0].text, 'plain text, not a record');
+});
+
+test('a legacy annotations.title is hoisted to the slot 2025-06-18 promoted it to', async () => {
+  const legacy = {
+    ...config,
+    tools: [{ ...config.tools[0], title: undefined, annotations: { title: 'Old slot', readOnlyHint: true } }],
+  };
+  const listed = await handleMcp(rpc('tools/list'), legacy);
+  assert.equal(listed.result.tools[0].title, 'Old slot');
+});
+
+test('requireOneOf is caught before dispatch, not in the handler', async () => {
+  let ran = false;
+  const either = {
+    ...config,
+    tools: [{
+      name: 'search',
+      description: 'Search the corpus.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          q: { type: 'string', description: 'query' },
+          popular: { type: 'boolean', description: 'trending instead' },
+        },
+        requireOneOf: ['q', 'popular'],
+      },
+      handler: async () => { ran = true; return { ok: true }; },
+    }],
+  };
+  const empty = await handleMcp(rpc('tools/call', { name: 'search', arguments: {} }), either);
+  assert.equal(empty.result.isError, true);
+  assert.match(empty.result.content[0].text, /at least one of "q", "popular"/);
+  assert.equal(ran, false);
+
+  const ok = await handleMcp(rpc('tools/call', { name: 'search', arguments: { popular: true } }), either);
+  assert.equal(ok.result.isError, undefined);
+});
+
 test('a gate can withhold an entry and merge its own answer back', async () => {
   const gated = {
     ...config,

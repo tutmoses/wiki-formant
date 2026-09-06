@@ -162,6 +162,12 @@ test('a listing envelope tells an agent there is more and what to send', () => {
   assert.equal(first.totalPages, 3);
   assert.equal(first.hasMore, true);
   assert.equal(first.nextPage, 2);
+  // A note rides only on nought results: an envelope of zeroes cannot say
+  // whether the term was wrong or the corpus silent.
+  assert.equal(listEnvelope([], 0, 1, 20, 'Try a single word.').note, 'Try a single word.');
+  assert.equal(listEnvelope(['a'], 1, 1, 20, 'Try a single word.').note, undefined);
+  assert.equal(listEnvelope([], 0, 1, 20).note, undefined);
+
   const last = listEnvelope(['x'], 45, 3, 20);
   assert.equal(last.hasMore, false);
   assert.equal(last.nextPage, undefined, 'a nextPage that does not exist is worse than none');

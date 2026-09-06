@@ -19,10 +19,13 @@ export interface Rpc {
     isError?: boolean;
     tools?: Array<{
       name: string;
+      title?: string;
       description?: string;
+      inputSchema?: { required?: string[]; requireOneOf?: string[] };
       annotations?: Record<string, unknown>;
     }>;
     resources?: Array<{ uri: string }>;
+    prompts?: Array<{ name: string; description?: string }>;
     resourceTemplates?: Array<{ uriTemplate?: string }>;
     contents?: Array<{ text?: string }>;
     serverInfo?: { version?: string };
@@ -181,10 +184,27 @@ export async function transportChecks(
   // 429 and a rate limit reads to it as a hang.
   t.check(
     'CORS exposes response headers',
-    ['Mcp-Protocol-Version', 'Retry-After'].every(h =>
+    ['Mcp-Protocol-Version', 'Retry-After', 'RateLimit-Remaining'].every(h =>
       (opt.headers.get('access-control-expose-headers') ?? '').includes(h),
     ),
     `expose=${opt.headers.get('access-control-expose-headers')}`,
+  );
+
+  // A budget stated only in the 429 can be discovered only by exceeding it —
+  // the one moment an agent is least able to act on it. This suite is the
+  // proof: with no header to read, its own client blind-sleeps five seconds on
+  // a 429 and hopes.
+  const headroom = await fetch(t.endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 'headroom', method: 'ping' }),
+  });
+  t.recordCall();
+  const remaining = headroom.headers.get('ratelimit-remaining');
+  t.check(
+    'rate limit states headroom',
+    !!headroom.headers.get('ratelimit-limit') && remaining !== null,
+    `RateLimit-Limit=${headroom.headers.get('ratelimit-limit')} Remaining=${remaining} Reset=${headroom.headers.get('ratelimit-reset')}`,
   );
 
   const get = await fetch(t.endpoint);
@@ -444,10 +464,25 @@ export async function annotationChecks(
  */
 export async function payloadBudget(
   t: Tester,
-  calls: ReadonlyArray<{ name: string; args?: Record<string, unknown> }>,
+  calls: ReadonlyArray<{ name: string; args?: Record<string, unknown>; maxBytes?: number }>,
   maxBytes = 120_000,
 ): Promise<void> {
-  for (const { name, args } of calls) {
+  // Every read-only tool a caller can invoke with no arguments at all, whether
+  // or not the suite thought to name it. This check used to weigh only the
+  // listed calls, which is how a tool taking no parameters and answering with
+  // 3.3 MB — 27× the budget it was exempt from — passed a suite that measured
+  // the four tools beside it. A tool with required arguments still has to be
+  // listed: the suite is the only thing that knows a valid pair.
+  const listed = new Set(calls.map(c => c.name));
+  const bare = ((await t.rpc('tools/list')).result?.tools ?? [])
+    .filter(x => x.annotations?.readOnlyHint === true && !listed.has(x.name))
+    // `requireOneOf` is a required argument too, just one this cannot pick for
+    // the caller — such a tool has to be listed with args like any other.
+    .filter(x => !(x.inputSchema?.required ?? []).length && !(x.inputSchema?.requireOneOf ?? []).length)
+    .map(x => ({ name: x.name, args: undefined, maxBytes: undefined }));
+
+  for (const { name, args, maxBytes: own } of [...calls, ...bare]) {
+    const budget = own ?? maxBytes;
     const answer = await t.call(name, args ?? {});
     const text = answer.result?.content?.[0]?.text ?? '';
     // An empty answer is not a small one. The first draft compared only the
@@ -458,11 +493,25 @@ export async function payloadBudget(
     const answered = text.length > 0 && !answer.error && !answer.result?.isError;
     t.check(
       `${name} within budget`,
-      answered && text.length <= maxBytes,
+      answered && text.length <= budget,
       answered
-        ? `${text.length.toLocaleString()} chars (max ${maxBytes.toLocaleString()})`
+        ? `${text.length.toLocaleString()} chars (max ${budget.toLocaleString()})`
         : `no answer to weigh: ${answer.error ? `-${answer.error.code} ${answer.error.message}` : answer.result?.isError ? `isError: ${text.slice(0, 80)}` : 'empty result'}`,
     );
+
+    // A JSON answer that arrives only as prose costs every client a parse it
+    // should never have had to write. Measured on the answer already in hand,
+    // so it is free — and it stays quiet for a tool that genuinely returns
+    // prose, which is the only reason a read tool may skip it.
+    if (answered && /^\s*\{/.test(text)) {
+      t.check(
+        `${name} structured`,
+        answer.result?.structuredContent !== undefined,
+        answer.result?.structuredContent !== undefined
+          ? 'structuredContent beside the text'
+          : 'JSON answer with no structuredContent — the client has to parse prose',
+      );
+    }
   }
 }
 

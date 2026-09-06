@@ -127,7 +127,11 @@ What it gets right:
 
 ### Structured output, `_meta`, and the envelope gate
 
-Declare an `outputSchema` and the result carries `structuredContent` beside the text block, so a client reads the answer rather than scraping prose for it. A handler's second argument is its context:
+**Every object a handler returns comes back as `structuredContent` beside the text block**, so a client reads the answer rather than scraping prose for it. This used to be gated on declaring an `outputSchema`, and the result was that across four live servers and thirty-two tools — every one of them answering in JSON — not a single response ever carried it. `outputSchema` remains the stronger contract, because a client validates against it; it is no longer the price of admission. A handler returning a string is left alone.
+
+`inputSchema.requireOneOf` names a set of which at least one must be present. `required` cannot express "query or popular", so the one tool needing it checked in its handler and the caller learned at execution time — the single class of argument mistake this module was otherwise catching before dispatch.
+
+A handler's second argument is its context:
 
 ```ts
 handler: async (args, ctx) => {
@@ -138,6 +142,20 @@ handler: async (args, ctx) => {
 ```
 
 `config.gate` is envelope-level middleware: it may withhold entries before dispatch and merge its own responses back afterwards. A payment gate has to sit there rather than in a handler, because the demand *replaces* the call and the receipt rides on the envelope.
+
+## Conformance
+
+`wiki-formant/conformance` is the half of an MCP conformance run that is not about any one server's tools: a JSON-RPC client that backs off on a 429, the transport assertions (CORS preflight, `GET`→405, a notification answering 202 with no body, `-32700`, the batch cap, honest `capabilities`, version negotiation), version coherence across every descriptor a surface publishes, A2A card parity, conditional-GET and `robots` checks, and a pass/fail table with an exit code.
+
+```ts
+const t = createTester({ base: 'https://example.com', clientName: 'my-mcp-test' });
+await transportChecks(t, 'my-mcp-test');
+await annotationChecks(t, { writes: ['create_page'] });
+await payloadBudget(t, [{ name: 'search', args: { query: 'x' } }]);
+process.exit(t.summary());
+```
+
+What stays in your repo is fixtures: which tools you expect, what a good answer from each looks like, and which text surfaces you publish. `payloadBudget` weighs every listed call **and** every read-only tool that takes no required arguments, because the one tool nobody thought to list is the one that answers with 3.3 MB; pass a per-call `maxBytes` for a bulk-export tool that is deliberately large. It also asserts that a JSON answer arrived with `structuredContent`.
 
 ## Markdown twins
 

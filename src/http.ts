@@ -62,6 +62,28 @@ export function notModified(
 }
 
 /**
+ * A 404 that teaches, for the plain-GET half of an agent surface.
+ *
+ * The MCP half of every server here answers a wrong identifier by naming the
+ * tools that find a right one. The GET half, reached by exactly the agents that
+ * guessed a URL, answered the same mistake with `Page not found`, `Not found`,
+ * and in one case a 26 KB HTML error page — nothing to retry from. `hints` are
+ * merged into the body, so an index URL or a nearest match rides along. A
+ * missing page is a hot crawler path, so it is cacheable by default; pass
+ * `cacheControl` where the surface has its own edge posture.
+ */
+export function teachingNotFound(
+  message: string,
+  hints: Record<string, unknown> = {},
+  cacheControl = 'public, max-age=60',
+): Response {
+  return Response.json({ error: message, ...hints }, {
+    status: 404,
+    headers: { 'Cache-Control': cacheControl },
+  });
+}
+
+/**
  * Headers for a plain-text export. `maxAge` is the edge window — a curated
  * corpus can sit on hours, a projection of live data should pass a short one.
  */

@@ -59,6 +59,13 @@ export type ToolSchema = {
   type: 'object';
   properties: Record<string, ToolParam>;
   required?: string[];
+  /**
+   * At least one of these must be present. `required` cannot say "query or
+   * popular", so a tool needing that checked it in its handler and the caller
+   * only learned at execution time — the one class of argument mistake this
+   * module was otherwise catching before dispatch.
+   */
+  requireOneOf?: string[];
 };
 
 /**
@@ -67,7 +74,11 @@ export type ToolSchema = {
  * calls has no way to tell a lookup from one that reaches a payment processor.
  */
 export type ToolAnnotations = {
-  /** Human-facing label for the tool. */
+  /**
+   * Human-facing label — the pre-2025-06-18 slot. `tools/list` hoists it to
+   * the top-level `title` when that is absent, so a manifest written against
+   * either revision renders the same in a client. Prefer `McpTool.title`.
+   */
   title?: string;
   /** Does not modify anything. */
   readOnlyHint?: boolean;
@@ -230,7 +241,7 @@ const toolText = (
  * values, plus the schema — one retry should be able to fix all of them.
  */
 function validateArgs(tool: McpTool, args: Record<string, unknown>): string | null {
-  const { properties, required = [] } = tool.inputSchema;
+  const { properties, required = [], requireOneOf } = tool.inputSchema;
   const allowed = Object.keys(properties);
   const problems: string[] = [];
 
@@ -247,6 +258,10 @@ function validateArgs(tool: McpTool, args: Record<string, unknown>): string | nu
     if (args[key] === undefined || args[key] === null) {
       problems.push(`Missing required parameter "${key}". Required: ${quote(required)}.`);
     }
+  }
+
+  if (requireOneOf?.length && !requireOneOf.some(k => args[k] !== undefined && args[k] !== null)) {
+    problems.push(`Provide at least one of ${quote(requireOneOf)}.`);
   }
 
   for (const [key, spec] of Object.entries(properties)) {
@@ -366,7 +381,11 @@ async function handleRpc(
             tools: config.tools.map(
               ({ name, title, description, inputSchema, outputSchema, annotations }) => ({
                 name,
-                ...(title ? { title } : {}),
+                // 2025-06-18 promoted `title` out of `annotations`. Hoisting
+                // rather than requiring every manifest to be rewritten: a
+                // client reading only the new slot showed a raw tool name for
+                // every surface that had not moved its label yet.
+                ...(title ?? annotations?.title ? { title: title ?? annotations!.title } : {}),
                 description,
                 inputSchema,
                 ...(outputSchema ? { outputSchema } : {}),
@@ -481,11 +500,17 @@ async function handleRpc(
         try {
           const data = await tool.handler(args, ctx);
           const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-          // `structuredContent` only where a schema says what its shape is; the
-          // text block stays either way, because a client that never looked at
-          // outputSchema still has to be able to read the answer.
+          // Every object answer, not only the schema-bearing ones. Gating this
+          // on `outputSchema` meant that across four live servers and thirty-two
+          // tools — every one of them returning JSON — not a single result ever
+          // carried `structuredContent`, and every agent parsed prose to reach
+          // data the server already had in hand. A declared `outputSchema` is
+          // still the stronger contract (a client validates against it); it is
+          // no longer the price of admission. The text block stays regardless:
+          // the spec asks for the serialised twin, and a client that reads only
+          // content still has to be able to read the answer.
           const structured =
-            tool.outputSchema && data !== null && typeof data === 'object' && !Array.isArray(data)
+            data !== null && typeof data === 'object' && !Array.isArray(data)
               ? { structuredContent: data }
               : {};
           return toolText(id, text, false, {
@@ -557,7 +582,8 @@ export const MCP_CORS: Record<string, string> = {
   // may read none of what comes back. A browser client could not see the
   // negotiated version, and could not see `Retry-After` on the 429 telling it
   // how long to wait — which reads as a hang, not as a limit.
-  'Access-Control-Expose-Headers': 'Mcp-Session-Id, Mcp-Protocol-Version, Retry-After',
+  'Access-Control-Expose-Headers':
+    'Mcp-Session-Id, Mcp-Protocol-Version, Retry-After, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset',
   'Access-Control-Max-Age': '86400',
 };
 

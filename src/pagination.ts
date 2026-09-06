@@ -66,13 +66,23 @@ export function listEnvelope<T>(
   total: number,
   page: number,
   pageSize: number,
+  emptyNote?: string,
 ): {
   total: number; page: number; pageSize: number; totalPages: number;
-  hasMore: boolean; nextPage?: number; pages: T[];
+  hasMore: boolean; nextPage?: number; note?: string; pages: T[];
 } {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const hasMore = page < totalPages;
-  return { total, page, pageSize, totalPages, hasMore, ...(hasMore ? { nextPage: page + 1 } : {}), pages };
+  return {
+    total, page, pageSize, totalPages, hasMore,
+    ...(hasMore ? { nextPage: page + 1 } : {}),
+    // Nought results is the one answer a model cannot act on, and an envelope
+    // of zeroes does not say whether the term was wrong, the filter too narrow,
+    // or the wiki simply silent on it. One surface here answered that with a
+    // note and two answered it with `pages: []`.
+    ...(total === 0 && emptyNote ? { note: emptyNote } : {}),
+    pages,
+  };
 }
 
 /** The `skip`/`take` an ORM wants, from the same clamped pair. */

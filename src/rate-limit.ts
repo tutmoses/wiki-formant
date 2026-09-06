@@ -109,6 +109,45 @@ export function rateLimitedResponse(retryAfterSec: number): Response {
   );
 }
 
+/**
+ * The headroom headers a *successful* response owes the caller.
+ *
+ * `rateLimit` has always returned `remaining`, and every consumer threw it away
+ * — so an agent could discover its budget only by exceeding it, and the 429 was
+ * the first and only signal. The conformance suite proved the cost: with no
+ * header to read it blind-sleeps five seconds on a 429 and hopes.
+ *
+ * The de-facto `RateLimit-Limit` / `-Remaining` / `-Reset` triple, in seconds.
+ * `Retry-After` stays the 429's own header; these are for the 200s before it.
+ */
+export function rateLimitHeaders(
+  result: RateLimitResult,
+  opts: RateLimitOptions,
+): Record<string, string> {
+  const remaining = result.ok ? result.remaining : 0;
+  return {
+    'RateLimit-Limit': String(opts.capacity),
+    'RateLimit-Remaining': String(remaining),
+    // When the bucket is full there is nothing to wait for, so report 0 rather
+    // than the time it would take to refill from full, which is not a wait.
+    'RateLimit-Reset': String(
+      result.ok
+        ? Math.ceil((opts.capacity - remaining) / opts.refillPerSec)
+        : result.retryAfterSec,
+    ),
+  };
+}
+
+/** `rateLimitHeaders` applied to a response you already have. */
+export function withRateLimit<T extends Response>(
+  res: T,
+  result: RateLimitResult,
+  opts: RateLimitOptions,
+): T {
+  for (const [k, v] of Object.entries(rateLimitHeaders(result, opts))) res.headers.set(k, v);
+  return res;
+}
+
 /** Test seam: the bucket map is module state and outlives a single test. */
 export function resetRateLimits(): void {
   buckets.clear();
