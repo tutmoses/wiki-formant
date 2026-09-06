@@ -42,7 +42,7 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v === 'object' && !Array.isArray(v);
 
 /** `[{ id, text, url? }]` — the shape a references block stores. */
-export function validateReferenceItems(items: unknown, urlCheck: (u: unknown) => boolean = okUrl): boolean {
+export function validateReferenceItems(items: unknown): boolean {
   return (
     Array.isArray(items) &&
     items.every(
@@ -50,13 +50,13 @@ export function validateReferenceItems(items: unknown, urlCheck: (u: unknown) =>
         isRecord(it) &&
         typeof it.id === 'string' &&
         typeof it.text === 'string' &&
-        (it.url === undefined || urlCheck(it.url)),
+        (it.url === undefined || okUrl(it.url)),
     )
   );
 }
 
 /** `[{ id, heading, links: [{ label, href }] }]` — a link-grid block's groups. */
-export function validateLinkGroups(groups: unknown, urlCheck: (u: unknown) => boolean = okUrl): boolean {
+export function validateLinkGroups(groups: unknown): boolean {
   return (
     Array.isArray(groups) &&
     groups.every(
@@ -65,7 +65,7 @@ export function validateLinkGroups(groups: unknown, urlCheck: (u: unknown) => bo
         typeof g.id === 'string' &&
         typeof g.heading === 'string' &&
         Array.isArray(g.links) &&
-        g.links.every(l => isRecord(l) && typeof l.label === 'string' && urlCheck(l.href)),
+        g.links.every(l => isRecord(l) && typeof l.label === 'string' && okUrl(l.href)),
     )
   );
 }

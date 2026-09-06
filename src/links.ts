@@ -15,15 +15,8 @@
 // no visible text. That is an accessibility fix, not a preference, so it is the
 // default here and caper gains it by adopting this module.
 
-/** Read one double-quoted attribute out of a tag's attribute string. */
-const getAttr = (attrs: string, name: string): string | null =>
-  attrs.match(new RegExp(`\\s${name}\\s*=\\s*"([^"]*)"`, 'i'))?.[1] ?? null;
 
-/** Drop every occurrence of one attribute from a tag's attribute string. */
-const removeAttr = (attrs: string, name: string): string =>
-  attrs.replace(new RegExp(`\\s${name}\\s*=\\s*"[^"]*"`, 'gi'), '');
-
-const stripTags = (s: string): string => s.replace(/<[^>]*>/g, '').trim();
+import { getAttr, removeAttr, stripTags } from './html.js';
 
 /**
  * A readable label for an anchor whose text is empty, derived from its href.

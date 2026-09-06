@@ -31,7 +31,8 @@ export function extractCoordsFromUrl(url: string): MapCoords | null {
   if (data) return { lat: +data[1]!, lon: +data[2]! };
 
   try {
-    const ll = new URL(url).searchParams.get('ll') ?? new URL(url).searchParams.get('sll');
+    const params = new URL(url).searchParams;
+    const ll = params.get('ll') ?? params.get('sll');
     if (ll) {
       const [lat, lon] = ll.split(',').map(Number);
       if (lat !== undefined && lon !== undefined && !isNaN(lat) && !isNaN(lon)) return { lat, lon };

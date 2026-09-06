@@ -246,8 +246,12 @@ const rpcError = (id: RpcId, code: number, message: string, data?: object) => ({
   error: { code, message, ...(data ? { data } : {}) },
 });
 
-const toolText = (
-  id: RpcId,
+/**
+ * A tool result envelope. Exported because `x402.ts` builds the same shape when
+ * it withholds a paid call, and had grown two more copies of it doing so.
+ */
+export const toolText = (
+  id: RpcRequest['id'],
   text: string,
   isError = false,
   extra: Record<string, unknown> = {},

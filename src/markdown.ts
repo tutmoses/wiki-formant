@@ -11,6 +11,7 @@
 // head. That is the whole portable half.
 
 import { decodeEntities } from './entities.js';
+import { isoDate } from './html.js';
 
 /** Inline-level HTML → markdown. Applied inside cells, list items, headings. */
 export function inlineToMarkdown(html: string): string {
@@ -116,8 +117,6 @@ export function htmlToMarkdown(html: string): string {
     .trim();
 }
 
-const isoDate = (d: Date | string): string =>
-  (typeof d === 'string' ? d : d.toISOString()).split('T')[0]!;
 
 export interface FrontmatterFields {
   title: string;

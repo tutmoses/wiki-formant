@@ -113,7 +113,6 @@ for (const [tok, at] of [...dead].sort((a, b) => b[1].length - a[1].length)) {
   console.error(`  ${tok.padEnd(24)} ${String(at.length).padStart(3)}x  ${at.slice(0, 4).join(', ')}${at.length > 4 ? ', …' : ''}`);
 }
 // Derived, not hardcoded: this runs in every sibling project and their
-// globals.css does not sit at the same path.
-const globals = walk(SRC_DIR, '.css').find(f => f.endsWith('globals.css')) ?? 'your globals.css';
-console.error(`\nEither define it in ${globals} or delete the usage.`);
+// globals.css does not sit at the same path. Found once, above.
+console.error(`\nEither define it in ${globalsFile ?? 'your globals.css'} or delete the usage.`);
 process.exit(WARN_ONLY ? 0 : 1);

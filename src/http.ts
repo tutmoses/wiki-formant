@@ -5,6 +5,8 @@
 // corpus-derived ETag a recrawl costs a 304 instead of a full corpus build.
 // Without one, every AI crawler pays full price on every pass, forever.
 
+import { isoDate } from './html.js';
+
 /** A stable ETag from whatever the corpus revision is (count + newest stamp). */
 export function corpusEtag(parts: Array<string | number | Date | null | undefined>): string {
   const seed = parts
@@ -188,9 +190,7 @@ export function pageLine(opts: {
   updated?: Date | string | null;
 }): string {
   const excerpt = opts.excerpt ? `: ${cleanSnippet(opts.excerpt)}` : '';
-  const stamp = opts.updated
-    ? (typeof opts.updated === 'string' ? opts.updated : opts.updated.toISOString()).split('T')[0]
-    : '';
+  const stamp = opts.updated ? isoDate(opts.updated) : '';
   return `- [${opts.title}](${opts.url})${excerpt}${stamp ? ` _(updated ${stamp})_` : ''}`;
 }
 

@@ -9,6 +9,8 @@
 // This runs during SSR, and a render that reads the clock is a render that can
 // disagree with the one the server just sent.
 
+import { isoDate } from './html.js';
+
 export interface FreshnessInput {
   lastVerifiedAt?: Date | string | null;
   updatedAt?: Date | string | null;
@@ -43,7 +45,7 @@ export function isStale(page: FreshnessInput, now: number, maxAgeDays = DEFAULT_
  */
 export function freshnessNotice(page: FreshnessInput): string {
   const when = page.lastVerifiedAt
-    ? `last verified ${new Date(page.lastVerifiedAt).toISOString().slice(0, 10)}`
+    ? `last verified ${isoDate(new Date(page.lastVerifiedAt))}`
     : 'not yet verified against sources';
   return `This page was ${when} and may be out of date. Please help re-check its facts against current sources and the live ledger.`;
 }

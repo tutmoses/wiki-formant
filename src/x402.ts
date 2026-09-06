@@ -45,7 +45,8 @@
 // the same wherever it is written and the part that is easy to get subtly
 // wrong.
 
-import type { RpcRequest } from './mcp.js';
+import { toolText } from './mcp.js';
+import type { EnvelopeGate, RpcRequest } from './mcp.js';
 
 /**
  * The slice of `@x402/core`'s `x402ResourceServer` this module calls.
@@ -147,15 +148,6 @@ export interface GateOptions {
   declareDiscovery?: (discovery: Record<string, unknown>) => Promise<unknown>;
 }
 
-export interface Gate {
-  /** What `handleMcp` should dispatch — blocked entries removed. */
-  body: RpcRequest | RpcRequest[];
-  /** True when nothing survived: answer 202 rather than handing over an empty batch. */
-  empty: boolean;
-  /** Splice the challenges back in and attach settlement receipts. */
-  finish: (dispatched: object | object[] | null) => Promise<object | object[] | null>;
-}
-
 /** Structural check only — `verifyPayment` does the real one, as @x402/mcp does. */
 function metaPayment(req: RpcRequest): unknown | null {
   const meta = ((req.params ?? {}) as { _meta?: Record<string, unknown> })._meta;
@@ -165,7 +157,7 @@ function metaPayment(req: RpcRequest): unknown | null {
     : null;
 }
 
-const passthrough = (body: unknown): Gate => ({
+const passthrough = (body: unknown): EnvelopeGate => ({
   body: body as RpcRequest | RpcRequest[],
   empty: false,
   finish: async r => r,
@@ -179,7 +171,7 @@ const passthrough = (body: unknown): Gate => ({
  * the handler produced something that is not an error. A tool that raises
  * cancels rather than settles — the caller pays for an answer, not an attempt.
  */
-export async function gatePaidCalls(raw: unknown, options: GateOptions): Promise<Gate> {
+export async function gatePaidCalls(raw: unknown, options: GateOptions): Promise<EnvelopeGate> {
   const { resolve, network, payTo, maxTimeoutSeconds, serviceName, tags, maxBatch } = options;
   if (options.enabled === false) return passthrough(raw);
 
@@ -208,15 +200,7 @@ export async function gatePaidCalls(raw: unknown, options: GateOptions): Promise
   /** A withheld entry, in whichever form this method can carry. */
   const refuse = (entry: RpcRequest, kind: 'tool' | 'resource', message: string, data?: unknown) =>
     kind === 'tool'
-      ? {
-          jsonrpc: '2.0' as const,
-          id: entry.id,
-          result: {
-            content: [{ type: 'text', text: JSON.stringify(data ?? { error: message }) }],
-            ...(data ? { structuredContent: data } : {}),
-            isError: true,
-          },
-        }
+      ? toolText(entry.id, JSON.stringify(data ?? { error: message }), true, data ? { structuredContent: data } : {})
       : { jsonrpc: '2.0' as const, id: entry.id, error: { code: -32042, message, data } };
 
   // An unreachable facilitator THROWS out of initialize() rather than returning
@@ -295,7 +279,7 @@ export async function gatePaidCalls(raw: unknown, options: GateOptions): Promise
 type Settler = () => Promise<{ success?: boolean }>;
 
 /**
- * Assemble the Gate: what to dispatch, and how to put the answer back together.
+ * Assemble the EnvelopeGate: what to dispatch, and how to put the answer back together.
  *
  * Shared by the normal path and the facilitator-unreachable one, which differ
  * only in whether anything is left to settle.
@@ -305,14 +289,11 @@ function finishWith(
   isBatch: boolean,
   blocked: Map<number, object>,
   settlers: Map<number, Settler>,
-): Gate {
+): EnvelopeGate {
   const kept = entries.filter((_, i) => !blocked.has(i));
 
-  const failedResult = (id: RpcRequest['id'], message: string) => ({
-    jsonrpc: '2.0' as const,
-    id,
-    result: { content: [{ type: 'text', text: JSON.stringify({ error: message }) }], isError: true },
-  });
+  const failedResult = (id: RpcRequest['id'], message: string) =>
+    toolText(id, JSON.stringify({ error: message }), true);
 
   return {
     body: isBatch ? kept : (kept[0] as RpcRequest),

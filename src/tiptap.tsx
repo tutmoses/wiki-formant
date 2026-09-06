@@ -25,9 +25,9 @@ import TiptapCodeBlock from '@tiptap/extension-code-block';
 import { onTweetResize, tweetEmbedSrc } from './dom.js';
 import { toMapEmbedUrl } from './maps.js';
 import { useClickOutside } from './react.js';
+import { cx } from './html.js';
 
 /** Local `cn`. Both wikis import one; the package will not depend on one. */
-const cx = (...parts: (string | false | undefined)[]) => parts.filter(Boolean).join(' ');
 
 // ---- iframe -----------------------------------------------------------------
 

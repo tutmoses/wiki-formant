@@ -186,9 +186,9 @@ export const SERVER_CARD_SCHEMA =
 export function serverCard(
   manifest: ServerManifest,
   /** Every version the transport speaks, not just the newest it prefers. */
-  protocolVersions: string | readonly string[],
+  protocolVersions: readonly string[],
 ): Record<string, unknown> {
-  const supported = typeof protocolVersions === 'string' ? [protocolVersions] : [...protocolVersions];
+  const supported = [...protocolVersions];
   return {
     $schema: SERVER_CARD_SCHEMA,
     name: manifest.name,
@@ -211,9 +211,10 @@ export function serverCard(
  * that actually has behaviour to get wrong. Mount it as
  * `export const GET = registryAuthHandler()`.
  *
- * Key material stays an env var, read by the caller rather than here: a package
- * that reaches into `process.env` is one that behaves differently depending on
- * who imported it.
+ * `registryAuthRecord` stays pure — it is handed its key material and reads no
+ * environment, so it can be tested and reused anywhere. The handler around it is
+ * the piece whose whole job is to be mounted as a route, and a route reading its
+ * own configuration is what a route is for; pass both arguments to override.
  *
  * Unset → 404 rather than a malformed record, so a missing key reads as "not
  * configured" instead of failing verification for a reason nobody sees.

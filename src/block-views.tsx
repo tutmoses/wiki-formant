@@ -22,16 +22,11 @@
 
 import { Fragment, useState, type ReactNode } from 'react';
 import type { CodeTab, LinkGridGroup, ReferenceItem, StatItem } from './blocks.js';
+import { Anchor } from './react-server.js';
 import type { WikiLinkComponent } from './react-server.js';
 import { safeLinkHref } from './validation.js';
+import { cx } from './html.js';
 
-/** Local `cn`. Both wikis import one; the package will not depend on one. */
-const cx = (...parts: (string | false | undefined)[]) => parts.filter(Boolean).join(' ');
-
-/** The default for a consumer that has no router link to give. */
-const Anchor: WikiLinkComponent = ({ href, className, children }) => (
-  <a href={href} className={className}>{children}</a>
-);
 
 // ---- codeTabs ---------------------------------------------------------------
 

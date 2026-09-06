@@ -53,7 +53,7 @@ test('BUG: a server card projects, so it cannot carry a second description', () 
     websiteUrl: 'https://radix.wiki',
     remotes: [{ type: 'streamable-http', url: 'https://radix.wiki/api/mcp' }],
   };
-  const card = serverCard(manifest, '2025-06-18');
+  const card = serverCard(manifest, ['2025-06-18']);
   assert.equal(card.$schema, SERVER_CARD_SCHEMA);
   assert.equal(card.version, manifest.version);
   assert.equal(card.description, manifest.description);
@@ -63,7 +63,7 @@ test('BUG: a server card projects, so it cannot carry a second description', () 
 });
 
 test('a manifest without optional fields yields a card without empty ones', () => {
-  const card = serverCard({ name: 'x/y', version: '1.0.0' }, '2025-06-18');
+  const card = serverCard({ name: 'x/y', version: '1.0.0' }, ['2025-06-18']);
   assert.equal('title' in card, false);
   assert.equal('remotes' in card, false);
   assert.equal(card.name, 'x/y');

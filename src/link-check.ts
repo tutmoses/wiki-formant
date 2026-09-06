@@ -1,6 +1,6 @@
 // link-check.ts — the dead-link probe both wikis' sweep scripts had written.
 //
-// Node-only (fetch, AbortController, URL). No framework, no database: what a
+// Node-only (fetch, AbortSignal, URL). No framework, no database: what a
 // checker does with the verdicts — which pages to walk, what counts as an
 // internal path, how to report — stays with the caller, because that is the
 // half that is genuinely per-wiki.
@@ -13,6 +13,8 @@
 // serialising per hostname is what fixes it. Neither copy was behind. A sweep
 // running either one alone strips good citations for reasons the other repo had
 // already written down — which is the entire argument for this file.
+
+import { stripTags } from './html.js';
 
 export interface Probe {
   url: string;
@@ -134,13 +136,15 @@ export function perHost<T>(url: string, fn: () => Promise<T>): Promise<T> {
 }
 
 async function attempt(url: string, budgetMs: number): Promise<Probe> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), budgetMs);
+  // One signal for both requests, so the budget covers the HEAD *and* the GET
+  // rather than resetting between them. `engines.node` is >= 20, so this needs
+  // no controller and no `clearTimeout` in a `finally` that could be forgotten.
+  const signal = AbortSignal.timeout(budgetMs);
   try {
-    let res = await fetch(url, { method: 'HEAD', redirect: 'follow', signal: ctrl.signal });
+    let res = await fetch(url, { method: 'HEAD', redirect: 'follow', signal });
     // Some hosts reject HEAD outright; retry with GET before believing a 4xx.
     if (res.status >= 400) {
-      res = await fetch(url, { method: 'GET', redirect: 'follow', signal: ctrl.signal });
+      res = await fetch(url, { method: 'GET', redirect: 'follow', signal });
     }
     return {
       url,
@@ -151,8 +155,6 @@ async function attempt(url: string, budgetMs: number): Promise<Probe> {
     };
   } catch (err) {
     return { url, status: 0, ok: false, ...describeFailure(err) };
-  } finally {
-    clearTimeout(t);
   }
 }
 
@@ -203,10 +205,12 @@ export async function probeYouTube(
 ): Promise<{ status: number; ok: boolean; reason?: string; error?: string }> {
   const { timeoutMs } = { ...DEFAULTS, ...opts };
   const oembed = `https://www.youtube.com/oembed?url=https%3A//www.youtube.com/watch%3Fv%3D${videoId}&format=json`;
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(oembed, { method: 'GET', redirect: 'follow', signal: ctrl.signal });
+    const res = await fetch(oembed, {
+      method: 'GET',
+      redirect: 'follow',
+      signal: AbortSignal.timeout(timeoutMs),
+    });
     if (res.status === 404) return { status: 404, ok: false, reason: 'deleted' };
     if (res.status === 401 || res.status === 403) {
       return { status: res.status, ok: false, reason: 'restricted (private or embedding disabled)' };
@@ -214,8 +218,6 @@ export async function probeYouTube(
     return { status: res.status, ok: res.status < 400 };
   } catch (err) {
     return { status: 0, ok: false, ...describeFailure(err) };
-  } finally {
-    clearTimeout(t);
   }
 }
 
@@ -260,7 +262,7 @@ const EMBED_RE = /<(iframe|img)\b[^>]*?\ssrc="([^"]*)"/gi;
 export function extractLinks(html: string): Array<{ href: string; text: string }> {
   const out: Array<{ href: string; text: string }> = [];
   for (const m of html.matchAll(LINK_RE)) {
-    if (m[1]) out.push({ href: m[1], text: (m[2] ?? '').replace(/<[^>]*>/g, '').trim() });
+    if (m[1]) out.push({ href: m[1], text: stripTags(m[2] ?? '') });
   }
   return out;
 }

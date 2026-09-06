@@ -42,8 +42,13 @@ export interface WikiLinkProps {
 
 export type WikiLinkComponent = ComponentType<WikiLinkProps>;
 
-/** The default for anything that does not need client-side navigation. */
-const Anchor: WikiLinkComponent = ({ href, className, children }) =>
+/**
+ * The default for anything that does not need client-side navigation.
+ *
+ * Exported because `block-views` renders links too and had declared the same
+ * three lines; a default that exists twice is a default that can diverge.
+ */
+export const Anchor: WikiLinkComponent = ({ href, className, children }) =>
   <a href={href} className={className}>{children}</a>;
 
 // ---- facet bar --------------------------------------------------------------

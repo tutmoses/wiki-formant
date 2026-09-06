@@ -18,6 +18,8 @@
 // the first. That was already a bug in the copy that lacked it, so this always
 // dedupes.
 
+import { getAttr, stripTags } from './html.js';
+
 /** A heading found in a page's HTML, in document order. */
 export interface Heading {
   id: string;
@@ -38,11 +40,6 @@ export function slugifyHeading(text: string): string {
 
 const HEADING = /<(h[1-6])([^>]*)>([\s\S]*?)<\/\1>/gi;
 
-const stripTags = (s: string): string =>
-  s.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').trim();
-
-const getAttr = (attrs: string, name: string): string | null =>
-  attrs.match(new RegExp(`\\s${name}\\s*=\\s*"([^"]*)"`, 'i'))?.[1] ?? null;
 
 export interface HeadingIdOptions {
   /**
