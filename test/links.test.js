@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normaliseLinks, fallbackAnchorText } from '../dist/links.js';
+import { normaliseLinks, fallbackAnchorText } from 'wiki-formant/links';
 
 test('an external link opens in a new tab with a safe rel', () => {
   const out = normaliseLinks('<a href="https://example.com">x</a>');

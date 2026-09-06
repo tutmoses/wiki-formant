@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { comboboxAria, listId, optionId } from '../dist/combobox.js';
+import { comboboxAria, listId, optionId } from 'wiki-formant/combobox';
 
 // The hook that calls this is verified in a browser. The arithmetic is here,
 // and every test below pins a bug that shipped on one of the five surfaces.

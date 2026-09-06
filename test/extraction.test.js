@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { hashStr, seededRandom } from '../dist/seeded.js';
-import { corpusRoute, textHeaders } from '../dist/http.js';
-import { MCP_RATE_LIMIT, MCP_RATE_LIMIT_PER_MIN, MCP_RATE_LIMIT_TEXT } from '../dist/rate-limit.js';
-import { BANNER_LABELS, BANNER_VARIANTS } from '../dist/text.js';
-import { registryAuthHandler } from '../dist/well-known.js';
+import { hashStr, seededRandom } from 'wiki-formant/seeded';
+import { corpusRoute, textHeaders } from 'wiki-formant/http';
+import { MCP_RATE_LIMIT, MCP_RATE_LIMIT_PER_MIN, MCP_RATE_LIMIT_TEXT } from 'wiki-formant/rate-limit';
+import { BANNER_LABELS, BANNER_VARIANTS } from 'wiki-formant/text';
+import { registryAuthHandler } from 'wiki-formant/well-known';
 import {
   TRANSIENT_CODES,
   describeFailure,
@@ -13,7 +13,7 @@ import {
   mapLimit,
   probeUrlFor,
   unverifiableReason,
-} from '../dist/link-check.js';
+} from 'wiki-formant/link-check';
 
 // ---- seeded -----------------------------------------------------------------
 

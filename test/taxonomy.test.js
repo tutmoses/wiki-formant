@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createTaxonomy, firstLetter, toggleFilter, defaultHref } from '../dist/taxonomy.js';
+import { createTaxonomy, firstLetter, toggleFilter, defaultHref } from 'wiki-formant/taxonomy';
 
 const KEYS = {
   ecosystem: [

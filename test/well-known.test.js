@@ -5,7 +5,7 @@ import {
   agentCard,
   skillsFromTools,
   AGENT_CARD_CACHE_CONTROL,
-} from '../dist/well-known.js';
+} from 'wiki-formant/well-known';
 
 test('no configured key means no record, so the caller can 404', () => {
   assert.equal(registryAuthRecord(undefined), null);

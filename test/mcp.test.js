@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   mcpResponse, mcpGet, mcpOptions, handleMcp, McpToolError, MCP_PROTOCOL_VERSION,
-} from '../dist/mcp.js';
-import { resetRateLimits } from '../dist/rate-limit.js';
+} from 'wiki-formant/mcp';
+import { resetRateLimits } from 'wiki-formant/rate-limit';
 
 const config = {
   serverInfo: { name: 'test-server', version: '1.0.0' },
@@ -325,15 +325,6 @@ test('a string answer carries no structuredContent', async () => {
   const called = await handleMcp(rpc('tools/call', { name: 'search', arguments: { q: 'x' } }), prose);
   assert.equal(called.result.structuredContent, undefined);
   assert.equal(called.result.content[0].text, 'plain text, not a record');
-});
-
-test('a legacy annotations.title is hoisted to the slot 2025-06-18 promoted it to', async () => {
-  const legacy = {
-    ...config,
-    tools: [{ ...config.tools[0], title: undefined, annotations: { title: 'Old slot', readOnlyHint: true } }],
-  };
-  const listed = await handleMcp(rpc('tools/list'), legacy);
-  assert.equal(listed.result.tools[0].title, 'Old slot');
 });
 
 test('requireOneOf is caught before dispatch, not in the handler', async () => {

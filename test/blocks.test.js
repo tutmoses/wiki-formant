@@ -7,7 +7,7 @@ import {
   referencesToMarkdown,
   statsToMarkdown,
   linkGridToMarkdown,
-  linkList, mapBlockTree, mapBlockTreeAsync, someBlock } from '../dist/blocks.js';
+  linkList, mapBlockTree, mapBlockTreeAsync, someBlock } from 'wiki-formant/blocks';
 
 // ---- the container walk ----
 

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { htmlToMarkdown, tableToMarkdown, inlineToMarkdown, frontmatter, markdownDocument } from '../dist/markdown.js';
-import { decodeEntities } from '../dist/entities.js';
+import { htmlToMarkdown, tableToMarkdown, inlineToMarkdown, frontmatter, markdownDocument } from 'wiki-formant/markdown';
+import { decodeEntities } from 'wiki-formant/markdown';
 
 test('ordered lists number per list', () => {
   // The bug this pins: a single regex with a `$1` backreference inside a

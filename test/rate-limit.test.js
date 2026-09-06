@@ -8,7 +8,7 @@ import {
   rateLimitHeaders,
   withRateLimit,
   resetRateLimits,
-} from '../dist/rate-limit.js';
+} from 'wiki-formant/rate-limit';
 
 const opts = { capacity: 3, refillPerSec: 1 };
 

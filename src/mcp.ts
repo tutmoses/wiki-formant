@@ -76,12 +76,6 @@ export type ToolSchema = {
  * calls has no way to tell a lookup from one that reaches a payment processor.
  */
 export type ToolAnnotations = {
-  /**
-   * Human-facing label — the pre-2025-06-18 slot. `tools/list` hoists it to
-   * the top-level `title` when that is absent, so a manifest written against
-   * either revision renders the same in a client. Prefer `McpTool.title`.
-   */
-  title?: string;
   /** Does not modify anything. */
   readOnlyHint?: boolean;
   /** May destroy or overwrite state (only meaningful when not read-only). */
@@ -406,11 +400,7 @@ async function handleRpc(
             tools: config.tools.map(
               ({ name, title, description, inputSchema, outputSchema, annotations }) => ({
                 name,
-                // 2025-06-18 promoted `title` out of `annotations`. Hoisting
-                // rather than requiring every manifest to be rewritten: a
-                // client reading only the new slot showed a raw tool name for
-                // every surface that had not moved its label yet.
-                ...(title ?? annotations?.title ? { title: title ?? annotations!.title } : {}),
+                ...(title ? { title } : {}),
                 description,
                 inputSchema,
                 ...(outputSchema ? { outputSchema } : {}),

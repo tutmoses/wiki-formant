@@ -48,7 +48,7 @@ const DEFAULTS = { timeoutMs: 12_000, slowTimeoutMs: 40_000 };
  * tell an expired cert from a dead domain will eventually strip good citations
  * over a lapsed renewal.
  */
-export const TLS_CODES = new Set([
+const TLS_CODES = new Set([
   'CERT_HAS_EXPIRED',
   'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
   'DEPTH_ZERO_SELF_SIGNED_CERT',
@@ -189,7 +189,7 @@ export const YOUTUBE_EMBED = /^https?:\/\/(?:www\.)?(?:youtube-nocookie\.com|you
  * anchor carrying a dead video is invisible to a status check — 55 of them went
  * unprobed corpus-wide until one sweep resolved them and found 7 unwatchable.
  */
-export const YOUTUBE_WATCH =
+const YOUTUBE_WATCH =
   /^https?:\/\/(?:(?:www\.)?youtube\.com\/(?:watch\?(?:[^#]*&)?v=|shorts\/|live\/)|youtu\.be\/)([\w-]{6,})/;
 
 /**

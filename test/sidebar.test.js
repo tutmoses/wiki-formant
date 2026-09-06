@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveSidebarOpen } from '../dist/sidebar.js';
+import { resolveSidebarOpen } from 'wiki-formant/sidebar';
 
 // The collapse rule carries both bug fixes, so it is tested directly. The
 // component around it is verified in a browser, where a DOM actually exists.

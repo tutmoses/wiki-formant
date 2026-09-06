@@ -8,7 +8,7 @@
 // own block union, where a new type is a compile error until it is handled —
 // and only the bodies live here.
 
-import { decodeEntities } from './entities.js';
+import { decodeEntities } from './markdown.js';
 import type { CodeTab, ReferenceItem } from './blocks.js';
 
 /**

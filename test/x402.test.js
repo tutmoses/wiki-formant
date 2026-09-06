@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { gatePaidCalls } from '../dist/x402.js';
+import { gatePaidCalls } from 'wiki-formant/x402';
 
 const PAID = {
   kind: 'tool',

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ccBy40, licenseBlock, licenseLines, licenseNote } from '../dist/license.js';
-import { serverCard, SERVER_CARD_SCHEMA } from '../dist/well-known.js';
+import { ccBy40, licenseBlock, licenseLines, licenseNote } from 'wiki-formant/license';
+import { serverCard, SERVER_CARD_SCHEMA } from 'wiki-formant/well-known';
 
 const license = ccBy40({ siteName: 'AcuiQ', siteUrl: 'https://acuiq.com' });
 

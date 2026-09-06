@@ -11,7 +11,7 @@
 // from here. Each renderer takes the block's DATA rather than the block, which
 // keeps this file free of any one repo's type union.
 
-import { decodeEntities } from './entities.js';
+import { decodeEntities } from './markdown.js';
 import { htmlToMarkdown, inlineToMarkdown } from './markdown.js';
 
 // ---- the shapes the standard block types carry ------------------------------

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AI_CRAWLERS, aiCrawlerRules, aiCrawlerTokens, detectAiBot } from '../dist/crawlers.js';
+import { AI_CRAWLERS, aiCrawlerRules, aiCrawlerTokens, detectAiBot } from 'wiki-formant/crawlers';
 
 test('the matcher returns the label the proxies used', () => {
   assert.equal(detectAiBot('Mozilla/5.0 (compatible; GPTBot/1.2; +https://openai.com/gptbot)'), 'GPTBot');

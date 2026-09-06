@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isStale, daysSince, freshnessNotice, DEFAULT_MAX_AGE_DAYS } from '../dist/freshness.js';
+import { isStale, daysSince, freshnessNotice, DEFAULT_MAX_AGE_DAYS } from 'wiki-formant/freshness';
 
 const NOW = Date.UTC(2026, 7, 30);
 const daysAgo = n => new Date(NOW - n * 86_400_000);

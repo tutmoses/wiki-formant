@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mcpCallProps, plausibleDomain, searchQueryProps } from '../dist/analytics.js';
+import { mcpCallProps, plausibleDomain, searchQueryProps } from 'wiki-formant/analytics';
 
 const req = (headers = {}, url = 'https://x.test/api/mcp') => ({
   url,

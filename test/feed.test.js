@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { absolutise, cdata, clampWords, escXml, renderFeed, renderItem } from '../dist/feed.js';
+import { absolutise, cdata, clampWords, escXml, renderFeed, renderItem } from 'wiki-formant/feed';
 
 const item = (over = {}) => ({
   title: 'A & B',

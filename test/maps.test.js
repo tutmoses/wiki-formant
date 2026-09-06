@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toMapEmbedUrl, extractCoordsFromUrl, isShortMapUrl } from '../dist/maps.js';
+import { toMapEmbedUrl, extractCoordsFromUrl, isShortMapUrl } from 'wiki-formant/maps';
 
 test('an already-embeddable url passes through untouched', () => {
   const g = 'https://www.google.com/maps/embed?pb=x';

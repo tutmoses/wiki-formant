@@ -5,7 +5,7 @@ import {
   tweetEmbedSrc,
   onTweetResize,
   addCopyButtons,
-} from '../dist/dom.js';
+} from 'wiki-formant/dom';
 
 // ---- tweet embeds -----------------------------------------------------------
 

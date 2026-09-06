@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { injectHeadingIds, headingsFrom, slugifyHeading } from '../dist/headings.js';
+import { injectHeadingIds, headingsFrom, slugifyHeading } from 'wiki-formant/headings';
 
 test('every heading gets an id and a permalink anchor', () => {
   const out = injectHeadingIds('<h2>The shape of a code</h2><p>x</p><h3>Points off the channels</h3>');

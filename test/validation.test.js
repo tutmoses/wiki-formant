@@ -7,7 +7,7 @@ import {
   validateLinkGroups,
   createBlockValidator,
   duplicateBlockIds,
-} from '../dist/validation.js';
+} from 'wiki-formant/validation';
 
 test('safe schemes pass, unsafe ones do not', () => {
   assert.equal(safeLinkHref('https://example.com'), 'https://example.com');

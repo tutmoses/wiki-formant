@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { corpusEtag, notModified, textHeaders, markdownHeaders, descriptorHeaders, descriptorResponse, cleanSnippet, pageLine } from '../dist/http.js';
-import { parsePagination, paginatedResponse, listEnvelope, toOffset, adjacentPages } from '../dist/pagination.js';
-import { parseVersion, formatVersion, bump, compareVersions } from '../dist/versioning.js';
+import { corpusEtag, notModified, textHeaders, markdownHeaders, descriptorHeaders, descriptorResponse, cleanSnippet, pageLine } from 'wiki-formant/http';
+import { parsePagination, paginatedResponse, listEnvelope, toOffset, adjacentPages } from 'wiki-formant/pagination';
+import { parseVersion, formatVersion, bump, compareVersions } from 'wiki-formant/versioning';
 
 test('an ETag is stable for the same corpus revision and moves when it changes', () => {
   const a = corpusEtag([349, new Date('2026-08-29T00:00:00Z')]);

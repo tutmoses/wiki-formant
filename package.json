@@ -151,6 +151,10 @@
     "./link-check": {
       "types": "./dist/link-check.d.ts",
       "import": "./dist/link-check.js"
+    },
+    "./seeded": {
+      "types": "./dist/seeded.d.ts",
+      "import": "./dist/seeded.js"
     }
   },
   "bin": {

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { changeSummary, classifyChanges, computeRevisionDiff, diffBlocks, extractBlocks } from '../dist/revisions.js';
+import { changeSummary, classifyChanges, computeRevisionDiff, diffBlocks, extractBlocks } from 'wiki-formant/revisions';
 
 const containers = (b) =>
   b.type === 'infobox' ? [{ path: 'blocks', blocks: b.blocks }]

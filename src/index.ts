@@ -9,7 +9,7 @@ export * from './mcp.js';
 export * from './headings.js';
 export * from './links.js';
 export * from './markdown.js';
-export * from './entities.js';
+export * from './markdown.js';
 export * from './http.js';
 export * from './pagination.js';
 export * from './versioning.js';

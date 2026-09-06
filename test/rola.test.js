@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRolaAuth, proofType } from '../dist/rola.js';
+import { createRolaAuth, proofType } from 'wiki-formant/rola';
 
 // The proof-type split is the bug this module exists to stop recurring: one of
 // the two copies it replaces passed `type: 'account'` unconditionally, so a
