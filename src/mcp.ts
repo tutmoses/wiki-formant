@@ -229,7 +229,8 @@ export class McpToolError extends Error {
 export type RpcRequest = { jsonrpc: '2.0'; id: string | number | null; method: string; params?: unknown };
 type RpcId = string | number | null;
 
-const DEFAULT_MAX_BATCH = 20;
+/** How many entries one JSON-RPC batch may carry. Quoted by the conformance suite. */
+export const DEFAULT_MAX_BATCH = 20;
 
 const quote = (list: readonly string[]) => list.map(s => `"${s}"`).join(', ');
 

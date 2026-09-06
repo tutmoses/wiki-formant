@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { corpusEtag, notModified, textHeaders, markdownHeaders, descriptorHeaders, descriptorResponse, cleanSnippet, pageLine } from '../dist/http.js';
-import { parsePagination, paginatedResponse, listEnvelope, toOffset } from '../dist/pagination.js';
+import { parsePagination, paginatedResponse, listEnvelope, toOffset, adjacentPages } from '../dist/pagination.js';
 import { parseVersion, formatVersion, bump, compareVersions } from '../dist/versioning.js';
 
 test('an ETag is stable for the same corpus revision and moves when it changes', () => {
@@ -173,4 +173,26 @@ test('a listing envelope tells an agent there is more and what to send', () => {
   assert.equal(last.nextPage, undefined, 'a nextPage that does not exist is worse than none');
   // An empty result is one page of nothing, not zero pages.
   assert.equal(listEnvelope([], 0, 1, 20).totalPages, 1);
+});
+
+// ---- adjacent pages ---------------------------------------------------------
+
+test('adjacentPages returns the entries either side of the current one', () => {
+  const pages = [{ slug: 'a' }, { slug: 'b' }, { slug: 'c' }];
+  const at = slug => adjacentPages(pages, p => p.slug === slug);
+  assert.deepEqual(at('b'), { prev: { slug: 'a' }, next: { slug: 'c' } });
+});
+
+test('adjacentPages leaves the ends open', () => {
+  const pages = [{ slug: 'a' }, { slug: 'b' }];
+  assert.equal(adjacentPages(pages, p => p.slug === 'a').prev, null);
+  assert.equal(adjacentPages(pages, p => p.slug === 'b').next, null);
+});
+
+test('adjacentPages yields nothing for a page its own list does not carry', () => {
+  assert.deepEqual(adjacentPages([{ slug: 'a' }], p => p.slug === 'z'), { prev: null, next: null });
+});
+
+test('adjacentPages handles a list of one', () => {
+  assert.deepEqual(adjacentPages([{ slug: 'a' }], p => p.slug === 'a'), { prev: null, next: null });
 });

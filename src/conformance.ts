@@ -11,6 +11,39 @@
 // same package — so the suite that checks it belongs next to it. What each app
 // keeps is its own fixtures: which tools it expects, what a good answer from each
 // looks like, and which text surfaces it publishes.
+//
+// Every value the transport assertions compare against is imported from `mcp.ts`,
+// not restated here. A suite that carries its own copy of the contract stops
+// testing the boundary the moment the contract moves and says nothing about it.
+
+import { DEFAULT_MAX_BATCH, MCP_CORS, MCP_PROTOCOL_VERSION } from './mcp.js';
+
+/**
+ * Does the live preflight carry every token `MCP_CORS` declares for this header?
+ *
+ * Derived rather than listed: the assertion used to name three headers by hand,
+ * so a fourth added to `MCP_CORS` was tested by nobody.
+ */
+const corsCovers = (res: Response, header: string): boolean => {
+  const live = res.headers.get(header) ?? '';
+  return (MCP_CORS[header] ?? '').split(',').every(tok => live.includes(tok.trim()));
+};
+
+/**
+ * A POST that `Tester.rpc` cannot make: one whose raw status and headers are the
+ * thing under test, and which must not take `rpc`'s 429 retry. A string body is
+ * sent as-is, so the malformed-JSON case uses the same door as the rest.
+ */
+const rawPost = (
+  endpoint: string,
+  body: unknown,
+  headers: Record<string, string> = {},
+): Promise<Response> =>
+  fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+  });
 
 export interface Rpc {
   result?: {
@@ -154,14 +187,14 @@ export async function transportChecks(
   // 2025-03-26 — forfeiting structured output, tool titles and `_meta` — while
   // every suite reported green.
   const echoed = await t.rpc('initialize', {
-    protocolVersion: CURRENT_PROTOCOL,
+    protocolVersion: MCP_PROTOCOL_VERSION,
     capabilities: {},
     clientInfo: { name: clientName, version: '1' },
   });
   t.check(
     'protocol negotiated',
-    echoed.result?.protocolVersion === CURRENT_PROTOCOL,
-    `asked ${CURRENT_PROTOCOL}, got ${echoed.result?.protocolVersion}`,
+    echoed.result?.protocolVersion === MCP_PROTOCOL_VERSION,
+    `asked ${MCP_PROTOCOL_VERSION}, got ${echoed.result?.protocolVersion}`,
   );
   t.check(
     'downgrades gracefully',
@@ -176,7 +209,7 @@ export async function transportChecks(
     'OPTIONS preflight',
     opt.status === 204 &&
       opt.headers.get('access-control-allow-origin') === '*' &&
-      (opt.headers.get('access-control-allow-headers') ?? '').includes('Mcp-Protocol-Version'),
+      corsCovers(opt, 'Access-Control-Allow-Headers'),
     `${opt.status} ACAO=${opt.headers.get('access-control-allow-origin')}`,
   );
   // Allow-Headers governs what a browser may send; Expose-Headers what it may
@@ -184,9 +217,7 @@ export async function transportChecks(
   // 429 and a rate limit reads to it as a hang.
   t.check(
     'CORS exposes response headers',
-    ['Mcp-Protocol-Version', 'Retry-After', 'RateLimit-Remaining'].every(h =>
-      (opt.headers.get('access-control-expose-headers') ?? '').includes(h),
-    ),
+    corsCovers(opt, 'Access-Control-Expose-Headers'),
     `expose=${opt.headers.get('access-control-expose-headers')}`,
   );
 
@@ -194,11 +225,7 @@ export async function transportChecks(
   // the one moment an agent is least able to act on it. This suite is the
   // proof: with no header to read, its own client blind-sleeps five seconds on
   // a 429 and hopes.
-  const headroom = await fetch(t.endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 'headroom', method: 'ping' }),
-  });
+  const headroom = await rawPost(t.endpoint, { jsonrpc: '2.0', id: 'headroom', method: 'ping' });
   t.recordCall();
   const remaining = headroom.headers.get('ratelimit-remaining');
   t.check(
@@ -216,25 +243,20 @@ export async function transportChecks(
 
   // A notification has no id, so it must be acknowledged with no body at all —
   // a JSON-RPC response to one is a protocol error.
-  const notif = await fetch(t.endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
-  });
+  const notif = await rawPost(t.endpoint, { jsonrpc: '2.0', method: 'notifications/initialized' });
   const notifBody = await notif.text();
   t.check('notification→202', notif.status === 202 && notifBody === '', `${notif.status} body="${notifBody}"`);
 
-  const bad = await fetch(t.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: 'not json' });
+  const bad = await rawPost(t.endpoint, 'not json');
   const badJson = (await bad.json()) as Rpc;
   t.check('parse error→400', bad.status === 400 && badJson.error?.code === -32700, `${bad.status} code=${badJson.error?.code}`);
 
-  const over = await fetch(t.endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(Array.from({ length: 21 }, (_, i) => ({ jsonrpc: '2.0', id: i, method: 'ping' }))),
-  });
+  const over = await rawPost(
+    t.endpoint,
+    Array.from({ length: DEFAULT_MAX_BATCH + 1 }, (_, i) => ({ jsonrpc: '2.0', id: i, method: 'ping' })),
+  );
   const overJson = (await over.json()) as Rpc;
-  t.check('batch cap (21)', overJson.error?.code === -32600, `code=${overJson.error?.code}: ${(overJson.error?.message ?? '').slice(0, 80)}`);
+  t.check(`batch cap (${DEFAULT_MAX_BATCH + 1})`, overJson.error?.code === -32600, `code=${overJson.error?.code}: ${(overJson.error?.message ?? '').slice(0, 80)}`);
 
   const caps = init.result?.capabilities ?? {};
   t.check(
@@ -254,33 +276,26 @@ export async function transportChecks(
     );
   }
 
-  const versioned = await fetch(t.endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'MCP-Protocol-Version': CURRENT_PROTOCOL },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }),
+  const versioned = await rawPost(t.endpoint, { jsonrpc: '2.0', id: 1, method: 'ping' }, {
+    'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
   });
   t.recordCall();
   t.check(
     'MCP-Protocol-Version echoed',
-    versioned.headers.get('mcp-protocol-version') === CURRENT_PROTOCOL,
-    `sent ${CURRENT_PROTOCOL}, got ${versioned.headers.get('mcp-protocol-version')}`,
+    versioned.headers.get('mcp-protocol-version') === MCP_PROTOCOL_VERSION,
+    `sent ${MCP_PROTOCOL_VERSION}, got ${versioned.headers.get('mcp-protocol-version')}`,
   );
 
   // Batching was removed in 2025-06-18. A server that keeps honouring it under
   // a version that forbids it is telling the client something untrue.
-  const batched = await fetch(t.endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'MCP-Protocol-Version': CURRENT_PROTOCOL },
-    body: JSON.stringify([{ jsonrpc: '2.0', id: 1, method: 'ping' }]),
+  const batched = await rawPost(t.endpoint, [{ jsonrpc: '2.0', id: 1, method: 'ping' }], {
+    'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
   });
   t.recordCall();
   t.check('batch refused at 2025-06-18', batched.status === 400, `${batched.status}`);
 
   return init;
 }
-
-/** The newest protocol revision `wiki-formant/mcp` speaks. */
-export const CURRENT_PROTOCOL = '2025-06-18';
 
 /**
  * One service, many descriptors — server.json, the two agent-card paths, the
@@ -342,11 +357,7 @@ export async function agentCardParity(t: Tester): Promise<void> {
   // `url` is where a client sends its first call. Pointed at the homepage it
   // gets HTML back, which is the failure that looks like a broken agent.
   const endpoint = String(a.url ?? '');
-  const probe = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }),
-  });
+  const probe = await rawPost(endpoint, { jsonrpc: '2.0', id: 1, method: 'ping' });
   t.recordCall();
   t.check(
     'agent card url is callable',

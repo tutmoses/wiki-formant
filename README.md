@@ -264,6 +264,8 @@ are unit-tested without a DOM.
 
 `FacetBar` renders the rows `createTaxonomy` already produces. This is why the taxonomy exports a rows model rather than markup: the rows could always cross the boundary and, until this subpath existed, the markup could not, so all three wikis hand-rendered it and two put `aria-pressed` on an `<a>`. `Breadcrumbs` renders the trail and its `BreadcrumbList` JSON-LD together, because a trail whose structured data is written somewhere else is a trail that will one day disagree with its own markup — which is the case Google penalises. It takes a `base` origin: structured-data URLs must be absolute and a package cannot know the site.
 
+`PageNav` is the previous/next pair at the foot of an article — the sequential read the infobox rail's lateral links do not cover. Ordering is the caller's, because it is the one part that is never portable: a wiki's sequence is its section's configured sort, a knowledge base's is a taxonomy walk. Pair it with `adjacentPages` from `wiki-formant/pagination` over a list you already hold — neither wiki needs a query for it, and the two indexed lookups the neighbours used to cost were the reason one of them dropped the control.
+
 `WikiRail` stays in `wiki-formant/react`, because it calls `useSidebar` and genuinely is a client component. It renders the whole `wiki-rail__*` tree — scroll wrapper, both labelled `<nav>`s, the table of contents between them — where three wikis had drifted on which of those they had.
 
 All three take the router's link component as a prop:

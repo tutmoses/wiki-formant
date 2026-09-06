@@ -35,6 +35,8 @@ export interface WikiLinkProps {
   className?: string;
   title?: string;
   'aria-current'?: 'true' | 'page' | undefined;
+  /** `prev`/`next` on the foot nav — the half that makes the pair machine-readable. */
+  rel?: string;
   children?: ReactNode;
 }
 
@@ -273,5 +275,77 @@ export function BreadcrumbsRow({
       <Breadcrumbs {...props} />
       {actions}
     </div>
+  );
+}
+
+// ---- previous / next --------------------------------------------------------
+
+/** One end of the foot nav: where it goes and what it is called. */
+export interface PageNavRef {
+  title: string;
+  href: string;
+}
+
+export interface PageNavProps {
+  prev?: PageNavRef | null;
+  next?: PageNavRef | null;
+  link?: WikiLinkComponent;
+  /** The landmark's accessible name. */
+  label?: string;
+  prevLabel?: string;
+  nextLabel?: string;
+  /**
+   * The arrows. `ReactNode` rather than a string because both wikis draw them
+   * with an icon component, and this package is not acquiring an icon peer to
+   * hold two glyphs.
+   */
+  prevGlyph?: ReactNode;
+  nextGlyph?: ReactNode;
+}
+
+/**
+ * The sequential read at the foot of an article — the move the infobox rail's
+ * lateral links do not cover.
+ *
+ * Ordering is entirely the caller's; pair this with `adjacentPages` from
+ * `wiki-formant/pagination` over a list you already hold. Both wikis had this
+ * markup and had already drifted on the parts that matter rather than the parts
+ * that show: one carried `rel="prev"`/`rel="next"` and an `aria-label` and the
+ * other carried neither, and the one without expressed its right-hand alignment
+ * as two inline utilities instead of the modifier its own stylesheet defines.
+ *
+ * The `page-nav__*` class names are NOT props, for the reason `WikiRail`'s are
+ * not: they are the convention both stylesheets already implement, and making
+ * them configurable is how a convention forks. The empty `<div>` holds the
+ * first article's left column so the next link stays in the right one.
+ */
+export function PageNav({
+  prev,
+  next,
+  link: Link = Anchor,
+  label = 'Article navigation',
+  prevLabel = 'Previous',
+  nextLabel = 'Next',
+  prevGlyph = '\u2190',
+  nextGlyph = '\u2192',
+}: PageNavProps) {
+  if (!prev && !next) return null;
+  return (
+    <nav className="page-nav" aria-label={label}>
+      {prev ? (
+        <Link href={prev.href} className="page-nav-link" rel="prev">
+          <span className="page-nav-label">{prevGlyph}{prevLabel}</span>
+          <span className="page-nav-title">{prev.title}</span>
+        </Link>
+      ) : (
+        <div />
+      )}
+      {next && (
+        <Link href={next.href} className="page-nav-link page-nav-link--end" rel="next">
+          <span className="page-nav-label page-nav-label--end">{nextLabel}{nextGlyph}</span>
+          <span className="page-nav-title">{next.title}</span>
+        </Link>
+      )}
+    </nav>
   );
 }

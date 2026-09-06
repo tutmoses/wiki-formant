@@ -89,3 +89,27 @@ export function listEnvelope<T>(
 export function toOffset({ page, pageSize }: Pagination): { skip: number; take: number } {
   return { skip: (page - 1) * pageSize, take: pageSize };
 }
+
+/**
+ * The entries either side of the current one in an already-ordered list.
+ *
+ * The ordering is the caller's, deliberately — it is the one thing here that is
+ * never portable. A wiki's sequence is its section's configured sort, a
+ * knowledge base's is a taxonomy walk, and a company log's is `updatedAt` desc.
+ * What both wikis had written twice is this scan, not the sort.
+ *
+ * `null` on both sides when the page is not in the list, so a page reached by a
+ * URL its own section does not list renders no nav rather than a wrong one.
+ *
+ * No query. Both callers already hold the ordered siblings for something else —
+ * a related-pages panel, a section listing — and the two indexed lookups the
+ * neighbours used to cost were the reason one wiki dropped the control.
+ */
+export function adjacentPages<T>(
+  ordered: readonly T[],
+  isCurrent: (page: T) => boolean,
+): { prev: T | null; next: T | null } {
+  const i = ordered.findIndex(isCurrent);
+  if (i < 0) return { prev: null, next: null };
+  return { prev: ordered[i - 1] ?? null, next: ordered[i + 1] ?? null };
+}
