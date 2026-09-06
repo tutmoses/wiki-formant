@@ -125,4 +125,6 @@ jobs:
       # tarball.
       - name: Publish
         if: steps.check.outputs.changed == 'true'
-        run: npm publish --provenance --access public
+        run: |
+          npm --version
+          npm publish --provenance --access public --loglevel verbose
