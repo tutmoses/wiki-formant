@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   mcpResponse, mcpGet, mcpOptions, handleMcp, McpToolError, MCP_PROTOCOL_VERSION,
 } from '../dist/mcp.js';
+import { resetRateLimits } from '../dist/rate-limit.js';
 
 const config = {
   serverInfo: { name: 'test-server', version: '1.0.0' },
@@ -376,4 +377,39 @@ test('a gate can withhold an entry and merge its own answer back', async () => {
     gated,
   );
   assert.equal((await res.json()).error.code, 402);
+});
+
+test('a declared budget is enforced, and every answer states the headroom', async () => {
+  resetRateLimits();
+  const limited = { ...config, rateLimit: { capacity: 2, refillPerSec: 0.01, prefix: 'test-mcp' } };
+  const post = () =>
+    mcpResponse(
+      new Request('https://x/api/mcp', {
+        method: 'POST',
+        headers: { 'x-forwarded-for': '9.9.9.9' },
+        body: JSON.stringify(rpc('ping')),
+      }),
+      limited,
+    );
+
+  const first = await post();
+  assert.equal(first.status, 200);
+  assert.equal(first.headers.get('RateLimit-Limit'), '2');
+  assert.equal(first.headers.get('RateLimit-Remaining'), '1');
+
+  await post();
+  const over = await post();
+  assert.equal(over.status, 429);
+  assert.equal(over.headers.get('RateLimit-Remaining'), '0');
+  assert.match(over.headers.get('Retry-After'), /^\d+$/);
+  assert.equal((await over.json()).error.code, -32000);
+});
+
+test('no declared budget means no limiting and no headroom headers', async () => {
+  const res = await mcpResponse(
+    new Request('https://x/api/mcp', { method: 'POST', body: JSON.stringify(rpc('ping')) }),
+    config,
+  );
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('RateLimit-Limit'), null);
 });

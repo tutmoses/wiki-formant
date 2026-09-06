@@ -48,6 +48,8 @@ export function requestProtocol(request: Request): McpProtocolVersion {
 /** JSON-RPC batching was removed in 2025-06-18; it stays legal below that. */
 const allowsBatch = (v: McpProtocolVersion) => v !== '2025-06-18';
 
+import { clientKey, rateLimit, rateLimitHeaders, withRateLimit, type RateLimitOptions } from './rate-limit.js';
+
 export type ToolParam = {
   type: 'string' | 'number' | 'boolean' | 'array' | 'object';
   description: string;
@@ -169,6 +171,24 @@ export interface McpServerConfig {
    * query. Keep this aligned with whatever ceiling the batching tools advertise.
    */
   maxBatch?: number;
+  /**
+   * Per-IP budget for this endpoint.
+   *
+   * Declared rather than wired: the four routes in this workspace each spelled
+   * out the same verdict → refuse → answer → attach-headroom dance through
+   * three differently-named local helpers, two of them taking an async detour
+   * through the framework's `headers()` to reach a `Request` that was already
+   * in hand. A surface that states a budget owes the same four things every
+   * time, so stating the budget is now the whole of it — and the headroom
+   * header cannot be the part a new surface forgets.
+   *
+   * Enforced before the body is parsed, deliberately: an unparsed body must not
+   * cost a query.
+   */
+  rateLimit?: RateLimitOptions & {
+    /** Bucket namespace. Defaults to `mcp`; endpoints sharing it share a bucket. */
+    prefix?: string;
+  };
   /** Per-request analytics hook. Runs before dispatch; never blocks the response. */
   onCall?: (request: Request, body: unknown) => void;
   /**
@@ -639,10 +659,27 @@ export async function mcpResponse(
   config: McpServerConfig,
 ): Promise<Response> {
   const protocolVersion = requestProtocol(request);
+
+  // Before `request.json()`: an unparsed body must not cost a query, which is
+  // also why the refusal carries a null id.
+  let headroom: Record<string, string> = {};
+  if (config.rateLimit) {
+    const verdict = rateLimit(
+      clientKey(config.rateLimit.prefix ?? 'mcp', request.headers),
+      config.rateLimit,
+    );
+    if (!verdict.ok) {
+      return withRateLimit(mcpRateLimited(verdict.retryAfterSec), verdict, config.rateLimit);
+    }
+    headroom = rateLimitHeaders(verdict, config.rateLimit);
+  }
+
   // Echoed on every response so a client can see which version it is actually
   // being answered under, rather than inferring it from the initialize it sent
-  // some requests ago.
-  const headers = { ...MCP_CORS, 'MCP-Protocol-Version': protocolVersion };
+  // some requests ago. The headroom rides alongside on every answer, not only
+  // on the 429 — a budget discoverable only by exceeding it is one an agent
+  // meets when it is least able to act on it.
+  const headers = { ...MCP_CORS, 'MCP-Protocol-Version': protocolVersion, ...headroom };
 
   let body: RpcRequest | RpcRequest[];
   try {
