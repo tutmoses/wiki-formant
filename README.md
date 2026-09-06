@@ -266,7 +266,7 @@ are unit-tested without a DOM.
 
 `PageNav` is the previous/next pair at the foot of an article — the sequential read the infobox rail's lateral links do not cover. Ordering is the caller's, because it is the one part that is never portable: a wiki's sequence is its section's configured sort, a knowledge base's is a taxonomy walk. Pair it with `adjacentPages` from `wiki-formant/pagination` over a list you already hold — neither wiki needs a query for it, and the two indexed lookups the neighbours used to cost were the reason one of them dropped the control.
 
-`WikiRail` stays in `wiki-formant/react`, because it calls `useSidebar` and genuinely is a client component. It renders the whole `wiki-rail__*` tree — scroll wrapper, both labelled `<nav>`s, the table of contents between them — where three wikis had drifted on which of those they had.
+`RailShell` stays in `wiki-formant/react`, because it calls `useSidebar` and genuinely is a client component. It renders the rail's landmark, its scroll wrapper and the three collapse states — including the `--instant` class that keeps a remembered-closed rail from animating shut on first paint, and the close-on-tap that a mobile rail needs. Compose your own rail inside it and mark the active link with `isRailLinkActive`; all three wikis do, and the pre-composed component that used to sit here had one consumer and had already lost both of those behaviours.
 
 All three take the router's link component as a prop:
 
