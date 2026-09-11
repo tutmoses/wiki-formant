@@ -1,13 +1,20 @@
 // rola.ts — Radix On-Ledger Authentication: challenge, proof, session.
 //
-// Both Radix wikis had written this file, and the two copies were 94% identical
-// — the whole difference was a cookie name, plus the half radix-wiki had learned
-// since and miow had not: persona (identity_*) proofs, which miow rejected
-// because it passed `type: 'account'` unconditionally, and the error logging
-// that makes a failed verification diagnosable at all.
+// Two Radix wikis had written this file, and the copies were 94% identical — the
+// whole difference was a cookie name, plus the half radix-wiki had learned and
+// miow had not: persona (identity_*) proofs, which miow rejected because it
+// passed `type: 'account'` unconditionally, and the error logging that makes a
+// failed verification diagnosable at all.
 //
 // This is radix-wiki's version, parameterised on the two things a second wiki
-// actually differs in: the cookie name and its dApp identity.
+// would actually differ in: the cookie name and its dApp identity.
+//
+// **One consumer, as of Sep 2026.** miow is retired, so the second wiki this was
+// parameterised for no longer exists; caper's wallet auth never used this stack
+// and acuiq gates only its wiki editor, on a shared secret. Keep it — the
+// persona-proof fix and the error logging are worth not losing, and the ports
+// below are what make it reusable at all — but do not mistake it for a proven
+// shared abstraction. It is radix-wiki's auth that happens to live in a package.
 //
 // Storage and cookies are ports rather than imports. A Prisma client is
 // generated per repo and cannot be shared, and taking `next/headers` here would
