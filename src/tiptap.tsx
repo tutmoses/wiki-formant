@@ -1,16 +1,11 @@
 'use client';
 
-// tiptap.tsx — the custom editor nodes both wikis had written twice.
+// tiptap.tsx — the custom editor nodes the wikis share.
 //
 // Behind its own subpath for the same reason `react.tsx` is: the four
 // `@tiptap/*` packages are OPTIONAL peer dependencies, so a consumer that only
 // wants the taxonomy or the MCP transport still installs a package with no
 // runtime dependencies at all.
-//
-// The two copies had drifted in both directions — one had grown tabs the other
-// lacked, the other had extracted the Twitter helper the first still wrote out
-// three times — which is the shape of drift that costs the most: neither copy
-// is behind, so neither looks like the one to fix.
 //
 // What is shared is the node schema and its behaviour, never appearance. Class
 // names and icons are injected, which is what lets one wiki keep `text-jupiter`
@@ -71,7 +66,7 @@ export const YouTube = TiptapYoutube.extend({
 function TwitterEmbedView({ node }: { node: any }) {
   const containerRef = useRef<HTMLDivElement>(null);
   // The embed posts its measured height back; `onTweetResize` owns the origin
-  // check, which is the part that was written out at four call sites.
+  // check.
   useEffect(
     () =>
       onTweetResize(height => {

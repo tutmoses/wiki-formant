@@ -1,12 +1,6 @@
 // headings.ts — stable ids on a wiki page's headings, and the list a table of
 // contents is built from.
 //
-// Two of the three wikis had already written this out (caper's `injectHeadingIds`,
-// radix-wiki's heading branch in `processHtml`), down to byte-identical
-// `stripTags` and `getAttr` helpers — caper's file says "ported in spirit from
-// radix-wiki" at the top, which is the drift admitting itself. What they had
-// drifted on is below.
-//
 // The slug rule is a parameter, not a decision this module makes. A heading id
 // is a live URL: readers link to `#the-shape-of-a-code`, and so does the page's
 // own permalink anchor. Unifying two slug rules would silently move every
@@ -15,8 +9,7 @@
 //
 // Deduping, by contrast, is not a choice: two headings with the same text
 // otherwise mint the same id twice and every link to the second one lands on
-// the first. That was already a bug in the copy that lacked it, so this always
-// dedupes.
+// the first, so this always dedupes.
 
 import { getAttr, stripTags } from './html.js';
 

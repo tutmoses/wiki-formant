@@ -96,14 +96,12 @@ export function toOffset({ page, pageSize }: Pagination): { skip: number; take: 
  * The ordering is the caller's, deliberately — it is the one thing here that is
  * never portable. A wiki's sequence is its section's configured sort, a
  * knowledge base's is a taxonomy walk, and a company log's is `updatedAt` desc.
- * What both wikis had written twice is this scan, not the sort.
  *
  * `null` on both sides when the page is not in the list, so a page reached by a
  * URL its own section does not list renders no nav rather than a wrong one.
  *
- * No query. Both callers already hold the ordered siblings for something else —
- * a related-pages panel, a section listing — and the two indexed lookups the
- * neighbours used to cost were the reason one wiki dropped the control.
+ * No query. Callers already hold the ordered siblings for something else, a
+ * related-pages panel or a section listing, so the neighbours cost no lookups.
  */
 export function adjacentPages<T>(
   ordered: readonly T[],

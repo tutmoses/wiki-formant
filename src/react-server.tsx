@@ -84,7 +84,7 @@ export interface FacetBarProps {
  * dropping the active facets — and the A–Z row leads with the reset control.
  *
  * `aria-current`, not `aria-pressed`: a link is not a toggle button and does not
- * take that attribute. Two of the three copies this replaces had it wrong.
+ * take that attribute.
  */
 export function FacetBar({
   link: Link,
@@ -267,7 +267,7 @@ export function Breadcrumbs({
  * The standard page-top row: the trail, plus optional right-aligned actions.
  *
  * The column it sits in is the one its route declares — the row reads the
- * page's own max-width by inheritance, so a trail can no longer disagree with
+ * page's own max-width by inheritance, so a trail cannot disagree with
  * the content it titles.
  */
 export function BreadcrumbsRow({
@@ -313,16 +313,12 @@ export interface PageNavProps {
  * lateral links do not cover.
  *
  * Ordering is entirely the caller's; pair this with `adjacentPages` from
- * `wiki-formant/pagination` over a list you already hold. Both wikis had this
- * markup and had already drifted on the parts that matter rather than the parts
- * that show: one carried `rel="prev"`/`rel="next"` and an `aria-label` and the
- * other carried neither, and the one without expressed its right-hand alignment
- * as two inline utilities instead of the modifier its own stylesheet defines.
+ * `wiki-formant/pagination` over a list you already hold.
  *
- * The `page-nav__*` class names are NOT props, for the reason `WikiRail`'s are
- * not: they are the convention both stylesheets already implement, and making
- * them configurable is how a convention forks. The empty `<div>` holds the
- * first article's left column so the next link stays in the right one.
+ * The `page-nav__*` class names are NOT props: they are the convention every
+ * stylesheet implements, and making them configurable is how a convention
+ * forks. The empty `<div>` holds the first article's left column so the next
+ * link stays in the right one.
  */
 export function PageNav({
   prev,

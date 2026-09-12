@@ -1,17 +1,9 @@
 // revisions.ts — what changed between two versions of a page.
 //
 // The semver lives next door in `versioning.ts`; this is the walk that decides
-// which bump to ask for. Both wikis had written it, and `extractBlocks` was
-// byte-identical between the two copies.
-//
-// They differed in what each had learned since. One grew a leaf-level diff, a
-// second changed-flag for the page's banner, and a `patch` classification for
-// when only that flag moved. The other grew none of those and instead dropped
-// twenty-five lines the first still carries: two Maps keyed by a recursive
-// JSON.stringify of every block, built on every save and never read once.
-// Matching is by id and always was.
-//
-// This is the union, minus the dead half.
+// which bump to ask for. It carries a leaf-level diff, a changed-flag for the
+// page's banner, and a `patch` classification for when only that flag moved.
+// Matching is by id.
 
 import { incrementVersion, parseVersion, type ChangeType, type SemVer } from './versioning.js';
 

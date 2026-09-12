@@ -910,8 +910,7 @@ export class ErrorBoundary extends Component<
     children: ReactNode;
     /**
      * `error` is passed as well as `retry` because a fallback that cannot see
-     * what failed can only say "something went wrong" — which is what one of
-     * the copies this replaced said, while the other had the message and used it.
+     * what failed can only say "something went wrong".
      */
     fallback: (retry: () => void, error: unknown) => ReactNode;
     onError?: (error: unknown) => void;

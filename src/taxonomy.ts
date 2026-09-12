@@ -64,12 +64,11 @@ export interface RelatedRanking<T> {
  * value is precisely a set the category view already filters and counts, so the
  * row is the way into that set rather than dead text.
  *
- * Rows, not markup: the three wikis this was lifted from render the same
- * selection three ways (an HTML `<table>` string folded into a block, a React
- * `<aside>`, a markdown twin), and they differ only in how a value is
- * *formatted* — a `url` gets an external link here, a shortened display there.
- * What they had all rebuilt, and had already begun to disagree about, is which
- * keys appear and where each one links.
+ * Rows, not markup: wikis render the same selection differently (an HTML
+ * `<table>` string folded into a block, a React `<aside>`, a markdown twin) and
+ * differ only in how a value is *formatted*: a `url` gets an external link
+ * here, a shortened display there. Which keys appear and where each one links
+ * is what they share.
  */
 export interface MetadataRow extends MetadataKeyDefinition {
   value: string;

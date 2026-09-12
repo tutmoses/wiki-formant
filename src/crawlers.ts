@@ -1,22 +1,16 @@
 // crawlers.ts — one roster of AI crawler tokens, for both surfaces that need it.
 //
-// Every wiki in the workspace kept this list twice: once in the proxy, keyed by
-// user-agent substring, to count an "AI Bot Visit"; and once in `robots.ts`, as
-// the set of agents that get their own group. The two copies were each
-// byte-identical across all three repos — and they were different lists.
+// The proxy counts an "AI Bot Visit" by user-agent substring, and `robots.ts`
+// gives each agent its own group. Both read this one roster.
 //
-// Only one direction of that difference was deliberate. `Applebot-Extended`
+// One difference between the two uses is deliberate. `Applebot-Extended`
 // never fetches a page: it is a robots.txt-only token that Applebot consults
 // before using already-crawled data for AI, so counting it would count nothing.
 // That belongs in robots and not in the matcher, and it is declared here.
 //
-// The other direction was not deliberate. Bytespider, CCBot, cohere-ai,
-// Claude-Web and Meta-ExternalFetcher were matched by every proxy and named by
-// no robots.txt — and a crawler obeys only its most-specific matching group, so
-// an agent with no group of its own falls through to `*` and is granted
-// whatever that grants. The wikis were measuring five crawlers they had never
-// addressed. One roster makes that a property of the data rather than of which
-// file you happened to edit.
+// Every other token appears in both, because a crawler obeys only its
+// most-specific matching group: an agent with no group of its own falls through
+// to `*` and is granted whatever that grants.
 
 export interface AiCrawler {
   /** Matched as a substring of the User-Agent, and the robots.txt token. */

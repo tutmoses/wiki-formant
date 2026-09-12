@@ -4,21 +4,12 @@
 // pure, so it can be tested without a DOM, and `react.tsx` is left holding only
 // the hook that calls it.
 //
-// `useTypeahead` already shared the state machine across five surfaces in three
-// wikis. The ARIA did not travel with it, and all five had drifted into
-// different wrongness:
-//
-//   - one put `aria-selected` on a plain `<button>`, which is not a role that
-//     takes it, and gave the container no `role="listbox"` at all;
-//   - one gave the rows `role="option"` but still no listbox, so the options
-//     had no owner;
-//   - two had no roles whatsoever;
-//   - one used a `data-highlighted` attribute, which no assistive technology
-//     reads.
-//
-// None of the five set `aria-activedescendant`, which is the attribute that
-// actually announces the highlighted row as the reader arrows through it. A
-// combobox without it is a text field that silently changes what Enter does.
+// `useTypeahead` shares the state machine; this is the ARIA that goes with it:
+// a `role="listbox"` container that owns `role="option"` rows, `aria-selected`
+// on the option rather than on a plain `<button>`, and `aria-activedescendant`,
+// the attribute that announces the highlighted row as the reader arrows
+// through it. A combobox without it is a text field that silently changes what
+// Enter does.
 
 /** Which surface a set of controls belongs to, when one hook feeds several. */
 export interface ComboboxInput {

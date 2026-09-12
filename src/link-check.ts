@@ -1,18 +1,15 @@
-// link-check.ts — the dead-link probe both wikis' sweep scripts had written.
+// link-check.ts — the dead-link probe wiki sweep scripts share.
 //
 // Node-only (fetch, AbortSignal, URL). No framework, no database: what a
 // checker does with the verdicts — which pages to walk, what counts as an
 // internal path, how to report — stays with the caller, because that is the
 // half that is genuinely per-wiki.
 //
-// EVERY GUARD BELOW WAS PAID FOR BY A FALSE POSITIVE, and the two copies had
-// each learned a different half of the lesson. One knew that npmjs.com 403s
-// scripted requests, that an expired certificate is not a dead host, and that a
-// YouTube /embed/ URL answers 200 for a deleted video. The other knew that a
-// connect refusal is usually concurrency rather than death, and that
-// serialising per hostname is what fixes it. Neither copy was behind. A sweep
-// running either one alone strips good citations for reasons the other repo had
-// already written down — which is the entire argument for this file.
+// EVERY GUARD BELOW WAS PAID FOR BY A FALSE POSITIVE. npmjs.com 403s scripted
+// requests, an expired certificate is not a dead host, a YouTube /embed/ URL
+// answers 200 for a deleted video, and a connect refusal is usually concurrency
+// rather than death, which serialising per hostname fixes. A sweep missing any
+// one of these strips good citations.
 
 import { stripTags } from './html.js';
 

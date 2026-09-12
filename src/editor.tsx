@@ -5,25 +5,16 @@
 // `tiptap.tsx` holds the custom NODES both wikis needed (iframe, tweet, map,
 // code block, tabs). This holds what sits around them: which extensions are
 // configured how, what a paste is scrubbed down to, how a pasted URL becomes
-// the right embed, and the state a toolbar reads. Those were byte-identical in
-// both repos — the same twelve-entry extension array, the same paste scrubber,
-// the same embed dispatch including the shortened-map async swap.
+// the right embed, and the state a toolbar reads.
 //
-// TWO BUGS ARE FIXED HERE RATHER THAN PROPAGATED, and the reason this file
-// exists at all is that each repo had exactly one of them:
+// TWO GUARDS HERE ARE LOAD-BEARING:
 //
-//   1. `onChangeRef.current = onChange` was written DURING render in one copy.
-//      A ref mutated mid-render can tear under concurrent rendering. It is
-//      written in an effect here, and only read from events and timeouts, which
-//      run later.
-//   2. The other copy had no `onBlur`. The change is debounced 150ms, and
-//      clicking Save blurs the editor before the click lands — so the final
-//      keystroke of every edit that ended in a click was dropped. Blur flushes
-//      the pending debounce.
-//
-// Neither repo was "behind": each had shipped the fix the other lacked, which
-// is the drift that costs the most, because neither file looks like the one to
-// fix.
+//   1. `onChangeRef.current = onChange` is written in an effect, never during
+//      render: a ref mutated mid-render can tear under concurrent rendering.
+//      It is only read from events and timeouts, which run later.
+//   2. Blur flushes the pending debounce. The change is debounced 150ms, and
+//      clicking Save blurs the editor before the click lands, so without the
+//      flush the final keystroke of an edit that ends in a click is dropped.
 //
 // Every @tiptap package here is an OPTIONAL PEER. A consumer that only wants
 // the taxonomy or the MCP transport installs none of them.
@@ -46,8 +37,7 @@ import { toMapEmbedUrl } from './maps.js';
  *
  * Each of these packages ships a `declare module '@tiptap/core'` block that adds
  * its commands to `ChainedCommands` — `toggleBold`, `insertTable`, `setLink`,
- * `setImage`. A consumer that imported the extensions itself picked those up as
- * a side effect of the import; now that this module owns them, it has to carry
+ * `setImage`. Because this module owns the extensions, it has to carry
  * the augmentation across the package boundary, and a re-exported type is what
  * makes the emitted `.d.ts` load the module that declares it. Without these
  * four lines every `editor.chain().focus().toggleBold()` in every consumer

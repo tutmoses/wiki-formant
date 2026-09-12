@@ -75,8 +75,7 @@ export function addCopyButtons(root: ParentNode, options: CopyButtonOptions = {}
 
 /**
  * The one place this origin is written down. It is both the embed host and the
- * allow-list the resize listener checks, and it was previously spelled out at
- * four call sites across the two wikis.
+ * allow-list the resize listener checks.
  */
 export const TWITTER_ORIGIN = 'https://platform.twitter.com';
 

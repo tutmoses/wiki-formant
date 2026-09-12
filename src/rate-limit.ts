@@ -161,10 +161,9 @@ export function resetRateLimits(): void {
  * `.well-known/mcp.json`, the OpenAPI spec, agents.md, llms.txt and the
  * `initialize` instructions all quote this, so the endpoint enforces exactly
  * what the documents claim. It is a cross-surface contract, which is why it
- * lives here rather than three times over: it had already drifted to 200 on one
- * surface with nothing recorded about why, and that is the state that makes a
- * number impossible to change safely later — nobody can tell a considered
- * difference from a stale one.
+ * lives here rather than three times over. A second copy is how a number
+ * becomes impossible to change safely: nobody can tell a considered difference
+ * from a stale one.
  *
  * A surface with a genuine reason to differ passes its own `RateLimitOptions`.
  * What it must not do is restate this one.

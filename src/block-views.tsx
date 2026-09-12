@@ -1,6 +1,6 @@
 'use client';
 
-// block-views.tsx — the block renderers both wikis had written twice.
+// block-views.tsx — the block leaves the wikis share.
 //
 // Behind its own subpath for the reason `react.tsx` is: React is an OPTIONAL
 // peer, so a consumer that only wants the taxonomy or the MCP transport still
@@ -10,13 +10,12 @@
 // that way (see the Block Model note in the workspace CLAUDE.md) — a closed
 // union is what makes `switch (block.type)` exhaustive, so a new block type is
 // a compile error rather than a silent blank. What is NOT per-repo is what a
-// codeTabs or a linkGrid LOOKS like once you have dispatched to it: those were
-// byte-identical in both repos, down to the class names. So the dispatch stays
-// with the caller and the leaves move here.
+// codeTabs or a linkGrid LOOKS like once you have dispatched to it, down to the
+// class names. So the dispatch stays with the caller and the leaves live here.
 //
-// The class names are NOT props. Like the rail's `wiki-rail__*` tree they are
-// the shared convention both stylesheets already implement, and making them
-// configurable would only let that convention fork again. Everything that
+// The class names are NOT props. They are the shared convention every
+// stylesheet implements, and making them configurable would let that convention
+// fork. Everything that
 // genuinely differs — the prose of a banner, whether references run through an
 // HTML processor, the router's link — arrives as a prop.
 

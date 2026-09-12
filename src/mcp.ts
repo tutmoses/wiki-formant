@@ -334,9 +334,7 @@ function methodsFor(config: McpServerConfig): string[] {
     ...BASE_METHODS,
     // The list methods answer whether or not anything is registered: an empty
     // list is a better answer to a client that asked than a -32601 it has to
-    // interpret. This enumeration used to omit them while the dispatch below
-    // answered them, so the error message contradicted the server describing
-    // itself.
+    // interpret.
     'resources/list',
     'resources/templates/list',
     'prompts/list',
@@ -515,13 +513,12 @@ async function handleRpc(
         try {
           const data = await tool.handler(args, ctx);
           const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-          // Every object answer, not only the schema-bearing ones. Gating this
-          // on `outputSchema` meant that across four live servers and thirty-two
-          // tools — every one of them returning JSON — not a single result ever
-          // carried `structuredContent`, and every agent parsed prose to reach
-          // data the server already had in hand. A declared `outputSchema` is
-          // still the stronger contract (a client validates against it); it is
-          // no longer the price of admission. The text block stays regardless:
+          // Every object answer, not only the schema-bearing ones. Gated on
+          // `outputSchema`, a JSON-returning tool without one would carry no
+          // `structuredContent`, and agents would parse prose to reach data the
+          // server has in hand. A declared `outputSchema` is the stronger
+          // contract (a client validates against it), not the price of
+          // admission. The text block stays regardless:
           // the spec asks for the serialised twin, and a client that reads only
           // content still has to be able to read the answer.
           const structured =

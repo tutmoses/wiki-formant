@@ -21,8 +21,7 @@ import { DEFAULT_MAX_BATCH, MCP_CORS, MCP_PROTOCOL_VERSION } from './mcp.js';
 /**
  * Does the live preflight carry every token `MCP_CORS` declares for this header?
  *
- * Derived rather than listed: the assertion used to name three headers by hand,
- * so a fourth added to `MCP_CORS` was tested by nobody.
+ * Derived rather than listed, so a header added to `MCP_CORS` is tested too.
  */
 const corsCovers = (res: Response, header: string): boolean => {
   const live = res.headers.get(header) ?? '';
@@ -479,10 +478,9 @@ export async function payloadBudget(
   maxBytes = 120_000,
 ): Promise<void> {
   // Every read-only tool a caller can invoke with no arguments at all, whether
-  // or not the suite thought to name it. This check used to weigh only the
-  // listed calls, which is how a tool taking no parameters and answering with
-  // 3.3 MB — 27× the budget it was exempt from — passed a suite that measured
-  // the four tools beside it. A tool with required arguments still has to be
+  // or not the suite thought to name it, so a no-argument tool answering with
+  // megabytes cannot pass by going unlisted. A tool with required arguments
+  // still has to be
   // listed: the suite is the only thing that knows a valid pair.
   const listed = new Set(calls.map(c => c.name));
   const bare = ((await t.rpc('tools/list')).result?.tools ?? [])

@@ -2,7 +2,7 @@
 //
 // The block-diff half stays in the app: it has to walk a block tree, and every
 // project owns its own type set. What travels is the version arithmetic and the
-// rule for choosing a bump, which had drifted into a per-repo string split.
+// rule for choosing a bump.
 
 export interface SemVer {
   major: number;
