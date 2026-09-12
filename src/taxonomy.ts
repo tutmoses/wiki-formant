@@ -158,7 +158,7 @@ export function hrefBuilder(prefix = ''): (tagPath: string, state: CategoryState
 /** Categories mounted at the root. */
 export const defaultHref = hrefBuilder();
 
-export const DEFAULT_ALPHA_INDEX_MIN_PAGES = 40;
+const DEFAULT_ALPHA_INDEX_MIN_PAGES = 40;
 
 const metaValue = (page: FacetablePage, key: string): string =>
   ((page.metadata as Record<string, string> | null | undefined)?.[key] ?? '').trim();

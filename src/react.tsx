@@ -90,7 +90,7 @@ const readStored = (key: string): boolean | null => {
  * The reader's choice outranks the breakpoint. Someone who collapses the rail
  * on a laptop and then narrows the window has still collapsed the rail.
  */
-export function useCollapsibleSidebar(options: SidebarOptions = {}): SidebarState {
+function useCollapsibleSidebar(options: SidebarOptions = {}): SidebarState {
   const { storageKey = 'wiki:sidebar', breakpoint = 1024 } = options;
 
   // Start open on the server and on the first client paint. SSR has no viewport

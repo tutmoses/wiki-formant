@@ -72,7 +72,7 @@ export type { TableOptions } from '@tiptap/extension-table';
  * Browser-only: it parses with `DOMParser`. Called from `transformPastedHTML`,
  * which only ever runs in response to a paste.
  */
-export function cleanPastedHtml(html: string): string {
+function cleanPastedHtml(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   doc.querySelectorAll('style, script, meta, link, svg, canvas, noscript').forEach(el => el.remove());
   doc.querySelectorAll('*').forEach(el => {
@@ -110,7 +110,7 @@ export interface WikiEditorExtensionOptions {
  * schema two nodes claiming the same name. Headings stop at h2 — the page title
  * is the only h1 a wiki page has.
  */
-export function wikiEditorExtensions({
+function wikiEditorExtensions({
   placeholder = '',
   nodes = [],
 }: WikiEditorExtensionOptions = {}): AnyExtension[] {

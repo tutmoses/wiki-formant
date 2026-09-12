@@ -98,7 +98,7 @@ export interface AgentCardLicense {
  * without it is not a card a spec-current client will accept, and all three
  * origins here were serving one.
  */
-export const A2A_PROTOCOL_VERSION = '0.3.0';
+const A2A_PROTOCOL_VERSION = '0.3.0';
 
 export interface AgentCardConfig {
   name: string;

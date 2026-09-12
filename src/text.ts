@@ -87,7 +87,7 @@ export function referencesToText(items: readonly ReferenceItem[]): string {
  * search index never matched and miss text it did. A snippet claiming to show
  * why a row matched has to read the same bytes the match was made against.
  */
-export function collectText(node: unknown, out: string[] = []): string[] {
+function collectText(node: unknown, out: string[] = []): string[] {
   if (Array.isArray(node)) {
     for (const item of node) collectText(item, out);
     return out;

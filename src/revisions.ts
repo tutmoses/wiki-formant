@@ -93,7 +93,7 @@ export function extractBlocks<B>(
  * as their own entries, and comparing them here would report a container as
  * modified every time anything inside it moved.
  */
-export function diffAttributes<B extends DiffBlock>(
+function diffAttributes<B extends DiffBlock>(
   oldBlock: B,
   newBlock: B,
   containers: (block: B) => BlockGroup<B>[] | null,

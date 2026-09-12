@@ -11,7 +11,7 @@ export interface MapCoords {
 }
 
 /** A plain embed URL for a coordinate pair. */
-export function mapsEmbedUrl(lat: number, lon: number, zoom = 15): string {
+function mapsEmbedUrl(lat: number, lon: number, zoom = 15): string {
   return `https://maps.google.com/maps?q=${lat},${lon}&z=${zoom}&output=embed`;
 }
 

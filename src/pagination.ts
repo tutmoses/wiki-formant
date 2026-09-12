@@ -15,8 +15,8 @@ export interface PaginatedResponse<T> extends Pagination {
   totalPages: number;
 }
 
-export const MAX_PAGE_SIZE = 100;
-export const DEFAULT_PAGE_SIZE = 20;
+const MAX_PAGE_SIZE = 100;
+const DEFAULT_PAGE_SIZE = 20;
 
 /**
  * `page` clamped to ≥1, `pageSize` clamped to 1–`max`. Never trust either.

@@ -35,12 +35,12 @@ const speaks = (v: unknown): v is McpProtocolVersion =>
   (MCP_PROTOCOL_VERSIONS as readonly unknown[]).includes(v);
 
 /** Echo the client's version when it is one we speak, else offer the newest. */
-export function negotiateProtocol(requested: unknown): McpProtocolVersion {
+function negotiateProtocol(requested: unknown): McpProtocolVersion {
   return speaks(requested) ? requested : MCP_PROTOCOL_VERSION;
 }
 
 /** The version a post-initialize request is operating under. */
-export function requestProtocol(request: Request): McpProtocolVersion {
+function requestProtocol(request: Request): McpProtocolVersion {
   const header = request.headers.get('mcp-protocol-version');
   return speaks(header) ? header : ASSUMED_VERSION;
 }
