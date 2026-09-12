@@ -18,11 +18,20 @@
 // are utilities is derived, not listed — anything the build emits that globals.css
 // does not define is Tailwind's.
 //
+// And the reverse: a selector globals.css defines that nothing the build ships
+// references. The shared blocks and chrome render their markup inside
+// wiki-formant while each app styles it, so references are read from the build
+// output, which holds this repo's code, the package's components and bundled
+// libraries alike. A class renamed in the package surfaces here as its old
+// selector going unreferenced. HTML stored in a database is not in the build,
+// so a selector only stored content uses is reported too.
+//
 //   npx check-classes                # exit 1 on any dead token
 //   npx check-classes --warn         # report and exit 0
 //   npx check-classes --compositions # also fail on 3+ inline utilities
+//   npx check-classes --unused       # also fail on unreferenced selectors
 //
-// Run it from the repo root: `.next/static` and `src` are resolved against cwd.
+// Run it from the repo root: `.next` and `src` are resolved against cwd.
 //
 // Needs a build first (npm run build): without one there is nothing to check
 // against, and the script says so and exits 0 rather than failing blind.
@@ -30,7 +39,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const WARN_ONLY = process.argv.includes('--warn');
-const CSS_DIR = '.next/static';
+const STATIC_DIR = '.next/static';
 const SRC_DIR = 'src';
 
 const walk = (dir, ext, out = []) => {
@@ -43,7 +52,7 @@ const walk = (dir, ext, out = []) => {
   return out;
 };
 
-const cssFiles = walk(CSS_DIR, '.css');
+const cssFiles = walk(STATIC_DIR, '.css');
 if (!cssFiles.length) {
   console.log('check-classes: no built CSS under .next/static — run `npm run build` first. Skipping.');
   process.exit(0);
@@ -59,12 +68,18 @@ for (const f of cssFiles) {
 
 // Classes this project defines itself. Everything else the build emitted is a
 // Tailwind utility, which is what makes the composition count derivable rather
-// than a maintained prefix list.
+// than a maintained prefix list. Read from rule preludes only, so a decimal in a
+// value or a class named in a comment is not taken for a selector.
 const globalsFile = walk(SRC_DIR, '.css').find(f => f.endsWith('globals.css'));
 const named = new Set();
 if (globalsFile) {
-  for (const m of fs.readFileSync(globalsFile, 'utf8').matchAll(/\.((?:\\.|[-\w])+)/g)) {
-    named.add(m[1].replace(/\\/g, ''));
+  const css = fs.readFileSync(globalsFile, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  for (const [, prelude] of css.matchAll(/([^{};]*)\{/g)) {
+    if (prelude.trim().startsWith('@')) continue;
+    for (const m of prelude.matchAll(/\.((?:\\.|[-\w])+)/g)) {
+      const name = m[1].replace(/\\/g, '');
+      if (/^[A-Za-z_-]/.test(name)) named.add(name);
+    }
   }
 }
 
@@ -92,6 +107,7 @@ for (const f of walk(SRC_DIR, '.tsx')) {
 }
 
 const CHECK_COMPOSITIONS = process.argv.includes('--compositions');
+const CHECK_UNUSED = process.argv.includes('--unused');
 
 if (compositions.length) {
   const verb = CHECK_COMPOSITIONS ? 'must be named' : 'should be named (advisory)';
@@ -103,9 +119,30 @@ if (compositions.length) {
   console.error('');
 }
 
+// Every token in the JavaScript the build ships, server and client. A selector
+// is referenced when its name appears whole, or when a prefix of it ending in `-`
+// or `_` does, which is how `editorial-banner-${variant}` is written.
+const shipped = new Set();
+for (const f of [...walk(STATIC_DIR, '.js'), ...walk('.next/server', '.js')]) {
+  for (const [tok] of fs.readFileSync(f, 'utf8').matchAll(/[\w-]+/g)) shipped.add(tok);
+}
+const referenced = name =>
+  shipped.has(name) ||
+  [...name].some((c, i) => i >= 3 && (c === '-' || c === '_') && shipped.has(name.slice(0, i + 1)));
+const unused = [...named].filter(n => !referenced(n)).sort();
+
+if (unused.length) {
+  const verb = CHECK_UNUSED ? 'must be deleted' : 'advisory';
+  console.error(`check-classes: ${unused.length} selector(s) in ${globalsFile} referenced by nothing the build ships (${verb}):\n`);
+  console.error(`  ${unused.join(', ')}\n`);
+  console.error('  Class names inside HTML stored in a database do not count, so check stored content before deleting one.\n');
+}
+
+const advisoryFailed = (CHECK_COMPOSITIONS && compositions.length > 0) || (CHECK_UNUSED && unused.length > 0);
+
 if (!dead.size) {
   console.log(`check-classes: clean — every className token resolves against ${emitted.size} emitted selectors.`);
-  process.exit(CHECK_COMPOSITIONS && compositions.length && !WARN_ONLY ? 1 : 0);
+  process.exit(advisoryFailed && !WARN_ONLY ? 1 : 0);
 }
 
 console.error(`check-classes: ${dead.size} className token(s) style nothing:\n`);
