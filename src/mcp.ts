@@ -1,5 +1,6 @@
 // mcp.ts — a minimal Model Context Protocol server over Streamable HTTP
-// (JSON-RPC). Spec: https://modelcontextprotocol.io/specification/2025-06-18
+// (JSON-RPC), serving both protocol eras from one endpoint.
+// Spec: https://modelcontextprotocol.io/specification/2026-07-28
 //
 // Web-standard `Request`/`Response` only, so this runs unchanged on Next route
 // handlers (NextResponse extends Response), Hono, Bun, Deno and workers.
@@ -14,39 +15,73 @@
 // That split is the one most implementations get wrong.
 
 /**
- * The versions this transport speaks, newest first.
- *
- * This was a constant answered unconditionally, which is legal and still wrong:
- * a client asking for 2025-06-18 was told 2025-03-26 and silently gave up tool
- * titles, structured output and `_meta`. The last one is where a payment
- * receipt rides, so the one surface that needed it rebuilt this module's HTTP
- * shell by hand to reach it.
+ * The modern era: every request carries its own version and client
+ * capabilities in `params._meta`. No handshake, no session, no `ping`, no batch.
  */
-export const MCP_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'] as const;
-export type McpProtocolVersion = (typeof MCP_PROTOCOL_VERSIONS)[number];
+export const MCP_MODERN_VERSIONS = ['2026-07-28'] as const;
 
-/** The newest version spoken here, and what an unrecognised ask falls back to. */
+/**
+ * The legacy era, negotiated by an `initialize` handshake.
+ *
+ * Served beside the modern era rather than replaced by it. The spec lets one
+ * endpoint speak both, and a legacy client meeting a dual-era server works;
+ * going modern-only would fail the handshake of every client in the field.
+ */
+export const MCP_LEGACY_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'] as const;
+
+/**
+ * Every version this transport speaks, newest first. It is the `supported` list
+ * a `-32022` names and the `supportedVersions` of `server/discover`, so a modern
+ * client that cannot use the newest still learns a legacy fallback exists.
+ */
+export const MCP_PROTOCOL_VERSIONS = [...MCP_MODERN_VERSIONS, ...MCP_LEGACY_VERSIONS] as const;
+export type McpProtocolVersion = (typeof MCP_PROTOCOL_VERSIONS)[number];
+type LegacyVersion = (typeof MCP_LEGACY_VERSIONS)[number];
+
+/** The newest version spoken here. */
 export const MCP_PROTOCOL_VERSION: McpProtocolVersion = MCP_PROTOCOL_VERSIONS[0];
 
-/** What a request carrying no `MCP-Protocol-Version` header means, per the spec. */
-const ASSUMED_VERSION: McpProtocolVersion = '2025-03-26';
+/**
+ * The newest version `initialize` can negotiate, and what an unrecognised ask is
+ * offered. A handshake cannot land on a modern version — the modern era has no
+ * handshake — so this, not `MCP_PROTOCOL_VERSION`, is what a legacy client gets.
+ */
+export const MCP_LEGACY_PROTOCOL_VERSION: LegacyVersion = MCP_LEGACY_VERSIONS[0];
 
-const speaks = (v: unknown): v is McpProtocolVersion =>
-  (MCP_PROTOCOL_VERSIONS as readonly unknown[]).includes(v);
+/** The reserved `_meta` keys the modern era is spelled in. */
+export const MCP_META = {
+  protocolVersion: 'io.modelcontextprotocol/protocolVersion',
+  clientCapabilities: 'io.modelcontextprotocol/clientCapabilities',
+  serverInfo: 'io.modelcontextprotocol/serverInfo',
+} as const;
 
-/** Echo the client's version when it is one we speak, else offer the newest. */
-function negotiateProtocol(requested: unknown): McpProtocolVersion {
-  return speaks(requested) ? requested : MCP_PROTOCOL_VERSION;
+/** What a legacy request carrying no `MCP-Protocol-Version` header means, per the spec. */
+const ASSUMED_VERSION: LegacyVersion = '2025-03-26';
+
+const member =
+  <T extends string>(list: readonly T[]) =>
+  (v: unknown): v is T =>
+    (list as readonly unknown[]).includes(v);
+const speaksLegacy = member(MCP_LEGACY_VERSIONS);
+const speaksModern = member(MCP_MODERN_VERSIONS);
+
+/**
+ * Echo the client's version when it is one we speak, else offer the newest.
+ * Answering a constant instead is legal and still wrong: it silently held every
+ * caller below the version that carries structured output and `_meta`.
+ */
+function negotiateProtocol(requested: unknown): LegacyVersion {
+  return speaksLegacy(requested) ? requested : MCP_LEGACY_PROTOCOL_VERSION;
 }
 
 /** The version a post-initialize request is operating under. */
-function requestProtocol(request: Request): McpProtocolVersion {
+function requestProtocol(request: Request): LegacyVersion {
   const header = request.headers.get('mcp-protocol-version');
-  return speaks(header) ? header : ASSUMED_VERSION;
+  return speaksLegacy(header) ? header : ASSUMED_VERSION;
 }
 
-/** JSON-RPC batching was removed in 2025-06-18; it stays legal below that. */
-const allowsBatch = (v: McpProtocolVersion) => v !== '2025-06-18';
+/** JSON-RPC batching was removed in 2025-06-18 and stays removed; it is legal only below that. */
+const allowsBatch = (v: LegacyVersion) => v === '2025-03-26' || v === '2024-11-05';
 
 import { clientKey, rateLimit, rateLimitHeaders, withRateLimit, type RateLimitOptions } from './rate-limit.js';
 
@@ -158,6 +193,12 @@ export interface McpServerConfig {
   prompts?: McpPrompt[];
   /** Appended to the GET refusal so a browser that lands here learns where to go. */
   docsUrl?: string;
+  /**
+   * How long, in ms, a modern client may reuse `server/discover`, a list or a
+   * read. The modern era requires the hint on each of those. Defaults to five
+   * minutes: tool and prompt lists only change on deploy.
+   */
+  cacheTtlMs?: number;
   /**
    * Cap on JSON-RPC batch size. The rate limiter charges one token per HTTP
    * request, before the body is parsed — an unbounded batch would let a single
@@ -327,11 +368,19 @@ function validateArgs(tool: McpTool, args: Record<string, unknown>): string | nu
   ].join('\n');
 }
 
-const BASE_METHODS = ['initialize', 'ping', 'tools/list', 'tools/call'];
+/** The methods one era has and the other does not. Everything else is shared. */
+const ERA_METHODS = {
+  legacy: ['initialize', 'ping'],
+  modern: ['server/discover'],
+} as const;
 
-function methodsFor(config: McpServerConfig): string[] {
+type Era = keyof typeof ERA_METHODS;
+
+function methodsFor(config: McpServerConfig, era: Era): string[] {
   return [
-    ...BASE_METHODS,
+    ...ERA_METHODS[era],
+    'tools/list',
+    'tools/call',
     // The list methods answer whether or not anything is registered: an empty
     // list is a better answer to a client that asked than a -32601 it has to
     // interpret.
@@ -343,9 +392,31 @@ function methodsFor(config: McpServerConfig): string[] {
   ];
 }
 
+const methodNotFound = (id: RpcId, method: string, config: McpServerConfig, era: Era) => {
+  const methods = methodsFor(config, era);
+  return rpcError(
+    id,
+    -32601,
+    `Method not found: "${method}". This server implements: ${quote(methods)}.`,
+    { supportedMethods: methods },
+  );
+};
+
+/**
+ * Only the capabilities the config actually populates — an advertised
+ * `resources` whose list comes back empty reads as a bug to a client, not as
+ * honesty. One function, so `initialize` and `server/discover` cannot disagree.
+ */
+const capabilitiesOf = (config: McpServerConfig) => ({
+  tools: {},
+  ...(config.resources?.length ? { resources: {} } : {}),
+  ...(config.prompts?.length ? { prompts: {} } : {}),
+});
+
 /** Everything the dispatcher needs that is not in the JSON-RPC entry itself. */
 interface Dispatch {
   protocolVersion: McpProtocolVersion;
+  era: Era;
   request?: Request;
 }
 
@@ -359,6 +430,11 @@ async function handleRpc(
   const resources = config.resources ?? [];
   const prompts = config.prompts ?? [];
 
+  // A method the other era owns is not found in this one, however well the
+  // server knows it: a modern `ping` is a removed method, not a pong.
+  const foreign: readonly string[] = ERA_METHODS[dispatch.era === 'modern' ? 'legacy' : 'modern'];
+  if (foreign.includes(method)) return methodNotFound(id, method, config, dispatch.era);
+
   try {
     switch (method) {
       case 'initialize':
@@ -366,18 +442,22 @@ async function handleRpc(
           jsonrpc: '2.0',
           id,
           result: {
-            // Echo what the client asked for when we speak it. Answering a
-            // constant is what silently held every caller at 2025-03-26.
             protocolVersion: negotiateProtocol(p.protocolVersion),
-            // Only advertise capabilities the config actually populates — an
-            // advertised `resources` whose list comes back empty reads as a bug
-            // to a client, not as honesty.
-            capabilities: {
-              tools: {},
-              ...(resources.length ? { resources: {} } : {}),
-              ...(prompts.length ? { prompts: {} } : {}),
-            },
+            capabilities: capabilitiesOf(config),
             serverInfo: config.serverInfo,
+            instructions: config.instructions,
+          },
+        };
+
+      // What `initialize` tells a legacy client, asked the modern way. The
+      // transport adds `resultType`, the cache hints and `_meta` serverInfo.
+      case 'server/discover':
+        return {
+          jsonrpc: '2.0',
+          id,
+          result: {
+            supportedVersions: [...MCP_PROTOCOL_VERSIONS],
+            capabilities: capabilitiesOf(config),
             instructions: config.instructions,
           },
         };
@@ -535,15 +615,8 @@ async function handleRpc(
         }
       }
 
-      default: {
-        const methods = methodsFor(config);
-        return rpcError(
-          id,
-          -32601,
-          `Method not found: "${method}". This server implements: ${quote(methods)}.`,
-          { supportedMethods: methods },
-        );
-      }
+      default:
+        return methodNotFound(id, method, config, dispatch.era);
     }
   } catch (err) {
     console.error('[MCP]', method, err);
@@ -555,7 +628,7 @@ async function handleRpc(
 export async function handleMcp(
   body: RpcRequest | RpcRequest[],
   config: McpServerConfig,
-  dispatch: Dispatch = { protocolVersion: ASSUMED_VERSION },
+  dispatch: Dispatch = { protocolVersion: ASSUMED_VERSION, era: 'legacy' },
 ): Promise<object | object[] | null> {
   const maxBatch = config.maxBatch ?? DEFAULT_MAX_BATCH;
   const isBatch = Array.isArray(body);
@@ -582,14 +655,15 @@ export async function handleMcp(
 // the spec's Origin-validation MUST exists to protect localhost servers from
 // DNS rebinding, which is the opposite situation. The allow-headers list
 // matters more than it looks — MCP clients preflight with `Accept` and
-// `Mcp-Protocol-Version`, and one missing entry fails the preflight, not the
-// POST, which reads as "the server is down".
+// `Mcp-Protocol-Version` — and a modern client adds `Mcp-Method` and `Mcp-Name`
+// on every call — and one missing entry fails the preflight, not the POST,
+// which reads as "the server is down".
 
 export const MCP_CORS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers':
-    'Content-Type, Accept, Authorization, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID',
+    'Content-Type, Accept, Authorization, Mcp-Session-Id, Mcp-Protocol-Version, Mcp-Method, Mcp-Name, Last-Event-ID',
   // Allow-Headers governs what a browser may send; without Expose-Headers it
   // may read none of what comes back. A browser client could not see the
   // negotiated version, and could not see `Retry-After` on the 429 telling it
@@ -650,8 +724,6 @@ export async function mcpResponse(
   request: Request,
   config: McpServerConfig,
 ): Promise<Response> {
-  const protocolVersion = requestProtocol(request);
-
   // Before `request.json()`: an unparsed body must not cost a query, which is
   // also why the refusal carries a null id.
   let headroom: Record<string, string> = {};
@@ -666,22 +738,70 @@ export async function mcpResponse(
     headroom = rateLimitHeaders(verdict, config.rateLimit);
   }
 
-  // Echoed on every response so a client can see which version it is actually
-  // being answered under, rather than inferring it from the initialize it sent
-  // some requests ago. The headroom rides alongside on every answer, not only
-  // on the 429 — a budget discoverable only by exceeding it is one an agent
-  // meets when it is least able to act on it.
-  const headers = { ...MCP_CORS, 'MCP-Protocol-Version': protocolVersion, ...headroom };
+  // The headroom rides on every answer, not only on the 429 — a budget
+  // discoverable only by exceeding it is one an agent meets when it is least
+  // able to act on it.
+  const base = { ...MCP_CORS, ...headroom };
 
-  let body: RpcRequest | RpcRequest[];
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
     return Response.json(rpcError(null, -32700, 'Parse error: request body is not valid JSON.'), {
       status: 400,
-      headers,
+      headers: { ...base, 'MCP-Protocol-Version': requestProtocol(request) },
     });
   }
+
+  // Tracked before either era refuses anything: a probe the server turns away,
+  // and a call an agent walked away from behind a gate, are exactly the ones
+  // worth counting.
+  config.onCall?.(request, body);
+
+  return isModern(request, body)
+    ? modernResponse(request, body as RpcRequest, config, base)
+    : legacyResponse(request, body as RpcRequest | RpcRequest[], config, base);
+}
+
+/**
+ * Which era a POST belongs to. The spec's rule: modern `_meta` selects the modern
+ * era and `initialize` selects the legacy one. A modern version header and
+ * `server/discover` can only mean one thing too. Anything else is legacy,
+ * because a body without `_meta` is exactly what every client in the field sends.
+ */
+function isModern(request: Request, body: unknown): boolean {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
+  const { method, params } = body as { method?: unknown; params?: { _meta?: unknown } };
+  if (method === 'initialize') return false;
+  const meta = params?._meta;
+  return (
+    (!!meta && typeof meta === 'object' && MCP_META.protocolVersion in meta) ||
+    method === 'server/discover' ||
+    speaksModern(request.headers.get('mcp-protocol-version'))
+  );
+}
+
+async function dispatchThroughGate(
+  body: RpcRequest | RpcRequest[],
+  config: McpServerConfig,
+  dispatch: Dispatch,
+): Promise<object | object[] | null> {
+  const gate = await config.gate?.(body);
+  const dispatched = gate?.empty ? null : await handleMcp(gate ? gate.body : body, config, dispatch);
+  return gate ? gate.finish(dispatched) : dispatched;
+}
+
+async function legacyResponse(
+  request: Request,
+  body: RpcRequest | RpcRequest[],
+  config: McpServerConfig,
+  base: Record<string, string>,
+): Promise<Response> {
+  const protocolVersion = requestProtocol(request);
+  // Echoed on every response so a client can see which version it is actually
+  // being answered under, rather than inferring it from the initialize it sent
+  // some requests ago.
+  const headers = { ...base, 'MCP-Protocol-Version': protocolVersion };
 
   if (Array.isArray(body) && !allowsBatch(protocolVersion)) {
     return Response.json(
@@ -694,15 +814,7 @@ export async function mcpResponse(
     );
   }
 
-  // Tracked on the original body, before a gate withholds anything: a call an
-  // agent walked away from is exactly the one worth counting.
-  config.onCall?.(request, body);
-
-  const gate = await config.gate?.(body);
-  const dispatched = gate?.empty
-    ? null
-    : await handleMcp(gate ? gate.body : body, config, { protocolVersion, request });
-  const result = gate ? await gate.finish(dispatched) : dispatched;
+  const result = await dispatchThroughGate(body, config, { protocolVersion, era: 'legacy', request });
 
   // Notification-only input produces no response bodies; the spec requires a
   // bare 202 there, not a 200 carrying a JSON `null`.
@@ -710,4 +822,148 @@ export async function mcpResponse(
     return new Response(null, { status: 202, headers });
   }
   return Response.json(result, { headers });
+}
+
+/** The modern era maps a protocol error to an HTTP status; the legacy era answered 200. */
+const MODERN_STATUS: Record<number, number> = {
+  [-32601]: 404,
+  [-32602]: 400,
+  [-32020]: 400,
+  [-32021]: 400,
+  [-32022]: 400,
+};
+
+/** The results a modern client may cache. A call or a prompt is never among them. */
+const CACHEABLE = new Set([
+  'server/discover',
+  'tools/list',
+  'prompts/list',
+  'resources/list',
+  'resources/templates/list',
+  'resources/read',
+]);
+
+const DEFAULT_CACHE_TTL_MS = 300_000;
+
+/** `Mcp-Name` carries the target of the three calls that have one, for a gateway to route on. */
+const NAME_PARAM: Record<string, string> = {
+  'tools/call': 'name',
+  'prompts/get': 'name',
+  'resources/read': 'uri',
+};
+
+/** A header value, decoded from the `=?base64?…?=` form a client uses for non-ASCII. */
+function headerValue(raw: string | null): string | null {
+  const encoded = raw?.match(/^=\?base64\?(.*)\?=$/i)?.[1];
+  if (encoded === undefined) return raw;
+  try {
+    return new TextDecoder().decode(Uint8Array.from(atob(encoded), c => c.charCodeAt(0)));
+  } catch {
+    return null;
+  }
+}
+
+/** The first routing header that disagrees with the body, described. */
+function headerMismatch(
+  request: Request,
+  method: string,
+  params: Record<string, unknown>,
+  version: string,
+): string | null {
+  const expected: Array<[string, unknown]> = [
+    ['MCP-Protocol-Version', version],
+    ['Mcp-Method', method],
+  ];
+  const nameKey = NAME_PARAM[method];
+  // A call missing its name is reported by the dispatcher, which can list the names.
+  if (nameKey && typeof params[nameKey] === 'string') expected.push(['Mcp-Name', params[nameKey]]);
+  for (const [name, want] of expected) {
+    const got = headerValue(request.headers.get(name));
+    if (got !== want) {
+      return `Header ${name} must equal ${JSON.stringify(want)}; received ${got === null ? 'none' : JSON.stringify(got)}.`;
+    }
+  }
+  return null;
+}
+
+/**
+ * A modern result: `resultType` on every one, cache hints on the cacheable ones,
+ * and serverInfo in `_meta` now that no handshake carries it. Applied after the
+ * gate, so an answer a gate builds in place of a call is shaped the same way.
+ */
+function modernResult(response: object, method: string, config: McpServerConfig): object {
+  if (!('result' in response)) return response;
+  const result = (response as { result: Record<string, unknown> }).result;
+  return {
+    ...response,
+    result: {
+      resultType: 'complete',
+      ...result,
+      ...(CACHEABLE.has(method)
+        ? {
+            ttlMs: config.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS,
+            // Nothing here varies by caller, except a read a gate may have
+            // charged for, which a shared cache must not hand to the next one.
+            cacheScope: method === 'resources/read' ? 'private' : 'public',
+          }
+        : {}),
+      _meta: { ...(result._meta as object | undefined), [MCP_META.serverInfo]: config.serverInfo },
+    },
+  };
+}
+
+async function modernResponse(
+  request: Request,
+  body: RpcRequest,
+  config: McpServerConfig,
+  base: Record<string, string>,
+): Promise<Response> {
+  const params = (body.params ?? {}) as Record<string, unknown>;
+  const meta = (params._meta ?? {}) as Record<string, unknown>;
+  const requested = meta[MCP_META.protocolVersion];
+  const headers = {
+    ...base,
+    'MCP-Protocol-Version': speaksModern(requested) ? requested : MCP_MODERN_VERSIONS[0],
+  };
+  const refuse = (code: number, message: string, data?: object) =>
+    Response.json(rpcError(body.id ?? null, code, message, data), {
+      status: MODERN_STATUS[code] ?? 400,
+      headers,
+    });
+
+  if (typeof requested !== 'string') {
+    return refuse(
+      -32602,
+      `Missing params._meta["${MCP_META.protocolVersion}"]. A ${MCP_MODERN_VERSIONS[0]} request carries its version and client capabilities on every call; to use ${MCP_LEGACY_PROTOCOL_VERSION} instead, send "initialize".`,
+    );
+  }
+  if (!speaksModern(requested)) {
+    return refuse(-32022, 'Unsupported protocol version', {
+      supported: [...MCP_PROTOCOL_VERSIONS],
+      requested,
+    });
+  }
+  const capabilities = meta[MCP_META.clientCapabilities];
+  if (!capabilities || typeof capabilities !== 'object' || Array.isArray(capabilities)) {
+    return refuse(
+      -32602,
+      `Missing params._meta["${MCP_META.clientCapabilities}"]. Send {} when the client declares none.`,
+    );
+  }
+  const mismatch = headerMismatch(request, body.method, params, requested);
+  if (mismatch) return refuse(-32020, mismatch);
+
+  const result = await dispatchThroughGate(body, config, {
+    protocolVersion: requested,
+    era: 'modern',
+    request,
+  });
+  if (result == null) return new Response(null, { status: 202, headers });
+
+  const response = modernResult(result, body.method, config) as { error?: { code: number } };
+  const code = response.error?.code;
+  return Response.json(response, {
+    status: (code !== undefined && MODERN_STATUS[code]) || 200,
+    headers,
+  });
 }

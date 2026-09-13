@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  mcpResponse, mcpGet, mcpOptions, handleMcp, McpToolError, MCP_PROTOCOL_VERSION,
+  mcpResponse, mcpGet, mcpOptions, handleMcp, McpToolError,
+  MCP_LEGACY_PROTOCOL_VERSION, MCP_META, MCP_MODERN_VERSIONS, MCP_PROTOCOL_VERSIONS,
 } from 'wiki-formant/mcp';
 import { resetRateLimits } from 'wiki-formant/rate-limit';
 
@@ -44,7 +45,7 @@ const rpc = (method, params, id = 1) => ({ jsonrpc: '2.0', id, method, params })
 test('initialize advertises only capabilities the config populates', async () => {
   const res = await post(rpc('initialize'));
   const { result } = await res.json();
-  assert.equal(result.protocolVersion, MCP_PROTOCOL_VERSION);
+  assert.equal(result.protocolVersion, MCP_LEGACY_PROTOCOL_VERSION);
   assert.deepEqual(Object.keys(result.capabilities), ['tools']);
   assert.equal(result.instructions, 'Call search first.');
 });
@@ -239,7 +240,11 @@ test('initialize echoes a version we speak, and offers the newest otherwise', as
   assert.equal(spoken.result.protocolVersion, '2025-03-26');
 
   const unknown = await (await post(rpc('initialize', { protocolVersion: '1999-01-01' }))).json();
-  assert.equal(unknown.result.protocolVersion, MCP_PROTOCOL_VERSION);
+  assert.equal(unknown.result.protocolVersion, MCP_LEGACY_PROTOCOL_VERSION);
+
+  // A handshake cannot land on a modern version: that era has no handshake.
+  const modern = await (await post(rpc('initialize', { protocolVersion: MCP_MODERN_VERSIONS[0] }))).json();
+  assert.equal(modern.result.protocolVersion, MCP_LEGACY_PROTOCOL_VERSION);
 });
 
 const postAt = (body, version) =>
@@ -403,4 +408,149 @@ test('no declared budget means no limiting and no headroom headers', async () =>
   );
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('RateLimit-Limit'), null);
+});
+
+// --- the modern era ----------------------------------------------------------
+
+const MODERN = MCP_MODERN_VERSIONS[0];
+const modern = (method, params = {}, { version = MODERN, headers = {}, cfg = config, meta = {} } = {}) =>
+  mcpResponse(
+    new Request('https://x/api/mcp', {
+      method: 'POST',
+      headers: { 'MCP-Protocol-Version': version, 'Mcp-Method': method, ...headers },
+      body: JSON.stringify(
+        rpc(method, {
+          ...params,
+          _meta: { [MCP_META.protocolVersion]: version, [MCP_META.clientCapabilities]: {}, ...meta },
+        }),
+      ),
+    }),
+    cfg,
+  );
+
+test('server/discover answers what initialize answers, in the modern shape', async () => {
+  const res = await modern('server/discover');
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('MCP-Protocol-Version'), MODERN);
+  const { result } = await res.json();
+  assert.equal(result.resultType, 'complete');
+  assert.deepEqual(result.supportedVersions, [...MCP_PROTOCOL_VERSIONS]);
+  assert.deepEqual(result.capabilities, { tools: {} });
+  assert.equal(result.instructions, 'Call search first.');
+  assert.equal(result.cacheScope, 'public');
+  assert.equal(typeof result.ttlMs, 'number');
+  // serverInfo moved out of the body and into `_meta`.
+  assert.deepEqual(result._meta[MCP_META.serverInfo], config.serverInfo);
+  assert.equal(result.serverInfo, undefined);
+});
+
+test('a modern request missing its _meta fields is -32602 and says how to fix it', async () => {
+  const bare = await mcpResponse(
+    new Request('https://x/api/mcp', { method: 'POST', body: JSON.stringify(rpc('server/discover')) }),
+    config,
+  );
+  assert.equal(bare.status, 400);
+  const { error } = await bare.json();
+  assert.equal(error.code, -32602);
+  assert.match(error.message, /initialize/);
+
+  const noCaps = await modern('tools/list', {}, { meta: { [MCP_META.clientCapabilities]: undefined } });
+  assert.equal(noCaps.status, 400);
+  assert.match((await noCaps.json()).error.message, /clientCapabilities/);
+});
+
+test('an unsupported version is -32022 and names every version spoken', async () => {
+  const res = await modern('tools/list', {}, { version: '1999-01-01' });
+  assert.equal(res.status, 400);
+  const { error } = await res.json();
+  assert.equal(error.code, -32022);
+  assert.deepEqual(error.data, { supported: [...MCP_PROTOCOL_VERSIONS], requested: '1999-01-01' });
+});
+
+test('the routing headers must agree with the body, encoded or not', async () => {
+  const wrongMethod = await modern('tools/list', {}, { headers: { 'Mcp-Method': 'prompts/list' } });
+  assert.equal(wrongMethod.status, 400);
+  assert.equal((await wrongMethod.json()).error.code, -32020);
+
+  const call = { name: 'search', arguments: { q: 'x' } };
+  const noName = await modern('tools/call', call);
+  assert.equal(noName.status, 400);
+  assert.match((await noName.json()).error.message, /Mcp-Name/);
+
+  const encoded = await modern('tools/call', call, { headers: { 'Mcp-Name': `=?base64?${btoa('search')}?=` } });
+  assert.equal(encoded.status, 200);
+});
+
+test('methods the modern era removed are 404 there and still work in the legacy era', async () => {
+  const ping = await modern('ping');
+  assert.equal(ping.status, 404);
+  const { error } = await ping.json();
+  assert.equal(error.code, -32601);
+  assert.ok(!error.data.supportedMethods.includes('ping'));
+  assert.ok(error.data.supportedMethods.includes('server/discover'));
+
+  assert.deepEqual((await (await post(rpc('ping'))).json()).result, {});
+});
+
+test('a modern tool result carries resultType beside the handler _meta', async () => {
+  const res = await modern('tools/call', { name: 'lookup', arguments: {} }, {
+    cfg: richConfig,
+    headers: { 'Mcp-Name': 'lookup' },
+  });
+  const { result } = await res.json();
+  assert.equal(result.resultType, 'complete');
+  assert.deepEqual(result.structuredContent, { hits: 2 });
+  assert.equal(result.ttlMs, undefined, 'a call is not cacheable');
+  assert.equal(result._meta['x402/payment-response'].settled, true);
+  assert.deepEqual(result._meta[MCP_META.serverInfo], config.serverInfo);
+
+  const unknown = await modern('tools/call', { name: 'nope' }, { headers: { 'Mcp-Name': 'nope' } });
+  assert.equal(unknown.status, 400);
+  assert.equal((await unknown.json()).error.code, -32602);
+});
+
+test('a result a gate builds is shaped for the modern era too', async () => {
+  const gated = {
+    ...config,
+    gate: async body => ({
+      body: [],
+      empty: true,
+      finish: async () => ({
+        jsonrpc: '2.0',
+        id: body.id,
+        result: { content: [{ type: 'text', text: 'pay first' }], isError: true },
+      }),
+    }),
+  };
+  const res = await modern('tools/call', { name: 'search' }, { cfg: gated, headers: { 'Mcp-Name': 'search' } });
+  assert.equal((await res.json()).result.resultType, 'complete');
+});
+
+test('lists are cacheable publicly and a read only privately', async () => {
+  const withResource = {
+    ...config,
+    resources: [{ uri: 'wiki://a', name: 'a', description: 'd', mimeType: 'text/plain', read: async () => 'hello' }],
+  };
+  const list = await (await modern('resources/list', {}, { cfg: withResource })).json();
+  assert.equal(list.result.cacheScope, 'public');
+
+  const read = await (
+    await modern('resources/read', { uri: 'wiki://a' }, { cfg: withResource, headers: { 'Mcp-Name': 'wiki://a' } })
+  ).json();
+  assert.equal(read.result.cacheScope, 'private');
+  assert.equal(read.result.contents[0].text, 'hello');
+});
+
+test('a legacy request carrying other _meta stays legacy', async () => {
+  const res = await postAt(
+    rpc('tools/call', { name: 'search', arguments: { q: 'x' }, _meta: { progressToken: 1 } }),
+    '2025-06-18',
+  );
+  assert.equal(res.status, 200);
+  const { result } = await res.json();
+  assert.equal(result.resultType, undefined);
+  assert.equal(res.headers.get('MCP-Protocol-Version'), '2025-06-18');
+
+  // 2025-11-25 is legacy and still forbids batching.
+  assert.equal((await postAt([rpc('ping')], '2025-11-25')).status, 400);
 });

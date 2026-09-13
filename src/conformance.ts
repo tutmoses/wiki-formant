@@ -16,7 +16,14 @@
 // not restated here. A suite that carries its own copy of the contract stops
 // testing the boundary the moment the contract moves and says nothing about it.
 
-import { DEFAULT_MAX_BATCH, MCP_CORS, MCP_PROTOCOL_VERSION } from './mcp.js';
+import {
+  DEFAULT_MAX_BATCH,
+  MCP_CORS,
+  MCP_LEGACY_PROTOCOL_VERSION,
+  MCP_META,
+  MCP_MODERN_VERSIONS,
+  MCP_PROTOCOL_VERSIONS,
+} from './mcp.js';
 
 /**
  * Does the live preflight carry every token `MCP_CORS` declares for this header?
@@ -64,8 +71,17 @@ export interface Rpc {
     protocolVersion?: string;
     capabilities?: Record<string, unknown>;
     instructions?: string;
+    resultType?: string;
+    supportedVersions?: string[];
+    ttlMs?: number;
+    cacheScope?: string;
+    _meta?: Record<string, unknown>;
   };
-  error?: { code: number; message: string; data?: { availableTools?: string[] } };
+  error?: {
+    code: number;
+    message: string;
+    data?: { availableTools?: string[]; supported?: string[]; requested?: string };
+  };
 }
 
 export interface CheckResult {
@@ -186,14 +202,14 @@ export async function transportChecks(
   // 2025-03-26 — forfeiting structured output, tool titles and `_meta` — while
   // every suite reported green.
   const echoed = await t.rpc('initialize', {
-    protocolVersion: MCP_PROTOCOL_VERSION,
+    protocolVersion: MCP_LEGACY_PROTOCOL_VERSION,
     capabilities: {},
     clientInfo: { name: clientName, version: '1' },
   });
   t.check(
     'protocol negotiated',
-    echoed.result?.protocolVersion === MCP_PROTOCOL_VERSION,
-    `asked ${MCP_PROTOCOL_VERSION}, got ${echoed.result?.protocolVersion}`,
+    echoed.result?.protocolVersion === MCP_LEGACY_PROTOCOL_VERSION,
+    `asked ${MCP_LEGACY_PROTOCOL_VERSION}, got ${echoed.result?.protocolVersion}`,
   );
   t.check(
     'downgrades gracefully',
@@ -276,24 +292,112 @@ export async function transportChecks(
   }
 
   const versioned = await rawPost(t.endpoint, { jsonrpc: '2.0', id: 1, method: 'ping' }, {
-    'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
+    'MCP-Protocol-Version': MCP_LEGACY_PROTOCOL_VERSION,
   });
   t.recordCall();
   t.check(
     'MCP-Protocol-Version echoed',
-    versioned.headers.get('mcp-protocol-version') === MCP_PROTOCOL_VERSION,
-    `sent ${MCP_PROTOCOL_VERSION}, got ${versioned.headers.get('mcp-protocol-version')}`,
+    versioned.headers.get('mcp-protocol-version') === MCP_LEGACY_PROTOCOL_VERSION,
+    `sent ${MCP_LEGACY_PROTOCOL_VERSION}, got ${versioned.headers.get('mcp-protocol-version')}`,
   );
 
   // Batching was removed in 2025-06-18. A server that keeps honouring it under
   // a version that forbids it is telling the client something untrue.
   const batched = await rawPost(t.endpoint, [{ jsonrpc: '2.0', id: 1, method: 'ping' }], {
-    'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
+    'MCP-Protocol-Version': MCP_LEGACY_PROTOCOL_VERSION,
   });
   t.recordCall();
-  t.check('batch refused at 2025-06-18', batched.status === 400, `${batched.status}`);
+  t.check(`batch refused at ${MCP_LEGACY_PROTOCOL_VERSION}`, batched.status === 400, `${batched.status}`);
+
+  await modernChecks(t, caps);
 
   return init;
+}
+
+/**
+ * A modern request exactly as a `2026-07-28` client sends it: version and
+ * capabilities in `_meta`, echoed by the headers a gateway routes on.
+ */
+const modernPost = async (
+  t: Tester,
+  method: string,
+  opts: { version?: string; headers?: Record<string, string> } = {},
+): Promise<{ status: number; json: Rpc }> => {
+  const version = opts.version ?? MCP_MODERN_VERSIONS[0];
+  const res = await rawPost(
+    t.endpoint,
+    {
+      jsonrpc: '2.0',
+      id: method,
+      method,
+      params: { _meta: { [MCP_META.protocolVersion]: version, [MCP_META.clientCapabilities]: {} } },
+    },
+    { 'MCP-Protocol-Version': version, 'Mcp-Method': method, ...opts.headers },
+  );
+  t.recordCall();
+  return { status: res.status, json: (await res.json()) as Rpc };
+};
+
+/**
+ * The modern era, served beside the legacy one. Every probe that graded these
+ * servers on `server/discover` saw a -32601 for a month while every legacy check
+ * here stayed green, because nothing asked the modern question.
+ */
+async function modernChecks(t: Tester, legacyCapabilities: Record<string, unknown>): Promise<void> {
+  console.log(`\n=== modern era (${MCP_MODERN_VERSIONS[0]}) ===`);
+
+  const discover = await modernPost(t, 'server/discover');
+  const d = discover.json.result;
+  t.check(
+    'server/discover',
+    discover.status === 200 &&
+      d?.resultType === 'complete' &&
+      MCP_PROTOCOL_VERSIONS.every(v => d.supportedVersions?.includes(v)) &&
+      !!d.instructions &&
+      typeof d.ttlMs === 'number' &&
+      !!d.cacheScope &&
+      !!d._meta?.[MCP_META.serverInfo],
+    `${discover.status} ${JSON.stringify(d?.supportedVersions ?? discover.json.error)}`,
+  );
+  // One server, two ways to ask what it can do. They must give one answer.
+  t.check(
+    'discover agrees with initialize',
+    JSON.stringify(d?.capabilities) === JSON.stringify(legacyCapabilities),
+    `discover=${JSON.stringify(d?.capabilities)} initialize=${JSON.stringify(legacyCapabilities)}`,
+  );
+
+  const list = await modernPost(t, 'tools/list');
+  t.check(
+    'modern tools/list',
+    list.status === 200 &&
+      list.json.result?.resultType === 'complete' &&
+      (list.json.result?.tools?.length ?? 0) > 0 &&
+      typeof list.json.result?.ttlMs === 'number',
+    `${list.status} tools=${list.json.result?.tools?.length ?? JSON.stringify(list.json.error)} ttlMs=${list.json.result?.ttlMs}`,
+  );
+
+  const unsupported = await modernPost(t, 'tools/list', { version: '1999-01-01' });
+  t.check(
+    'unsupported version→-32022',
+    unsupported.status === 400 &&
+      unsupported.json.error?.code === -32022 &&
+      JSON.stringify(unsupported.json.error?.data?.supported) === JSON.stringify(MCP_PROTOCOL_VERSIONS),
+    `${unsupported.status} code=${unsupported.json.error?.code} supported=${JSON.stringify(unsupported.json.error?.data?.supported)}`,
+  );
+
+  const ping = await modernPost(t, 'ping');
+  t.check(
+    'removed method→404',
+    ping.status === 404 && ping.json.error?.code === -32601,
+    `ping: ${ping.status} code=${ping.json.error?.code}`,
+  );
+
+  const mismatch = await modernPost(t, 'tools/list', { headers: { 'Mcp-Method': 'prompts/list' } });
+  t.check(
+    'header mismatch→-32020',
+    mismatch.status === 400 && mismatch.json.error?.code === -32020,
+    `${mismatch.status} code=${mismatch.json.error?.code}`,
+  );
 }
 
 /**
