@@ -370,6 +370,7 @@ const block = licenseBlock({ license, scope: 'The protocol compilation and prose
 
 ```ts
 addCopyButtons(el);            // every <pre> gets one, once
+sortTables(el);                // every column-headed table sorts by its headers
 hydrateTweetEmbeds(el);        // placeholders get a live src
 const off = onTweetResize(h => sizeTweetEmbeds(el, h));
 ```
@@ -377,6 +378,8 @@ const off = onTweetResize(h => sizeTweetEmbeds(el, h));
 `addCopyButton` was **byte-identical** in two BlockRenderers, down to the SVG path data. Its idempotence guard now lives inside the function rather than in a `pre:not(:has(…))` at the call site, where it can be — and was — retyped.
 
 `activateTabGroups` turns stored `[data-tabs]` markup into a working tab group. The editor persists tabs as nested divs, which is the right thing to store — it survives a markdown twin, a plain HTML render and a reader with JavaScript off, all of which show every tab in order. Making one of them pressable is a reader-side job, and it sits beside the other passes rather than inside a component.
+
+`sortTables` makes the tables stored in article HTML sortable by their headers. They arrive as a string a `dangerouslySetInnerHTML` wrote, so React never sees their rows and cannot sort them. A column is dates if every filled cell starts with one, numbers if every one does, and text otherwise — one stray value makes the whole column text, which beats sorting half of it by one rule and half by another. A third press restores the author's order, which is often chronological or ranked and otherwise needs a reload. Label/value tables and tables with merged cells are left alone. The markup it writes — `aria-sort` on the cell, a `.sort-header` button inside it — is the markup a React sortable header should write too, so both kinds of table draw their arrows from one stylesheet rule.
 
 `TWITTER_ORIGIN` is written down once. It is both the embed host and the allow-list `onTweetResize` checks before believing a posted height, and it had been spelled out at four call sites across two repos. Any page can `postMessage`; only the embed host may size the embed.
 
