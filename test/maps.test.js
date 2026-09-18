@@ -64,6 +64,9 @@ test('one hop, and only onto a maps host', async () => {
   const off = await withFetch(redirectTo('http://169.254.169.254/latest'), () =>
     resolveShortMapUrl('https://maps.app.goo.gl/abc'));
   assert.equal(off, null);
+  const lookalike = await withFetch(redirectTo('https://google.evil.com/maps'), () =>
+    resolveShortMapUrl('https://maps.app.goo.gl/abc'));
+  assert.equal(lookalike, null);
   let called = false;
   const refused = await withFetch(async () => { called = true; }, () => resolveShortMapUrl('https://evil.example/?goo.gl'));
   assert.equal(refused, null);
@@ -75,7 +78,7 @@ test('the route refuses the unsigned and the unrecognised before fetching', asyn
   assert.equal((await locked(new Request('https://w.test/api/resolve-map?url=https://maps.app.goo.gl/a'))).status, 401);
   const open = resolveMapHandler({ authorize: () => true });
   assert.equal((await open(new Request('https://w.test/api/resolve-map?url=https://evil.example/?goo.gl'))).status, 400);
-  const res = await withFetch(redirectTo('https://maps.apple.com/?ll=1,2'), () =>
+  const res = await withFetch(redirectTo('https://www.google.co.uk/maps/@1,2,3z'), () =>
     open(new Request('https://w.test/api/resolve-map?url=https%3A%2F%2Fmaps.app.goo.gl%2Fa')));
-  assert.deepEqual(await res.json(), { resolved: 'https://maps.apple.com/?ll=1,2' });
+  assert.deepEqual(await res.json(), { resolved: 'https://www.google.co.uk/maps/@1,2,3z' });
 });

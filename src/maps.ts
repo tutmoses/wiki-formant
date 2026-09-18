@@ -89,8 +89,13 @@ export function toMapEmbedUrl(url: string): string | null {
 // host lists, with a timeout, for signed-in members only. That one is below.
 
 const SHORTLINK_HOSTS = new Set(['goo.gl', 'maps.app.goo.gl']);
-/** Where a resolved shortlink may legitimately land. */
-const RESOLVED_HOST = /(^|\.)(google\.[a-z.]+|apple\.com)$/;
+/**
+ * Where a resolved shortlink may land: Google Maps on a Google country domain
+ * (google.com, maps.google.com, www.google.co.uk, www.google.com.au). An
+ * anchored list, because the suffix match it replaced, `google\.[a-z.]+`,
+ * admitted google.evil.com.
+ */
+const RESOLVED_HOST = /^(?:www\.|maps\.)?google\.(?:com|com?\.[a-z]{2}|[a-z]{2})$/;
 
 const parse = (url: string, base?: URL): URL | null => {
   try {

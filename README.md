@@ -421,7 +421,9 @@ const clean = createHtmlSanitizer({ iframeHosts: FRAME_HOSTS });   // pair with 
 const safe = mapBlockTree(blocks, b => sanitizeCoreLeaf(b, clean), BLOCK_SHAPE);
 ```
 
-The default list is derived from what the editor nodes in `wiki-formant/tiptap` store — the embed wrappers' data attributes, the tab markup `activateTabGroups` reads back, the table classes — plus the presentational SVG subset the infographics pipeline embeds. Extend it with `tags` and `attributes` derived from your stored HTML, never from memory: a list written from memory erases content on the first render.
+The default list is derived from what the editor nodes in `wiki-formant/tiptap` store — the embed wrappers' data attributes, the tab markup `activateTabGroups` reads back, the table classes — plus the presentational SVG subset the infographics pipeline embeds. Extend it with `tags`, `attributes`, `classes` and `schemesByTag` derived from your stored HTML, never from memory: a list written from memory erases content on the first render.
+
+Classes pass by name only. Limiting `style` to layout and paint is worth nothing while `class` is free, because every site's own stylesheet ships `fixed inset-0 z-50`, and those draw a fake prompt over the chrome as well as `position` does.
 
 ## Editor nodes
 

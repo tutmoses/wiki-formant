@@ -19,7 +19,7 @@ test('what the editor nodes store survives', () => {
   assert.equal(clean(tabs), tabs.replaceAll('=""', ''));
   const tweet = '<div data-twitter-embed="" data-tweet-id="1" data-url="https://x.com/a/status/1" class="twitter-embed"></div>';
   assert.equal(clean(tweet), tweet.replaceAll('=""', ''));
-  assert.match(clean('<table class="tiptap-table"><tbody><tr><td class="p-2" colspan="2">x</td></tr></tbody></table>'), /class="p-2" colspan="2"/);
+  assert.match(clean('<table class="tiptap-table"><tbody><tr><td class="p-2" colspan="2">x</td></tr></tbody></table>'), /<td class="p-2" colspan="2">/);
   assert.match(clean('<h2 id="intro">Intro</h2>'), /id="intro"/);
 });
 
@@ -39,7 +39,21 @@ test('iframes are held to the host list', () => {
 
 test('extra attributes merge with the defaults rather than replacing them', () => {
   const wide = createHtmlSanitizer({ attributes: { span: ['aria-hidden'] } });
-  assert.equal(wide('<span class="k" aria-hidden="true">x</span>'), '<span class="k" aria-hidden="true">x</span>');
+  assert.equal(wide('<span id="k" aria-hidden="true">x</span>'), '<span id="k" aria-hidden="true">x</span>');
+});
+
+test('classes pass by name only, so utilities cannot build an overlay', () => {
+  assert.equal(clean('<div class="fixed inset-0 z-50">fake prompt</div>'), '<div>fake prompt</div>');
+  assert.equal(clean('<a href="/x" class="link evil">x</a>'), '<a href="/x" class="link">x</a>');
+  assert.equal(clean('<pre><code class="language-rust">fn</code></pre>'), '<pre><code class="language-rust">fn</code></pre>');
+  const own = createHtmlSanitizer({ classes: { span: ['citation-needed'] }, attributes: { span: ['class'] } });
+  assert.equal(own('<span class="citation-needed fixed">x</span>'), '<span class="citation-needed">x</span>');
+});
+
+test('a tag can widen its schemes without widening every tag', () => {
+  const own = createHtmlSanitizer({ schemesByTag: { img: ['http', 'https', 'data'] } });
+  assert.match(own('<img src="data:image/png;base64,AAAA">'), /data:image/);
+  assert.equal(own('<a href="data:text/html,x">x</a>'), '<a>x</a>');
 });
 
 test('the core leaves are cleaned field by field, and other blocks pass through', () => {

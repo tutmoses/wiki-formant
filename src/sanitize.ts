@@ -79,36 +79,47 @@ const PROSE_TAGS = [
 ];
 
 const PROSE_ATTRS: Record<string, string[]> = {
-  a: ['href', 'target', 'rel', 'id', 'class', 'title', 'aria-label', 'tabindex'],
-  img: ['src', 'alt', 'title', 'width', 'height', 'loading', 'class'],
+  a: ['href', 'target', 'rel', 'id', 'title', 'aria-label', 'tabindex'],
+  img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
   // Every data attribute the `wiki-formant/tiptap` nodes store: the embed
   // wrappers, and the tab markup `activateTabGroups` reads back. An allowlist
   // written without the tab pair strips them, and stored tabs never activate.
   div: [
-    'class', 'id', 'style',
+    'id', 'style',
     'data-twitter-embed', 'data-tweet-id', 'data-url', 'data-map-embed', 'data-iframe-embed', 'data-youtube-video',
     'data-tabs', 'data-active-tab', 'data-tab-item', 'data-tab-title',
   ],
-  iframe: ['src', 'width', 'height', 'frameborder', 'allowfullscreen', 'scrolling', 'loading', 'referrerpolicy', 'class', 'title'],
-  figure: ['class', 'style', 'data-graphic'],
-  figcaption: ['class', 'style'],
-  span: ['class', 'id', 'style', 'title'],
-  p: ['class', 'id', 'style'],
-  code: ['class'],
-  pre: ['class'],
-  // `citation-needed` and `cite-n` markers ride on the superscript.
-  sup: ['class', 'id'],
-  sub: ['class', 'id'],
-  // The editor's table extension writes a class on the table and every cell.
-  table: ['class'],
-  tr: ['class'],
-  th: ['class', 'colspan', 'rowspan', 'colwidth', 'scope'],
-  td: ['class', 'colspan', 'rowspan', 'colwidth'],
+  iframe: ['src', 'width', 'height', 'frameborder', 'allowfullscreen', 'scrolling', 'loading', 'referrerpolicy', 'title'],
+  figure: ['style', 'data-graphic'],
+  figcaption: ['style'],
+  span: ['id', 'style', 'title'],
+  p: ['id', 'style'],
+  // `cite-n` back-link targets ride on the superscript.
+  sup: ['id'],
+  sub: ['id'],
+  th: ['colspan', 'rowspan', 'colwidth', 'scope'],
+  td: ['colspan', 'rowspan', 'colwidth'],
   col: ['span', 'width'],
   // Heading ids back the crawlable anchors `injectHeadingIds` writes.
   h1: ['id'], h2: ['id'], h3: ['id'], h4: ['id'], h5: ['id'], h6: ['id'],
-  li: ['class', 'id'],
-  blockquote: ['class', 'cite'],
+  li: ['id'],
+  blockquote: ['cite'],
+};
+
+/**
+ * Classes are allowed by NAME, never by attribute. Restricting `style` to
+ * layout and paint means nothing while `class` is free: every wiki here ships
+ * utility classes like `fixed inset-0 z-50`, which lay a fake prompt over the
+ * chrome as well as `position` would. These are the classes the package's own
+ * editor nodes write; a wiki adds the ones its stored content uses.
+ */
+const EDITOR_CLASSES: Record<string, string[]> = {
+  a: ['link'],
+  code: ['language-*'],
+  div: ['iframe-embed', 'map-embed', 'twitter-embed'],
+  table: ['tiptap-table'],
+  th: ['p-2', 'font-semibold', 'bg-surface-1'],
+  td: ['p-2'],
 };
 
 export interface HtmlSanitizerOptions {
@@ -118,29 +129,44 @@ export interface HtmlSanitizerOptions {
   svg?: boolean;
   /** Tags this wiki's stored HTML needs beyond the prose set. */
   tags?: readonly string[];
-  /** Attributes to add, per tag. Merged with the defaults, never replacing them. */
+  /** Attributes to add, per tag. Merged with the defaults, never replacing them. Not `class`: see `classes`. */
   attributes?: Readonly<Record<string, readonly string[]>>;
+  /** Class names to allow, per tag (`'language-*'` globs work). Merged with the editor's own. */
+  classes?: Readonly<Record<string, readonly string[]>>;
+  /** URL schemes per tag, where one tag needs more than http/https/mailto — `img: ['http', 'https', 'data']`. */
+  schemesByTag?: Readonly<Record<string, readonly string[]>>;
 }
 
 /**
  * A sanitiser bound to one wiki's allowlist.
  *
- * Derive `tags` and `attributes` from the HTML actually stored in your pages
- * and revisions, not from guesswork: that is how the SVG set above got here,
- * and a list written from memory erases content on the first render.
+ * Derive `tags`, `attributes` and `classes` from the HTML actually stored in
+ * your pages and revisions, not from guesswork: that is how the SVG set above
+ * got here, and a list written from memory erases content on the first render.
  */
 export function createHtmlSanitizer(options: HtmlSanitizerOptions = {}): (html: string) => string {
-  const { iframeHosts = DEFAULT_IFRAME_HOSTS, svg = true, tags = [], attributes = {} } = options;
+  const { iframeHosts = DEFAULT_IFRAME_HOSTS, svg = true, tags = [], attributes = {}, classes = {}, schemesByTag = {} } = options;
 
-  const allowedAttributes: Record<string, string[]> = { ...PROSE_ATTRS };
-  if (svg) for (const t of SVG_TAGS) allowedAttributes[t] = SVG_ATTRS;
-  for (const [tag, extra] of Object.entries(attributes)) {
-    allowedAttributes[tag] = [...new Set([...(allowedAttributes[tag] ?? []), ...extra])];
+  const merge = (base: Record<string, string[]>, extra: Readonly<Record<string, readonly string[]>>) => {
+    const out = { ...base };
+    for (const [tag, more] of Object.entries(extra)) out[tag] = [...new Set([...(out[tag] ?? []), ...more])];
+    return out;
+  };
+  const allowedAttributes = merge(
+    svg ? { ...PROSE_ATTRS, ...Object.fromEntries(SVG_TAGS.map(t => [t, SVG_ATTRS])) } : PROSE_ATTRS,
+    attributes,
+  );
+  // `class` only ever arrives through `allowedClasses`, which admits the
+  // attribute for the tags it names and filters its value by name.
+  for (const tag of Object.keys(allowedAttributes)) {
+    allowedAttributes[tag] = allowedAttributes[tag]!.filter(a => a !== 'class');
   }
 
   const config: sanitizeHtml.IOptions = {
     allowedTags: [...PROSE_TAGS, ...(svg ? SVG_TAGS : []), ...tags],
     allowedAttributes,
+    allowedClasses: merge(EDITOR_CLASSES, classes),
+    allowedSchemesByTag: Object.fromEntries(Object.entries(schemesByTag).map(([t, v]) => [t, [...v]])),
     allowedStyles: { '*': Object.fromEntries(STYLE_PROPS.map(p => [p, [SAFE_CSS_VALUE]])) },
     allowedSchemes: ['http', 'https', 'mailto'],
     allowedSchemesAppliedToAttributes: ['href', 'src', 'cite'],
@@ -171,6 +197,11 @@ const str = (v: unknown): v is string => typeof v === 'string';
  *
  * Returns any other block untouched, so it drops straight into a
  * `mapBlockTree` pass — a repo whose own types render HTML cleans those itself.
+ *
+ * `codeTabs` code is treated as stored HTML, which is what the editor writes.
+ * A wiki whose highlighter takes the code as SOURCE and escapes it on render
+ * must not pass it through here — every `<T>` in a signature would go — and
+ * cleans its other three fields with its own switch.
  */
 export function sanitizeCoreLeaf<B extends { type: string }>(block: B, clean: (html: string) => string): B {
   const b = block as unknown as Leaf;
