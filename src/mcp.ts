@@ -259,6 +259,73 @@ export class McpToolError extends Error {
   }
 }
 
+// ---- reading a tool's arguments ------------------------------------------------
+
+/** A value the server used in place of the one the caller sent, and why. */
+export interface ArgAdjustment {
+  param: string;
+  requested: unknown;
+  used: unknown;
+  reason: string;
+}
+
+/**
+ * Typed, clamped reads over a tool's raw arguments, recording every value it
+ * had to override.
+ *
+ * Defaults belong in the tool's description, where a model reads them; what a
+ * result should echo is only the case where the server overrode what the
+ * caller actually asked for, so `adjustments` stays signal. The three servers
+ * here had one of these, one inline `clamp`, and one server coercing per tool,
+ * where `Math.min(Number(limit) || 12, 50)` let a negative limit through.
+ */
+export function readArgs(raw: Record<string, unknown>) {
+  const adjustments: ArgAdjustment[] = [];
+  return {
+    adjustments,
+    note(a: ArgAdjustment): void {
+      adjustments.push(a);
+    },
+    /** A whole number in `[min, max]`; `def` when absent or not a number at all. */
+    num(name: string, def: number, min: number, max: number): number {
+      const value = raw[name];
+      if (value === undefined || value === null || value === '') return def;
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed)) {
+        adjustments.push({ param: name, requested: value, used: def, reason: 'not a number' });
+        return def;
+      }
+      if (typeof value !== 'number') adjustments.push({ param: name, requested: value, used: parsed, reason: 'parsed numeric string' });
+      const clamped = Math.min(max, Math.max(min, Math.trunc(parsed)));
+      if (clamped !== parsed) {
+        adjustments.push({ param: name, requested: parsed, used: clamped, reason: `must be a whole number between ${min} and ${max}` });
+      }
+      return clamped;
+    },
+    /** Trimmed text; `def` when absent. */
+    str(name: string, def = ''): string {
+      const value = raw[name];
+      return value === undefined || value === null ? def : String(value).trim();
+    },
+    /** True only for a JSON `true`. */
+    bool(name: string): boolean {
+      return raw[name] === true;
+    },
+    /** The string members of an array argument; `[]` when absent. */
+    list(name: string): string[] {
+      const value = raw[name];
+      return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+    },
+  };
+}
+
+/** `result`, plus `adjustments` when `readArgs` had to override anything. */
+export const withAdjustments = <T extends object>(
+  args: { adjustments: readonly ArgAdjustment[] },
+  result: T,
+): T | (T & { adjustments: readonly ArgAdjustment[] }) =>
+  args.adjustments.length ? { ...result, adjustments: args.adjustments } : result;
+
 /** One entry in a JSON-RPC envelope. Exported because `wiki-formant/x402`
  *  gates the envelope before `handleMcp` ever sees it. */
 export type RpcRequest = { jsonrpc: '2.0'; id: string | number | null; method: string; params?: unknown };

@@ -140,6 +140,28 @@ export function FacetBar({
   );
 }
 
+// ---- structured data --------------------------------------------------------
+
+/**
+ * A JSON-LD payload, safe to place inside `<script type="application/ld+json">`.
+ *
+ * The body has to go in through `dangerouslySetInnerHTML` — React escapes a
+ * text child's `<`, which breaks the parser Google reads — and these payloads
+ * carry authored strings: page titles, display names, excerpts. An authored
+ * `</script>` closes the tag and the rest parses as markup. Re-encoding every
+ * `<` as its JSON escape closes that; every JSON parser decodes it back, so the
+ * data a crawler reads is unchanged. One of the three wikis did this; the
+ * other two, and this package's own breadcrumb trail, did not.
+ */
+export function jsonLdScript(data: unknown): string {
+  return JSON.stringify(data).replace(/</g, '\\u003c');
+}
+
+/** A `<script type="application/ld+json">` for `data`, escaped by `jsonLdScript`. */
+export function JsonLd({ data }: { data: unknown }) {
+  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(data) }} />;
+}
+
 // ---- breadcrumbs ------------------------------------------------------------
 
 export interface BreadcrumbItem {
@@ -248,16 +270,18 @@ export function Breadcrumbs({
         </ol>
       </nav>
       {structured && (
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
-          '@context': 'https://schema.org',
-          '@type': 'BreadcrumbList',
-          itemListElement: items.map((item, i) => ({
-            '@type': 'ListItem',
-            position: i + 1,
-            name: item.label,
-            ...(item.href ? { item: absolute(item.href) } : {}),
-          })),
-        }) }} />
+        <JsonLd
+          data={{
+            '@context': 'https://schema.org',
+            '@type': 'BreadcrumbList',
+            itemListElement: items.map((item, i) => ({
+              '@type': 'ListItem',
+              position: i + 1,
+              name: item.label,
+              ...(item.href ? { item: absolute(item.href) } : {}),
+            })),
+          }}
+        />
       )}
     </>
   );

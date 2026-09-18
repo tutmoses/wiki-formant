@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toMapEmbedUrl, extractCoordsFromUrl, isShortMapUrl } from 'wiki-formant/maps';
+import { toMapEmbedUrl, extractCoordsFromUrl, isShortMapUrl, resolveMapHandler, resolveShortMapUrl } from 'wiki-formant/maps';
 
 test('an already-embeddable url passes through untouched', () => {
   const g = 'https://www.google.com/maps/embed?pb=x';
@@ -34,4 +34,48 @@ test('a non-map url is not a map url', () => {
 test('shortened map links are flagged for redirect resolution', () => {
   assert.equal(isShortMapUrl('https://maps.app.goo.gl/abc'), true);
   assert.equal(isShortMapUrl('https://google.com/maps/@1,2,3z'), false);
+});
+
+test('a shortener is matched on its exact host, never as a substring', () => {
+  assert.equal(isShortMapUrl('https://goo.gl/maps/abc'), true);
+  assert.equal(isShortMapUrl('https://evil.example/?goo.gl'), false);
+  assert.equal(isShortMapUrl('https://maps.app.goo.gl.evil.example/x'), false);
+  assert.equal(isShortMapUrl('https://goo.gl/other'), false);
+});
+
+const withFetch = async (stub, fn) => {
+  const real = globalThis.fetch;
+  globalThis.fetch = stub;
+  try {
+    return await fn();
+  } finally {
+    globalThis.fetch = real;
+  }
+};
+const redirectTo = location => async (_url, init) => {
+  assert.equal(init.redirect, 'manual');
+  return new Response(null, { status: 302, headers: { location } });
+};
+
+test('one hop, and only onto a maps host', async () => {
+  const ok = await withFetch(redirectTo('https://www.google.com/maps/place/X/@1,2,3z'), () =>
+    resolveShortMapUrl('https://maps.app.goo.gl/abc'));
+  assert.equal(ok, 'https://www.google.com/maps/place/X/@1,2,3z');
+  const off = await withFetch(redirectTo('http://169.254.169.254/latest'), () =>
+    resolveShortMapUrl('https://maps.app.goo.gl/abc'));
+  assert.equal(off, null);
+  let called = false;
+  const refused = await withFetch(async () => { called = true; }, () => resolveShortMapUrl('https://evil.example/?goo.gl'));
+  assert.equal(refused, null);
+  assert.equal(called, false);
+});
+
+test('the route refuses the unsigned and the unrecognised before fetching', async () => {
+  const locked = resolveMapHandler({ authorize: () => false });
+  assert.equal((await locked(new Request('https://w.test/api/resolve-map?url=https://maps.app.goo.gl/a'))).status, 401);
+  const open = resolveMapHandler({ authorize: () => true });
+  assert.equal((await open(new Request('https://w.test/api/resolve-map?url=https://evil.example/?goo.gl'))).status, 400);
+  const res = await withFetch(redirectTo('https://maps.apple.com/?ll=1,2'), () =>
+    open(new Request('https://w.test/api/resolve-map?url=https%3A%2F%2Fmaps.app.goo.gl%2Fa')));
+  assert.deepEqual(await res.json(), { resolved: 'https://maps.apple.com/?ll=1,2' });
 });

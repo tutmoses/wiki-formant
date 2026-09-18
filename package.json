@@ -1,6 +1,6 @@
 {
   "name": "wiki-formant",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "description": "The portable half of a wiki: derived taxonomy and facet controls, a version-negotiating MCP transport, markdown twins, block rendering, a rich-text editor engine, and conditional-GET plumbing.",
   "type": "module",
   "license": "MIT",
@@ -159,6 +159,14 @@
     "./seeded": {
       "types": "./dist/seeded.d.ts",
       "import": "./dist/seeded.js"
+    },
+    "./sanitize": {
+      "types": "./dist/sanitize.d.ts",
+      "import": "./dist/sanitize.js"
+    },
+    "./corpus": {
+      "types": "./dist/corpus.d.ts",
+      "import": "./dist/corpus.js"
     }
   },
   "bin": {
@@ -192,9 +200,11 @@
     "@tiptap/starter-kit": "^2.27.3",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
+    "@types/sanitize-html": "^2.16.1",
     "jose": "^6.2.10",
     "jsdom": "^30.1.0",
     "react": "^19.2.4",
+    "sanitize-html": "^2.17.7",
     "typescript": "^5.9.0"
   },
   "peerDependencies": {
@@ -212,7 +222,8 @@
     "@tiptap/react": ">=2.10",
     "@tiptap/starter-kit": ">=2.10",
     "jose": ">=5",
-    "react": ">=18"
+    "react": ">=18",
+    "sanitize-html": ">=2"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -258,6 +269,9 @@
       "optional": true
     },
     "@tiptap/extension-placeholder": {
+      "optional": true
+    },
+    "sanitize-html": {
       "optional": true
     }
   }

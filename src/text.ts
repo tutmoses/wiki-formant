@@ -9,7 +9,7 @@
 // and only the bodies live here.
 
 import { decodeEntities } from './markdown.js';
-import type { CodeTab, ReferenceItem } from './blocks.js';
+import type { CodeTab, LinkGridGroup, ReferenceItem, StatItem } from './blocks.js';
 
 /**
  * HTML to readable text. Links keep their href in parentheses so a model can
@@ -70,6 +70,37 @@ export function bannerToText(label: string, text?: string | null): string {
 /** Each tab under its label, tags stripped — highlighted markup is noise here. */
 export function codeTabsToText(tabs: readonly CodeTab[]): string {
   return tabs.map(t => `[${t.label}]\n${t.code}`).join('\n');
+}
+
+/** Metric cards, one per line: `99% Uptime`. */
+export function statsToText(items: readonly StatItem[]): string {
+  return items.map(s => `${s.value}${s.suffix ?? ''} ${s.label}`).join('\n');
+}
+
+/**
+ * Each group's heading over its links, hrefs in parentheses the way
+ * `stripHtml` keeps them.
+ *
+ * Two of the three wikis extracted nothing from a link grid, or from stats or
+ * page lists, so a hub page read to an agent as far emptier than it is. The
+ * third had its own three bodies. These are those bodies.
+ */
+export function linkGridToText(groups: readonly LinkGridGroup[], intro?: string | null): string {
+  return [
+    ...(intro ? [stripHtml(intro)] : []),
+    ...groups.map(g =>
+      [
+        g.heading,
+        ...(g.description ? [stripHtml(g.description)] : []),
+        ...g.links.map(l => `- ${l.label} (${l.href})`),
+      ].join('\n'),
+    ),
+  ].join('\n\n');
+}
+
+/** A resolved page list: one title per line. */
+export function pageListToText(pages: readonly { title: string }[]): string {
+  return pages.map(p => p.title).join('\n');
 }
 
 /** A numbered reference list, or `''` when there are none. */

@@ -6,6 +6,7 @@
 // Matching is by id.
 
 import { incrementVersion, parseVersion, type ChangeType, type SemVer } from './versioning.js';
+import { coreBlockGroups } from './blocks.js';
 
 /** The only two fields this module needs from a block. */
 export interface DiffBlock {
@@ -48,8 +49,12 @@ export interface RevisionDiff<L = unknown> {
 }
 
 export interface DiffOptions<B, L> {
-  /** Nested groups in document order, or `null` for a leaf. */
-  containers: (block: B) => BlockGroup<B>[] | null;
+  /**
+   * Nested groups in document order, or `null` for a leaf. Defaults to
+   * `coreBlockGroups` — `columns.i.blocks` and an infobox's `blocks` — which is
+   * every container any wiki here stores.
+   */
+  containers?: (block: B) => BlockGroup<B>[] | null;
   /**
    * A richer diff for one leaf, when the consumer has one to give. `from` is
    * null for an addition, `to` is null for a removal. Return `undefined` to
@@ -121,8 +126,9 @@ export function diffBlocks<B extends DiffBlock, L = unknown>(
   opts: DiffOptions<B, L>,
 ): BlockChange<L>[] {
   const changes: BlockChange<L>[] = [];
-  const oldFlat = extractBlocks(oldBlocks, opts.containers);
-  const newFlat = extractBlocks(newBlocks, opts.containers);
+  const containers = opts.containers ?? coreBlockGroups;
+  const oldFlat = extractBlocks(oldBlocks, containers);
+  const newFlat = extractBlocks(newBlocks, containers);
 
   const matchedOld = new Set<string>();
   const matchedNew = new Set<string>();
@@ -145,7 +151,7 @@ export function diffBlocks<B extends DiffBlock, L = unknown>(
       });
     }
 
-    const attributes = diffAttributes(oldItem.block, newItem.block, opts.containers);
+    const attributes = diffAttributes(oldItem.block, newItem.block, containers);
     if (attributes) {
       changes.push({
         id,
@@ -236,7 +242,7 @@ export function computeRevisionDiff<B extends DiffBlock, L = unknown>(opts: {
   newMeta?: unknown;
   /** What to call that value in the summary. Defaults to `banner`. */
   metaLabel?: string;
-  containers: DiffOptions<B, L>['containers'];
+  containers?: DiffOptions<B, L>['containers'];
   leafDiff?: DiffOptions<B, L>['leafDiff'];
 }): RevisionDiff<L> {
   const changes = diffBlocks<B, L>(opts.oldContent, opts.newContent, {

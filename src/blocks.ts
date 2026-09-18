@@ -13,6 +13,7 @@
 
 import { decodeEntities } from './markdown.js';
 import { htmlToMarkdown, inlineToMarkdown } from './markdown.js';
+import type { BlockGroup } from './revisions.js';
 
 // ---- the shapes the standard block types carry ------------------------------
 
@@ -99,6 +100,66 @@ export interface BlockTreeShape<B> {
   containers: (block: B) => B[][] | null;
   /** Rebuild a container from its mapped groups. */
   rebuild: (block: B, groups: B[][]) => B;
+}
+
+// ---- the two containers every wiki here has ---------------------------------
+
+type Stored = { type: string; blocks?: unknown; columns?: unknown };
+type StoredColumn = { blocks?: unknown };
+
+const list = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+
+/**
+ * The core containers' nested groups, each with the path segment that
+ * addresses it: `columns` holds `columns[i].blocks`, `infobox` holds `blocks`.
+ * Every other type is a leaf.
+ *
+ * All three wikis store these two identically, and between them had written
+ * this walk seven times — once per markdown twin, text export, revision diff,
+ * resolver and checker. A walk that forgot a container shipped a code block
+ * unhighlighted or dropped a link from the checker. The path-addressed form is
+ * what `computeRevisionDiff` defaults to.
+ */
+export function coreBlockGroups<B extends { type: string }>(block: B): BlockGroup<B>[] | null {
+  const b = block as Stored;
+  if (b.type === 'columns') {
+    return list<StoredColumn>(b.columns).map((col, i) => ({
+      path: `columns.${i}.blocks`,
+      blocks: list<B>(col?.blocks),
+    }));
+  }
+  if (b.type === 'infobox') return [{ path: 'blocks', blocks: list<B>(b.blocks) }];
+  return null;
+}
+
+/**
+ * `coreBlockGroups` as a `BlockTreeShape`: read the groups, and put mapped
+ * groups back where they came from. Bind it once per repo,
+ * `const BLOCK_SHAPE = coreBlockShape<Block>()`, and hand it to every walk.
+ */
+export function coreBlockShape<B extends { type: string }>(): BlockTreeShape<B> {
+  return {
+    containers: block => coreBlockGroups(block)?.map(group => group.blocks) ?? null,
+    rebuild: (block, groups) => {
+      const b = block as Stored;
+      if (b.type === 'columns') {
+        return {
+          ...block,
+          columns: list<StoredColumn>(b.columns).map((col, i) => ({ ...col, blocks: groups[i] ?? [] })),
+        };
+      }
+      if (b.type === 'infobox') return { ...block, blocks: groups[0] ?? [] };
+      return block;
+    },
+  };
+}
+
+/** Every leaf in document order, with the containers flattened away. */
+export function leafBlocks<B>(blocks: readonly B[], containers: (block: B) => B[][] | null): B[] {
+  return blocks.flatMap(block => {
+    const groups = containers(block);
+    return groups ? groups.flatMap(group => leafBlocks(group, containers)) : [block];
+  });
 }
 
 /**

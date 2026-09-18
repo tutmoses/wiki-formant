@@ -70,6 +70,34 @@ export function validateLinkGroups(groups: unknown): boolean {
   );
 }
 
+/** `[{ label, language?, code }]` — a code-tabs block's tabs. `code` renders as HTML. */
+export function validateCodeTabs(tabs: unknown): boolean {
+  return (
+    Array.isArray(tabs) &&
+    tabs.every(
+      t =>
+        isRecord(t) &&
+        typeof t.label === 'string' &&
+        typeof t.code === 'string' &&
+        (t.language === undefined || typeof t.language === 'string'),
+    )
+  );
+}
+
+/** `[{ value, label, suffix? }]` — a stats block's cards. */
+export function validateStatItems(items: unknown): boolean {
+  return (
+    Array.isArray(items) &&
+    items.every(
+      s =>
+        isRecord(s) &&
+        typeof s.label === 'string' &&
+        (typeof s.value === 'string' || typeof s.value === 'number') &&
+        (s.suffix === undefined || s.suffix === null || typeof s.suffix === 'string'),
+    )
+  );
+}
+
 export interface BlockValidatorOptions {
   /** True for a type this wiki knows at all. */
   isKnownType: (type: string) => boolean;
@@ -79,59 +107,107 @@ export interface BlockValidatorOptions {
   validateAtomic: (block: Record<string, unknown>) => boolean;
 }
 
+/** Where a block tree fails, and why: `{ path: '[2].columns[0].blocks[1]', reason }`. */
+export interface BlockIssue {
+  path: string;
+  reason: string;
+}
+
 /**
  * The block-tree walk, with one wiki's leaf switch plugged into it. The caller
  * keeps its own type parameter, so this stays free of any repo's types while
  * the call site still gets a real type guard.
+ *
+ * `blockIssues` is the same walk reporting WHERE. Every write path here
+ * answered a bad tree with "invalid block structure" and nothing else, which
+ * leaves an agent writing through MCP to guess, and one repo's seed guard had
+ * to walk the tree a second time just to name the offending link.
  */
 export function createBlockValidator(opts: BlockValidatorOptions) {
   const { isKnownType, isAtomicType, validateAtomic } = opts;
 
-  const atomic = (block: unknown): boolean => {
-    if (!isRecord(block)) return false;
-    if (typeof block.id !== 'string') return false;
-    if (typeof block.type !== 'string' || !isKnownType(block.type) || !isAtomicType(block.type)) return false;
-    return validateAtomic(block);
+  const check = (block: unknown, path: string, nested: boolean, out: BlockIssue[]): void => {
+    if (!isRecord(block)) {
+      out.push({ path, reason: 'not a block object' });
+      return;
+    }
+    if (typeof block.id !== 'string') out.push({ path, reason: '`id` must be a string' });
+    if (typeof block.type !== 'string' || !isKnownType(block.type)) {
+      out.push({ path, reason: `unknown block type ${JSON.stringify(block.type)}` });
+      return;
+    }
+
+    if (!nested && block.type === 'columns') {
+      if (!Array.isArray(block.columns)) {
+        out.push({ path: `${path}.columns`, reason: 'must be an array' });
+        return;
+      }
+      block.columns.forEach((col, i) => {
+        const at = `${path}.columns[${i}]`;
+        if (!isRecord(col) || typeof col.id !== 'string' || !Array.isArray(col.blocks)) {
+          out.push({ path: at, reason: 'a column needs a string `id` and a `blocks` array' });
+          return;
+        }
+        col.blocks.forEach((b, j) => check(b, `${at}.blocks[${j}]`, true, out));
+      });
+      return;
+    }
+    if (!nested && block.type === 'infobox') {
+      if (!Array.isArray(block.blocks)) {
+        out.push({ path: `${path}.blocks`, reason: 'must be an array' });
+        return;
+      }
+      block.blocks.forEach((b, j) => check(b, `${path}.blocks[${j}]`, true, out));
+      return;
+    }
+
+    if (!isAtomicType(block.type)) {
+      out.push({ path, reason: nested ? `a ${block.type} block cannot sit inside a container` : `${block.type} blocks are not accepted` });
+      return;
+    }
+    if (!validateAtomic(block)) out.push({ path, reason: `malformed ${block.type} block` });
   };
 
-  const one = (block: unknown): boolean => {
-    if (!isRecord(block)) return false;
-    if (typeof block.id !== 'string') return false;
-    if (typeof block.type !== 'string' || !isKnownType(block.type)) return false;
+  const issuesOf = (block: unknown, nested: boolean): BlockIssue[] => {
+    const out: BlockIssue[] = [];
+    check(block, '', nested, out);
+    return out;
+  };
 
-    if (block.type === 'columns') {
-      return (
-        Array.isArray(block.columns) &&
-        block.columns.every(
-          col =>
-            isRecord(col) &&
-            typeof col.id === 'string' &&
-            Array.isArray(col.blocks) &&
-            col.blocks.every(atomic),
-        )
-      );
-    }
-    if (block.type === 'infobox') {
-      return Array.isArray(block.blocks) && block.blocks.every(atomic);
-    }
-    return atomic(block);
+  const blockIssues = (content: unknown): BlockIssue[] => {
+    if (!Array.isArray(content)) return [{ path: '', reason: 'content must be an array of blocks' }];
+    const out: BlockIssue[] = [];
+    content.forEach((block, i) => check(block, `[${i}]`, false, out));
+    return out;
   };
 
   return {
     /** One leaf block; container types are rejected. */
-    validateAtomicBlock: atomic,
+    validateAtomicBlock: (block: unknown): boolean => issuesOf(block, true).length === 0,
     /** One block of any kind, containers included. */
-    validateBlock: one,
+    validateBlock: (block: unknown): boolean => issuesOf(block, false).length === 0,
     /** A whole page's content array. */
-    validateBlocks: (content: unknown): boolean => Array.isArray(content) && content.every(one),
+    validateBlocks: (content: unknown): boolean => blockIssues(content).length === 0,
+    /** Every failure in a page's content array, each with the path to it. */
+    blockIssues,
   };
+}
+
+/** One line for an error response: the first few issues, then a count. */
+export function describeBlockIssues(issues: readonly BlockIssue[], max = 3): string {
+  const shown = issues.slice(0, max).map(i => (i.path ? `${i.path}: ${i.reason}` : i.reason));
+  const more = issues.length - shown.length;
+  return `${shown.join('; ')}${more > 0 ? ` (+${more} more)` : ''}`;
 }
 
 /**
  * A copy of a block with a fresh id at every level, so a duplicated container
  * does not share child ids with its original.
  */
-export function duplicateBlockIds<B extends { type: string; id: string }>(block: B, newId: () => string): B {
+export function duplicateBlockIds<B extends { type: string; id: string }>(
+  block: B,
+  newId: () => string = () => crypto.randomUUID(),
+): B {
   const b = block as unknown as Record<string, unknown>;
   if (block.type === 'columns' && Array.isArray(b.columns)) {
     return {

@@ -145,6 +145,12 @@ handler: async (args, ctx) => {
 
 `config.gate` is envelope-level middleware: it may withhold entries before dispatch and merge its own responses back afterwards. A payment gate has to sit there rather than in a handler, because the demand *replaces* the call and the receipt rides on the envelope.
 
+### Tool arguments and the corpus tool
+
+`readArgs` reads a tool's raw arguments as typed, clamped values and records every value it had to override, so a result can say `adjustments: [{ param: 'limit', requested: -4, used: 1, … }]` instead of silently answering a different question. Defaults belong in the tool description; the result echoes only overrides.
+
+`wiki-formant/corpus` is the arithmetic behind a `get_full_corpus` tool: a `sizeOnly` preflight with per-branch and largest-page breakdowns, then page-aligned slices under a `maxChars` budget (`CORPUS_BUDGET`) with `truncated`, `nextSkip` and `clippedPage`. The corpus itself — which rows, how a page becomes a section — is the wiki's; `sliceCorpus` takes the sections it builds.
+
 ## Conformance
 
 `wiki-formant/conformance` is the half of an MCP conformance run that is not about any one server's tools: a JSON-RPC client that backs off on a 429, the transport assertions (CORS preflight, `GET`→405, a notification answering 202 with no body, `-32700`, the batch cap, honest `capabilities`, version negotiation), version coherence across every descriptor a surface publishes, A2A card parity, conditional-GET and `robots` checks, and a pass/fail table with an exit code.
@@ -263,7 +269,7 @@ are unit-tested without a DOM.
 
 `wiki-formant/react` carries `'use client'`, and that is a module-level boundary: anything exported from it hydrates in the consumer's tree whether or not it uses a hook. `wiki-formant/react-server` is the same React, without the directive — for the parts of a wiki that are pure functions of their props and should ship no JavaScript at all.
 
-`FacetBar` renders the rows `createTaxonomy` already produces. This is why the taxonomy exports a rows model rather than markup: the rows could always cross the boundary and, until this subpath existed, the markup could not, so all three wikis hand-rendered it and two put `aria-pressed` on an `<a>`. `Breadcrumbs` renders the trail and its `BreadcrumbList` JSON-LD together, because a trail whose structured data is written somewhere else is a trail that will one day disagree with its own markup — which is the case Google penalises. It takes a `base` origin: structured-data URLs must be absolute and a package cannot know the site.
+`FacetBar` renders the rows `createTaxonomy` already produces. This is why the taxonomy exports a rows model rather than markup: the rows could always cross the boundary and, until this subpath existed, the markup could not, so all three wikis hand-rendered it and two put `aria-pressed` on an `<a>`. `Breadcrumbs` renders the trail and its `BreadcrumbList` JSON-LD together, because a trail whose structured data is written somewhere else is a trail that will one day disagree with its own markup — which is the case Google penalises. It takes a `base` origin: structured-data URLs must be absolute and a package cannot know the site. Its JSON-LD goes out through `JsonLd`, which is exported for every other payload a page emits: it re-encodes each `<` as `\u003c`, because these payloads carry authored titles and an authored `</script>` would otherwise close the tag.
 
 `PageNav` is the previous/next pair at the foot of an article — the sequential read the infobox rail's lateral links do not cover. Ordering is the caller's, because it is the one part that is never portable: a wiki's sequence is its section's configured sort, a knowledge base's is a taxonomy walk. Pair it with `adjacentPages` from `wiki-formant/pagination` over a list you already hold — neither wiki needs a query for it, and the two indexed lookups the neighbours used to cost were the reason one of them dropped the control.
 
@@ -318,10 +324,7 @@ between the copies; they differed only in what each had learned since.
 const diff = computeRevisionDiff({
   currentVersion: page.version,
   oldContent, newContent, oldTitle, newTitle,
-  containers: b =>
-    b.type === 'infobox' ? [{ path: 'blocks', blocks: b.blocks }]
-    : b.type === 'columns' ? b.columns.map((c, i) => ({ path: `columns.${i}.blocks`, blocks: c.blocks }))
-    : null,
+  // containers: defaults to coreBlockGroups — `columns.i.blocks` and an infobox's `blocks`
 });
 ```
 
@@ -330,9 +333,9 @@ const diff = computeRevisionDiff({
 - **Container keys are never diffed as attributes.** They are walked as their own
   entries, and comparing them here would report an infobox as edited every time
   anything inside it changed — turning a prose edit into a structural bump.
-- **The path segment is a parameter**, because `root.1.columns.0.blocks.2` is
-  what a reviewing UI anchors on and only the consumer knows how its containers
-  are addressed.
+- **The path segment is part of the contract**, because `root.1.columns.0.blocks.2`
+  is what a reviewing UI anchors on. A wiki with a container beyond the core two
+  passes its own `containers` and says how it is addressed.
 
 One copy also built two Maps keyed by a recursive `JSON.stringify` of every
 block, on every save, and never read either one. Matching is by id and always
@@ -383,6 +386,43 @@ const off = onTweetResize(h => sizeTweetEmbeds(el, h));
 
 `TWITTER_ORIGIN` is written down once. It is both the embed host and the allow-list `onTweetResize` checks before believing a posted height, and it had been spelled out at four call sites across two repos. Any page can `postMessage`; only the embed host may size the embed.
 
+## Block trees
+
+Every wiki here stores the same two containers the same way — `columns[i].blocks` and an infobox's `blocks` — and between them had hand-written that walk seven times. Bind it once and hand it to every walk:
+
+```ts
+import { coreBlockShape, leafBlocks, mapBlockTree } from 'wiki-formant/blocks';
+
+export const BLOCK_SHAPE = coreBlockShape<Block>();
+mapBlockTree(blocks, processLeaf, BLOCK_SHAPE);
+leafBlocks(blocks, BLOCK_SHAPE.containers);
+```
+
+`computeRevisionDiff` defaults to the same shape, path-addressed, so a repo whose containers are the core two passes none.
+
+The dispatch over a repo's own block union stays in that repo; the bodies come from here. `wiki-formant/text` has a prose body for every core leaf — `statsToText`, `linkGridToText` and `pageListToText` joined the originals when two of the three wikis turned out to extract nothing from them, so their MCP `get_page` answered a hub page as nearly empty.
+
+`createBlockValidator` returns `blockIssues` beside the boolean validators: the same walk, reporting where each failure is.
+
+```ts
+const issues = blockIssues(body.content);
+if (issues.length) return badRequest(`Invalid content: ${describeBlockIssues(issues)}`);
+// Invalid content: [2].columns[0].blocks[1]: malformed linkGrid block
+```
+
+## Sanitising stored HTML
+
+`wiki-formant/sanitize` is the allowlist between an author's saved HTML and a reader's browser. The block views render three HTML fields themselves, and a repo renders `content.text` beside them, so the guard ships with the renderer. `sanitize-html` is an optional peer; run it server-side, on the render path, so it covers rows written before it existed and no sanitiser ships to the client.
+
+```ts
+import { createHtmlSanitizer, sanitizeCoreLeaf } from 'wiki-formant/sanitize';
+
+const clean = createHtmlSanitizer({ iframeHosts: FRAME_HOSTS });   // pair with CSP frame-src
+const safe = mapBlockTree(blocks, b => sanitizeCoreLeaf(b, clean), BLOCK_SHAPE);
+```
+
+The default list is derived from what the editor nodes in `wiki-formant/tiptap` store — the embed wrappers' data attributes, the tab markup `activateTabGroups` reads back, the table classes — plus the presentational SVG subset the infographics pipeline embeds. Extend it with `tags` and `attributes` derived from your stored HTML, never from memory: a list written from memory erases content on the first render.
+
 ## Editor nodes
 
 `wiki-formant/tiptap` carries the custom nodes both wiki editors had written twice: `Iframe`, `YouTube` (the stock extension plus the paste rule it does not ship with), `TwitterEmbed`, `createMapEmbed`, `createCodeBlock` and `createTabs`. The four `@tiptap/*` packages are optional peers, so a consumer taking only the taxonomy still installs a package with no runtime dependencies.
@@ -398,6 +438,12 @@ const CodeBlock = createCodeBlock({
 The ones that take config take it because that is exactly where the two copies differed — class tokens, the language list, and the API route a shortened map URL has to be resolved through. Injecting them is what lets one wiki keep `text-jupiter` and the other `text-accent` without either forking the node, and it keeps this file from dragging an icon library in behind it.
 
 `createTabs` returns `TabGroup` and `TabItem` together: `tabGroup`'s content expression is `tabItem+`, so registering one without the other leaves a node type the schema cannot satisfy. A pasted short map link inserts immediately with `about:blank` and swaps its `src` when the redirect resolves — pasting must not block on a network hop, and the node has to exist for the reader to see anything happen.
+
+The redirect resolves through the wiki's own route, because the editor cannot read it cross-origin. `resolveMapUrl` is the client half and `resolveMapHandler` the whole route: exact shortener hosts, one hop, an allowlisted landing host, a timeout, and your sign-in check as `authorize`. One of the two copies it replaced matched `goo.gl` as a substring and followed every redirect for anyone who asked.
+
+```ts
+export const GET = resolveMapHandler({ authorize: async () => !!(await currentUser()) });
+```
 
 ## Analytics
 

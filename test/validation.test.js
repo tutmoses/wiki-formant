@@ -6,7 +6,10 @@ import {
   validateReferenceItems,
   validateLinkGroups,
   createBlockValidator,
+  describeBlockIssues,
   duplicateBlockIds,
+  validateCodeTabs,
+  validateStatItems,
 } from 'wiki-formant/validation';
 
 test('safe schemes pass, unsafe ones do not', () => {
@@ -107,4 +110,48 @@ test('duplicating an infobox refreshes its children too', () => {
 test('duplicating a leaf just changes its id', () => {
   const out = duplicateBlockIds({ id: 'a', type: 'content', text: 'keep' }, () => 'z');
   assert.deepEqual(out, { id: 'z', type: 'content', text: 'keep' });
+});
+
+test('blockIssues names the path and the reason for every failure', () => {
+  const { blockIssues, validateBlocks } = createBlockValidator({
+    isKnownType: t => ['content', 'columns', 'infobox', 'stats'].includes(t),
+    isAtomicType: t => t === 'content' || t === 'stats',
+    validateAtomic: b => (b.type === 'content' ? typeof b.text === 'string' : true),
+  });
+  const content = [
+    { id: 'a', type: 'content', text: 'ok' },
+    { id: 'b', type: 'columns', columns: [{ id: 'c', blocks: [{ id: 'd', type: 'content', text: 3 }] }] },
+    { id: 'e', type: 'infobox', blocks: [{ id: 'f', type: 'infobox', blocks: [] }] },
+    { type: 'nope' },
+  ];
+  assert.equal(validateBlocks(content), false);
+  assert.deepEqual(blockIssues(content), [
+    { path: '[1].columns[0].blocks[0]', reason: 'malformed content block' },
+    { path: '[2].blocks[0]', reason: 'a infobox block cannot sit inside a container' },
+    { path: '[3]', reason: '`id` must be a string' },
+    { path: '[3]', reason: 'unknown block type "nope"' },
+  ]);
+  assert.deepEqual(blockIssues('x'), [{ path: '', reason: 'content must be an array of blocks' }]);
+  assert.deepEqual(blockIssues([content[0]]), []);
+});
+
+test('describeBlockIssues shows the first few and counts the rest', () => {
+  const issues = [1, 2, 3, 4, 5].map(n => ({ path: `[${n}]`, reason: 'bad' }));
+  assert.equal(describeBlockIssues(issues, 2), '[1]: bad; [2]: bad (+3 more)');
+  assert.equal(describeBlockIssues([{ path: '', reason: 'not an array' }]), 'not an array');
+});
+
+test('code tabs and stat items are checked field by field, not just as arrays', () => {
+  assert.equal(validateCodeTabs([{ label: 'Rust', language: 'rust', code: '' }]), true);
+  assert.equal(validateCodeTabs([{ label: 'Rust' }]), false);
+  assert.equal(validateCodeTabs([{ label: 'Rust', code: '', language: 7 }]), false);
+  assert.equal(validateStatItems([{ id: 'x', value: 42, label: 'Users', suffix: '%' }, { value: '1M', label: 'TVL', suffix: null }]), true);
+  assert.equal(validateStatItems([{ value: {}, label: 'x' }]), false);
+  assert.equal(validateStatItems([{ value: 1 }]), false);
+});
+
+test('duplicateBlockIds mints UUIDs when no minter is passed', () => {
+  const copy = duplicateBlockIds({ id: 'a', type: 'infobox', blocks: [{ id: 'b', type: 'content' }] });
+  assert.match(copy.id, /^[0-9a-f-]{36}$/);
+  assert.notEqual(copy.blocks[0].id, 'b');
 });

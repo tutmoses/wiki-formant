@@ -1,8 +1,9 @@
 // maps.ts — turn a map URL a human pasted into one an <iframe> will accept.
 //
-// Both wikis carried this byte-for-byte apart from one `export` keyword. It is
-// pure string work over Google and Apple Maps URL shapes, with no framework or
-// database in it, which is why neither copy had a reason to diverge.
+// Both wikis carried the parsing byte-for-byte apart from one `export`
+// keyword. It is pure string work over Google and Apple Maps URL shapes. The
+// shortener hop at the bottom is the one part that makes a request, and the
+// part the two copies did NOT agree on.
 
 export interface MapCoords {
   lat: number;
@@ -78,6 +79,90 @@ export function toMapEmbedUrl(url: string): string | null {
   return null;
 }
 
-/** True for the shortener forms that only a redirect can resolve. */
-export const isShortMapUrl = (url: string): boolean =>
-  /maps\.app\.goo\.gl|goo\.gl\/maps/.test(url);
+// ---- shortened links ---------------------------------------------------------
+//
+// A `maps.app.goo.gl` link only resolves through a redirect, which the editor
+// cannot read cross-origin, so each wiki runs a route that follows it. One of
+// the two copies matched its host as a SUBSTRING — `https://evil.example/?goo.gl`
+// passed — then followed every redirect with no timeout and no login: an
+// anonymous fetcher for any URL. The other followed one hop, between exact
+// host lists, with a timeout, for signed-in members only. That one is below.
+
+const SHORTLINK_HOSTS = new Set(['goo.gl', 'maps.app.goo.gl']);
+/** Where a resolved shortlink may legitimately land. */
+const RESOLVED_HOST = /(^|\.)(google\.[a-z.]+|apple\.com)$/;
+
+const parse = (url: string, base?: URL): URL | null => {
+  try {
+    return new URL(url, base);
+  } catch {
+    return null;
+  }
+};
+
+/** True for the shortener forms only a redirect can resolve. Exact hostnames, never a substring. */
+export function isShortMapUrl(url: string): boolean {
+  const u = parse(url);
+  if (!u || !SHORTLINK_HOSTS.has(u.hostname)) return false;
+  return u.hostname === 'maps.app.goo.gl' || u.pathname.startsWith('/maps');
+}
+
+/**
+ * Follow a shortened maps link ONE hop, server-side, and return where it
+ * lands — or null unless both ends are on the allowlists. Never follows a
+ * redirect chain: every hop is a request to a host this code did not choose.
+ */
+export async function resolveShortMapUrl(
+  url: string,
+  { timeoutMs = 5_000 }: { timeoutMs?: number } = {},
+): Promise<string | null> {
+  const source = parse(url);
+  if (!source || source.protocol !== 'https:' || !isShortMapUrl(url)) return null;
+  try {
+    const res = await fetch(source, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) });
+    const location = res.headers.get('location');
+    const target = location ? parse(location, source) : null;
+    return target && target.protocol === 'https:' && RESOLVED_HOST.test(target.hostname) ? target.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The whole `GET /api/resolve-map?url=…` route. `authorize` is the wiki's own
+ * sign-in check: the route makes an outbound request per call, so it belongs
+ * behind the same gate as the editor that calls it.
+ */
+export function resolveMapHandler(opts: {
+  authorize: (request: Request) => boolean | Promise<boolean>;
+  timeoutMs?: number;
+}): (request: Request) => Promise<Response> {
+  return async request => {
+    if (!(await opts.authorize(request))) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    const url = new URL(request.url).searchParams.get('url') ?? '';
+    if (!url.startsWith('https:') || !isShortMapUrl(url)) {
+      return Response.json({ error: 'Invalid URL' }, { status: 400 });
+    }
+    const resolved = await resolveShortMapUrl(url, opts);
+    return resolved
+      ? Response.json({ resolved })
+      : Response.json({ error: 'Failed to resolve' }, { status: 502 });
+  };
+}
+
+/**
+ * A pasted map URL as an embeddable one, following a shortener through the
+ * wiki's resolve route when the URL cannot be read directly. The editor's map
+ * node and embed dialog both take this as their `resolveMapUrl`.
+ */
+export async function resolveMapUrl(url: string, endpoint = '/api/resolve-map'): Promise<string | null> {
+  const direct = toMapEmbedUrl(url);
+  if (direct || !isShortMapUrl(url)) return direct;
+  try {
+    const res = await fetch(`${endpoint}?url=${encodeURIComponent(url)}`);
+    const { resolved } = (await res.json()) as { resolved?: string };
+    return resolved ? toMapEmbedUrl(resolved) : null;
+  } catch {
+    return null;
+  }
+}

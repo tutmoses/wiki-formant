@@ -12,6 +12,8 @@
 // one of these strips good citations.
 
 import { stripTags } from './html.js';
+import { decodeEntities } from './markdown.js';
+import { coreBlockShape, leafBlocks } from './blocks.js';
 
 export interface Probe {
   url: string;
@@ -269,6 +271,69 @@ export function extractEmbeds(html: string): Array<{ kind: string; url: string }
   const out: Array<{ kind: string; url: string }> = [];
   for (const m of html.matchAll(EMBED_RE)) {
     if (m[1] && m[2]) out.push({ kind: m[1].toLowerCase(), url: m[2] });
+  }
+  return out;
+}
+
+// ---- every link a page holds -------------------------------------------------
+
+/** What a page links to, split the way a checker probes it. */
+export interface BlockLinks {
+  /** Absolute http(s) targets. */
+  external: string[];
+  /** Site-relative paths, fragment and trailing slash dropped. `/` stays `/`. */
+  internal: string[];
+  /** `<iframe>` and `<img>` sources. */
+  embeds: Array<{ kind: string; url: string }>;
+}
+
+type Leaf = Record<string, unknown> & { type: string };
+const records = (v: unknown): Record<string, unknown>[] =>
+  Array.isArray(v) ? v.filter((x): x is Record<string, unknown> => !!x && typeof x === 'object') : [];
+const text = (v: unknown): string => (typeof v === 'string' ? v : '');
+
+/**
+ * Every link in a block tree, from every core type that carries one.
+ *
+ * The two checkers that walked this had each fixed a bug the other still had.
+ * One read reference URLs, which live in `items[].url` and never in an anchor;
+ * the other missed every citation. The other decoded `&amp;` before probing —
+ * a stored href is an attribute, and probing it raw turns query-sensitive APIs
+ * into false failures — and stopped a bare `/` collapsing to `''`, the
+ * homepage reported broken. Neither read link-grid hrefs. This does all four.
+ */
+export function collectBlockLinks<B extends { type: string }>(
+  blocks: readonly B[],
+  containers: (block: B) => B[][] | null = coreBlockShape<B>().containers,
+): BlockLinks {
+  const out: BlockLinks = { external: [], internal: [], embeds: [] };
+  const href = (raw: string): void => {
+    const url = decodeEntities(raw).trim();
+    if (/^https?:\/\//i.test(url)) out.external.push(url);
+    else if (url.startsWith('/') && !url.startsWith('//')) out.internal.push(url.split('#')[0]!.replace(/(.)\/+$/, '$1'));
+  };
+  const html = (fragment: string): void => {
+    for (const link of extractLinks(fragment)) href(link.href);
+    for (const embed of extractEmbeds(fragment)) {
+      const url = decodeEntities(embed.url).trim();
+      if (/^https?:\/\//i.test(url)) out.embeds.push({ kind: embed.kind, url });
+    }
+  };
+
+  for (const block of leafBlocks(blocks, containers) as unknown as Leaf[]) {
+    if (block.type === 'content') html(text(block.text));
+    if (block.type === 'references') {
+      for (const item of records(block.items)) {
+        html(text(item.text));
+        if (text(item.url)) href(text(item.url));
+      }
+    }
+    if (block.type === 'linkGrid') {
+      for (const group of records(block.groups)) {
+        html(text(group.description));
+        for (const link of records(group.links)) if (text(link.href)) href(text(link.href));
+      }
+    }
   }
   return out;
 }
