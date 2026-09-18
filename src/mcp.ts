@@ -281,27 +281,37 @@ export interface ArgAdjustment {
  */
 export function readArgs(raw: Record<string, unknown>) {
   const adjustments: ArgAdjustment[] = [];
+  // A numeric string is read as its number without comment — the transport
+  // accepts them, and parsing is not overriding what the caller asked for.
+  const number = <D extends number | null>(name: string, def: D, min: number, max: number, whole: boolean): number | D => {
+    const value = raw[name];
+    if (value === undefined || value === null || value === '') return def;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+      adjustments.push({ param: name, requested: value, used: def, reason: 'not a number' });
+      return def;
+    }
+    const clamped = Math.min(max, Math.max(min, whole ? Math.trunc(parsed) : parsed));
+    if (clamped !== parsed) {
+      adjustments.push({
+        param: name,
+        requested: value,
+        used: clamped,
+        reason: `must be a ${whole ? 'whole number' : 'number'} between ${min} and ${max}`,
+      });
+    }
+    return clamped;
+  };
   return {
     adjustments,
     note(a: ArgAdjustment): void {
       adjustments.push(a);
     },
     /** A whole number in `[min, max]`; `def` when absent or not a number at all. */
-    num(name: string, def: number, min: number, max: number): number {
-      const value = raw[name];
-      if (value === undefined || value === null || value === '') return def;
-      const parsed = Number(value);
-      if (!Number.isFinite(parsed)) {
-        adjustments.push({ param: name, requested: value, used: def, reason: 'not a number' });
-        return def;
-      }
-      if (typeof value !== 'number') adjustments.push({ param: name, requested: value, used: parsed, reason: 'parsed numeric string' });
-      const clamped = Math.min(max, Math.max(min, Math.trunc(parsed)));
-      if (clamped !== parsed) {
-        adjustments.push({ param: name, requested: parsed, used: clamped, reason: `must be a whole number between ${min} and ${max}` });
-      }
-      return clamped;
-    },
+    num: (name: string, def: number, min: number, max: number): number => number(name, def, min, max, true),
+    /** Any number in `[min, max]` — an age that is a cohort mean, a price; `def` (often null) when absent. */
+    decimal: <D extends number | null>(name: string, def: D, min: number, max: number): number | D =>
+      number(name, def, min, max, false),
     /** Trimmed text; `def` when absent. */
     str(name: string, def = ''): string {
       const value = raw[name];

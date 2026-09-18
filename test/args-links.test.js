@@ -4,18 +4,22 @@ import { readArgs, withAdjustments } from 'wiki-formant/mcp';
 import { collectBlockLinks } from 'wiki-formant/link-check';
 
 test('readArgs clamps, parses, and records only what it overrode', () => {
-  const r = readArgs({ limit: -4, page: '3', size: 'lots', q: '  cerberus ', tags: ['a', 7, 'b'], on: 'true' });
+  const r = readArgs({ limit: -4, page: '3', size: 'lots', half: '2.5', age: 35.5, q: '  cerberus ', tags: ['a', 7, 'b'], on: 'true' });
   assert.equal(r.num('limit', 12, 1, 50), 1);
   assert.equal(r.num('page', 1, 1, 100), 3);
   assert.equal(r.num('size', 20, 1, 50), 20);
+  assert.equal(r.num('half', 1, 1, 9), 2);
   assert.equal(r.num('absent', 5, 1, 9), 5);
+  assert.equal(r.decimal('age', null, 0, 130), 35.5);
+  assert.equal(r.decimal('none', null, 0, 130), null);
   assert.equal(r.str('q'), 'cerberus');
   assert.deepEqual(r.list('tags'), ['a', 'b']);
   assert.equal(r.bool('on'), false);
-  assert.deepEqual(r.adjustments.map(a => [a.param, a.reason]), [
-    ['limit', 'must be a whole number between 1 and 50'],
-    ['page', 'parsed numeric string'],
-    ['size', 'not a number'],
+  // A numeric string used as sent is not an override, so it is not reported.
+  assert.deepEqual(r.adjustments.map(a => [a.param, a.used, a.reason]), [
+    ['limit', 1, 'must be a whole number between 1 and 50'],
+    ['size', 20, 'not a number'],
+    ['half', 2, 'must be a whole number between 1 and 9'],
   ]);
   assert.deepEqual(withAdjustments(readArgs({}), { ok: true }), { ok: true });
   assert.equal(withAdjustments(r, { ok: true }).adjustments.length, 3);
