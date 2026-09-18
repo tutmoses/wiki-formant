@@ -38,8 +38,17 @@ export function notModified(
   request: Request,
   etag: string,
   lastModified?: string | null,
+  /**
+   * The headers the 200 would carry. RFC 9110 15.4.5 requires a 304 to send
+   * the Cache-Control and Vary a 200 would have, and a cross-origin client
+   * needs the CORS header on it too; without them a revalidated copy loses its
+   * freshness and a negotiated URL loses its Vary. The body's own headers
+   * (Content-Type, Content-Length) are dropped.
+   */
+  sent: Record<string, string> = {},
 ): Response | null {
   const headers: Record<string, string> = {
+    ...Object.fromEntries(Object.entries(sent).filter(([k]) => !/^content-(type|length)$/i.test(k))),
     ETag: etag,
     ...(lastModified ? { 'Last-Modified': lastModified } : {}),
   };
@@ -187,7 +196,8 @@ export function descriptorResponse(
 ): Response {
   const text = JSON.stringify(body);
   const etag = corpusEtag([text]);
-  return notModified(request, etag) ?? new Response(text, { headers: descriptorHeaders(etag, opts) });
+  const sent = descriptorHeaders(etag, opts);
+  return notModified(request, etag, null, sent) ?? new Response(text, { headers: sent });
 }
 
 /** Strip URLs and collapse whitespace so an excerpt stays one readable line. */
@@ -242,9 +252,7 @@ export function corpusRoute(
 ): (request: Request) => Promise<Response> {
   return async (request: Request) => {
     const { etag, lastModified } = await validators();
-    return (
-      notModified(request, etag, lastModified) ??
-      new Response(await build(), { headers: headers(etag, lastModified) })
-    );
+    const sent = headers(etag, lastModified);
+    return notModified(request, etag, lastModified, sent) ?? new Response(await build(), { headers: sent });
   };
 }

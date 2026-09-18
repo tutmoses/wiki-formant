@@ -105,3 +105,20 @@ test('one input sets canonical, twin, Open Graph and the Twitter card together',
   assert.equal('alternates' in unplaced, false);
   assert.equal('url' in unplaced.openGraph, false);
 });
+
+test('a 304 carries the Cache-Control, Vary and CORS headers its 200 would', async () => {
+  const { notModified } = await import('wiki-formant/http');
+  const sent = { 'Content-Type': 'text/markdown', 'Cache-Control': 'public, s-maxage=60', Vary: 'Accept', 'Access-Control-Allow-Origin': '*' };
+  const res = notModified(new Request('https://w.test/a', { headers: { 'If-None-Match': 'W/"x"' } }), 'W/"x"', null, sent);
+  assert.equal(res.status, 304);
+  assert.equal(res.headers.get('vary'), 'Accept');
+  assert.equal(res.headers.get('cache-control'), 'public, s-maxage=60');
+  assert.equal(res.headers.get('access-control-allow-origin'), '*');
+  assert.equal(res.headers.get('content-type'), null);
+  const d = descriptorHandler({ a: 1 }, { extra: { 'Access-Control-Allow-Origin': '*' } });
+  const etag = d(new Request('https://w.test/x')).headers.get('etag');
+  const cached = d(new Request('https://w.test/x', { headers: { 'If-None-Match': etag } }));
+  assert.equal(cached.status, 304);
+  assert.match(cached.headers.get('cache-control'), /max-age=300/);
+  assert.equal(cached.headers.get('access-control-allow-origin'), '*');
+});
