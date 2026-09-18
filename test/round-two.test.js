@@ -100,4 +100,8 @@ test('one input sets canonical, twin, Open Graph and the Twitter card together',
   const bare = pageMetadata({ title: 'T', url: 'https://w.test/b' });
   assert.equal('images' in bare.openGraph, false);
   assert.deepEqual(bare.alternates, { canonical: 'https://w.test/b' });
+  // No url, no canonical: a wrong one is worse than none.
+  const unplaced = pageMetadata({ title: 'T' });
+  assert.equal('alternates' in unplaced, false);
+  assert.equal('url' in unplaced.openGraph, false);
 });

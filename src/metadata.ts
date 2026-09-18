@@ -22,8 +22,8 @@ export interface PageMetadataOptions {
   /** The social title. */
   title: string;
   description?: string;
-  /** Absolute canonical URL. */
-  url: string;
+  /** Absolute canonical URL. Omit on a page that should not declare one (a layout default). */
+  url?: string;
   type?: 'website' | 'article';
   /** Absolute URL of a 1200×630 card. Omit to let a file-convention `opengraph-image` supply it. */
   image?: string;
@@ -47,15 +47,19 @@ export function pageMetadata(o: PageMetadataOptions) {
   const { title, description, url, type = 'website', image, siteName, locale, handle, markdownTwin, article } = o;
   const images = image ? [{ url: image, width: 1200, height: 630, alt: o.imageAlt ?? title }] : undefined;
   return {
-    alternates: {
-      canonical: url,
-      ...(markdownTwin ? { types: { 'text/markdown': `${url}.md` } } : {}),
-    },
+    ...(url
+      ? {
+          alternates: {
+            canonical: url,
+            ...(markdownTwin ? { types: { 'text/markdown': `${url}.md` } } : {}),
+          },
+        }
+      : {}),
     openGraph: {
       type,
       title,
       ...(description ? { description } : {}),
-      url,
+      ...(url ? { url } : {}),
       ...(siteName ? { siteName } : {}),
       ...(locale ? { locale } : {}),
       ...(images ? { images } : {}),
