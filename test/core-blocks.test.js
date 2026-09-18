@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { coreBlockGroups, coreBlockShape, leafBlocks, mapBlockTree, renderBlockTree } from 'wiki-formant/blocks';
+import { coreBlockGroups, coreBlockShape, leafBlocks, mapBlockTree, mapBlockTreeAsync, renderBlockTree } from 'wiki-formant/blocks';
 import { computeRevisionDiff } from 'wiki-formant/revisions';
 import { linkGridToText, pageListToText, statsToText } from 'wiki-formant/text';
 
@@ -46,4 +46,19 @@ test('stats, link grids and page lists have prose bodies', () => {
     'Intro\n\nDocs\nStart here\n- Guide (/guide)',
   );
   assert.equal(pageListToText([{ title: 'A' }, { title: 'B' }]), 'A\nB');
+});
+
+test('every walk reaches a container nested inside another', () => {
+  const nested = [{ id: 'i', type: 'infobox', blocks: [{ id: 'c', type: 'columns', columns: [{ id: 'l', blocks: [leaf('x', 'deep')] }] }] }];
+  const seen = [];
+  const out = mapBlockTree(nested, b => { seen.push(b.type); return { ...b, text: 'DEEP' }; }, shape);
+  assert.deepEqual(seen, ['content']);
+  assert.equal(out[0].blocks[0].columns[0].blocks[0].text, 'DEEP');
+  assert.equal(renderBlockTree(nested, { atomic: b => b.text ?? '', containers: shape.containers }), 'deep');
+});
+
+test('the async walk recurses too', async () => {
+  const nested = [{ id: 'i', type: 'infobox', blocks: [{ id: 'c', type: 'columns', columns: [{ id: 'l', blocks: [leaf('x', 'deep')] }] }] }];
+  const out = await mapBlockTreeAsync(nested, async b => ({ ...b, text: b.text.toUpperCase() }), shape);
+  assert.equal(out[0].blocks[0].columns[0].blocks[0].text, 'DEEP');
 });

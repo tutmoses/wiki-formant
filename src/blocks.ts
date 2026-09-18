@@ -70,15 +70,16 @@ export interface BlockTreeOptions<B> {
  */
 export function renderBlockTree<B>(blocks: readonly B[], opts: BlockTreeOptions<B>): string {
   const { atomic, containers, groupSeparator = '\n\n' } = opts;
+  const render = (block: B): string => {
+    const groups = containers?.(block);
+    if (!groups) return atomic(block);
+    return groups
+      .map(group => group.map(render).filter(Boolean).join(groupSeparator))
+      .filter(Boolean)
+      .join(groupSeparator);
+  };
   return blocks
-    .map(block => {
-      const groups = containers?.(block);
-      if (!groups) return atomic(block);
-      return groups
-        .map(group => group.map(atomic).filter(Boolean).join(groupSeparator))
-        .filter(Boolean)
-        .join(groupSeparator);
-    })
+    .map(render)
     .filter(Boolean)
     .join('\n\n')
     .replace(/\n{3,}/g, '\n\n')
@@ -163,13 +164,18 @@ export function leafBlocks<B>(blocks: readonly B[], containers: (block: B) => B[
 }
 
 /**
- * Every block in the tree, transformed, with the tree's shape preserved.
+ * Every leaf in the tree, transformed, with the tree's shape preserved.
  *
  * The three-branch walk this replaces — columns to `columns[].blocks`, infobox
  * to `.blocks`, everything else atomic — was written by hand for heading
  * injection, syntax highlighting, server-side data resolution, feed rendering
  * and twice more besides. Each copy was correct and each had to be found again
  * whenever a container type was added.
+ *
+ * It recurses, so `map` only ever sees leaves, however deep. It used to stop
+ * one level down and hand a nested container to `map` as if it were a leaf —
+ * harmless while every validator here rejects nesting, and a hole the moment a
+ * sanitising pass is the thing being mapped.
  */
 export function mapBlockTree<B>(
   blocks: readonly B[],
@@ -179,7 +185,7 @@ export function mapBlockTree<B>(
   return blocks.map(block => {
     const groups = shape.containers(block);
     if (!groups) return map(block);
-    return shape.rebuild(block, groups.map(group => group.map(map)));
+    return shape.rebuild(block, groups.map(group => mapBlockTree(group, map, shape)));
   });
 }
 
@@ -193,7 +199,7 @@ export async function mapBlockTreeAsync<B>(
     blocks.map(async block => {
       const groups = shape.containers(block);
       if (!groups) return map(block);
-      const mapped = await Promise.all(groups.map(group => Promise.all(group.map(map))));
+      const mapped = await Promise.all(groups.map(group => mapBlockTreeAsync(group, map, shape)));
       return shape.rebuild(block, mapped);
     }),
   );
