@@ -25,6 +25,7 @@ import { Anchor } from './react-server.js';
 import type { WikiLinkComponent } from './react-server.js';
 import { safeLinkHref } from './validation.js';
 import { cx } from './html.js';
+import { BANNER_LABELS, bannerVariant } from './text.js';
 
 
 // ---- codeTabs ---------------------------------------------------------------
@@ -242,29 +243,30 @@ export function StatsView({
 /**
  * A maintenance notice.
  *
- * The label and the fallback message arrive as `meta` because they are this
- * wiki's editorial voice — "You can help RADIX Wiki by expanding it" has a name
- * in it. The markup, the `role="note"` and the variant class are shared, and
- * were identical in both repos. `icon` is optional: one wiki sets one, and a
- * component library that hardcoded an icon set would make its consumers install
- * that icon set.
+ * The label is `BANNER_LABELS`, looked up here: three renderers each did the
+ * unknown-variant fallback and the lookup, and one restated all six labels.
+ * The fallback `message` arrives as a prop because it is the wiki's editorial
+ * voice — "You can help RADIX Wiki by expanding it" has a name in it. `icon`
+ * is optional: a component library that hardcoded an icon set would make its
+ * consumers install that icon set.
  */
 export function BannerView({
   variant,
   text,
-  meta,
+  message,
   icon,
 }: {
   variant: string;
   text?: string | null;
-  meta: { label: string; message: string };
+  message: string;
   icon?: ReactNode;
 }) {
+  const known = bannerVariant(variant);
   return (
-    <div className={cx('editorial-banner', `editorial-banner-${variant}`)} role="note">
+    <div className={cx('editorial-banner', `editorial-banner-${known}`)} role="note">
       {icon}
       <p className="editorial-banner-body">
-        <strong>{meta.label}.</strong> {text?.trim() || meta.message}
+        <strong>{BANNER_LABELS[known]}.</strong> {text?.trim() || message}
       </p>
     </div>
   );

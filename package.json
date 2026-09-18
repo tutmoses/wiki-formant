@@ -1,6 +1,6 @@
 {
   "name": "wiki-formant",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "description": "The portable half of a wiki: derived taxonomy and facet controls, a version-negotiating MCP transport, markdown twins, block rendering, a rich-text editor engine, and conditional-GET plumbing.",
   "type": "module",
   "license": "MIT",
@@ -167,6 +167,10 @@
     "./corpus": {
       "types": "./dist/corpus.d.ts",
       "import": "./dist/corpus.js"
+    },
+    "./metadata": {
+      "types": "./dist/metadata.d.ts",
+      "import": "./dist/metadata.js"
     }
   },
   "bin": {
@@ -223,7 +227,8 @@
     "@tiptap/starter-kit": ">=2.10",
     "jose": ">=5",
     "react": ">=18",
-    "sanitize-html": ">=2"
+    "sanitize-html": ">=2",
+    "@tiptap/pm": ">=2.10"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -272,6 +277,9 @@
       "optional": true
     },
     "sanitize-html": {
+      "optional": true
+    },
+    "@tiptap/pm": {
       "optional": true
     }
   }

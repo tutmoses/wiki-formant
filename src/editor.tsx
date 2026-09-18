@@ -193,6 +193,29 @@ export type ActiveDescriptor = string | [string, Record<string, unknown>];
 
 // ---- the editor -------------------------------------------------------------
 
+/**
+ * An `uploadImage` that POSTs the file as `file` form data and reads `{ url }`
+ * back. Two editors carried it character for character, `alert` included.
+ */
+export function uploadImageTo(endpoint: string): (file: File) => Promise<string | null> {
+  return async file => {
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const res = await fetch(endpoint, { method: 'POST', body: form });
+      const body = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok) {
+        alert(body.error || 'Upload failed');
+        return null;
+      }
+      return body.url ?? null;
+    } catch {
+      alert('Upload failed');
+      return null;
+    }
+  };
+}
+
 export interface WikiEditorOptions {
   value: string;
   onChange: (html: string) => void;

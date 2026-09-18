@@ -222,7 +222,9 @@ export async function probeYouTube(
 
 /** An external anchor, with a video treated as a video. */
 export async function probeExternal(url: string, opts: ProbeOptions = {}): Promise<Probe & { videoId?: string }> {
-  const yt = url.match(YOUTUBE_WATCH);
+  // Watch and embed URLs alike: an /embed/ page answers 200 for a deleted
+  // video, so a checker that probed embeds as plain URLs never saw one die.
+  const yt = url.match(YOUTUBE_WATCH) ?? url.match(YOUTUBE_EMBED);
   if (yt?.[1]) return { url, videoId: yt[1], ...(await probeYouTube(yt[1], opts)) };
   return probeUrl(url, opts);
 }

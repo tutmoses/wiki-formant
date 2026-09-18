@@ -65,6 +65,32 @@ export function searchTsvSql(content = 'content', title = 'title'): string {
 }
 
 /**
+ * The statements that (re)build a table's `search_tsv` column and its GIN index.
+ * Run `column` inside one transaction: DROP then ADD, so no reader ever sees
+ * the table without it; then `index`.
+ *
+ * Rebuilt unconditionally rather than skipped when the column exists. A skip
+ * is idempotent about the column and blind to its EXPRESSION: a changed prose
+ * expression re-runs clean and changes nothing, and Postgres normalises the
+ * stored expression, so comparing it to this string would only produce false
+ * rebuilds. The column is derived from `content`, so dropping it loses nothing.
+ * Run it BEFORE declaring the column in a Prisma schema: `prisma db push` reads
+ * a generated column it does not know about as drift and drops it.
+ */
+export function searchTsvDdl(
+  table: string,
+  { content = 'content', title = 'title' }: { content?: string; title?: string } = {},
+): { column: string[]; index: string } {
+  return {
+    column: [
+      `ALTER TABLE ${table} DROP COLUMN IF EXISTS search_tsv`,
+      `ALTER TABLE ${table} ADD COLUMN search_tsv tsvector GENERATED ALWAYS AS (${searchTsvSql(content, title)}) STORED`,
+    ],
+    index: `CREATE INDEX IF NOT EXISTS ${table}_search_tsv_idx ON ${table} USING GIN (search_tsv)`,
+  };
+}
+
+/**
  * `ts_headline` options for a search result snippet: one fragment, wide enough
  * to read as a sentence, with no highlight markers (the caller styles it).
  */

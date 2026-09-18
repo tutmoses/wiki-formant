@@ -10,6 +10,11 @@
 // wraps them in whatever its router wants. That keeps this package free of a
 // Next dependency and keeps each app's route a two-liner.
 
+import type { License } from './license.js';
+import { MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSIONS } from './mcp.js';
+import { MCP_RATE_LIMIT_TEXT } from './rate-limit.js';
+import { descriptorResponse } from './http.js';
+
 // ---- MCP registry domain proof ---------------------------------------------
 
 export interface RegistryAuthRecord {
@@ -85,13 +90,6 @@ export function skillsFromTools(tools: readonly SkillSource[]): AgentSkill[] {
     }));
 }
 
-export interface AgentCardLicense {
-  name: string;
-  url: string;
-  spdx?: string;
-  /** What the licence covers, e.g. `'content'`. */
-  scope?: string;
-}
 
 /**
  * The A2A revision these cards are written to. Required since v0.3 — a card
@@ -107,7 +105,10 @@ export interface AgentCardConfig {
   url: string;
   version: string;
   skills: AgentSkill[];
-  license?: AgentCardLicense;
+  /** The grant, as `ccBy40()` builds it. Projected once here, not per repo. */
+  license?: License;
+  /** What the grant covers, e.g. `'content'`, or which half of the site. */
+  licenseScope?: string;
   /** Defaults to `name`. */
   organization?: string;
   /** Defaults to `${url}/llms.txt`. */
@@ -126,7 +127,7 @@ export interface AgentCardConfig {
  * means half the callers conclude the origin has no agent at all.
  */
 export function agentCard(config: AgentCardConfig): Record<string, unknown> {
-  const { name, description, url, version, skills, license, organization, documentationUrl, mcpEndpoint, extra } = config;
+  const { name, description, url, version, skills, license, licenseScope, organization, documentationUrl, mcpEndpoint, extra } = config;
   const endpoint = mcpEndpoint === null ? url : (mcpEndpoint ?? `${url}/api/mcp`);
   return {
     protocolVersion: A2A_PROTOCOL_VERSION,
@@ -145,7 +146,14 @@ export function agentCard(config: AgentCardConfig): Record<string, unknown> {
     provider: { organization: organization ?? name, url },
     documentationUrl: documentationUrl ?? `${url}/llms.txt`,
     ...(mcpEndpoint === null ? {} : { mcpEndpoint: endpoint }),
-    ...(license ? { license } : {}),
+    // The same two discovery URLs on every card. The three cards here named the
+    // spec `apiSpecUrl`, `apiSpecUrl` and `openapiUrl`, and one omitted the
+    // server card, so a client reading one card could not read the next.
+    apiSpecUrl: `${url}/.well-known/openapi.json`,
+    ...(mcpEndpoint === null ? {} : { mcpServerCard: `${endpoint}/server-card` }),
+    ...(license
+      ? { license: { name: license.name, spdx: license.spdx, url: license.url, ...(licenseScope ? { scope: licenseScope } : {}) } }
+      : {}),
     ...extra,
     defaultInputModes: ['text/plain', 'application/json'],
     defaultOutputModes: ['text/plain', 'application/json', 'text/markdown'],
@@ -231,3 +239,83 @@ export function registryAuthHandler(
     });
   };
 }
+
+// ---- MCP discovery manifest --------------------------------------------------
+
+/** A tool as `/.well-known/mcp.json` lists it: what tools/list says, no handler. */
+export interface ManifestTool {
+  name: string;
+  title?: string;
+  description: string;
+  inputSchema: unknown;
+  annotations?: unknown;
+}
+
+export interface McpManifestConfig {
+  /** The server's display name. */
+  name: string;
+  /** Its registry name, from server.json. */
+  registryName: string;
+  version: string;
+  description: string;
+  /** Origin, no trailing slash. */
+  url: string;
+  /** Who runs it. Defaults to `name`. */
+  provider?: string;
+  tools: readonly ManifestTool[];
+  /** Auth notes, per-tenant endpoints, payment terms — what this origin has that others do not. */
+  extra?: Record<string, unknown>;
+}
+
+/**
+ * `/.well-known/mcp.json`: the third path an arriving agent probes, after the
+ * agent card and the OpenAPI spec. All three origins wrote the same envelope,
+ * and one had already dropped the tool titles the other two listed. The
+ * protocol versions and the rate limit come from the transport that answers,
+ * so the manifest cannot advertise a version the server does not speak.
+ */
+export function mcpManifest(config: McpManifestConfig): Record<string, unknown> {
+  const { name, registryName, version, description, url, provider, tools, extra } = config;
+  return {
+    schema_version: '1.0',
+    name,
+    registryName,
+    version,
+    description,
+    url,
+    provider: { name: provider ?? name, url },
+    api: { type: 'openapi', url: `${url}/.well-known/openapi.json` },
+    mcp: {
+      endpoint: `${url}/api/mcp`,
+      transport: 'streamable-http',
+      protocol: 'JSON-RPC 2.0',
+      protocolVersion: MCP_PROTOCOL_VERSION,
+      supportedProtocolVersions: MCP_PROTOCOL_VERSIONS,
+      rateLimit: MCP_RATE_LIMIT_TEXT,
+    },
+    ...extra,
+    tools: tools.map(({ name, title, description, inputSchema, annotations }) => ({
+      name,
+      ...(title ? { title } : {}),
+      description,
+      inputSchema,
+      ...(annotations ? { annotations } : {}),
+    })),
+  };
+}
+
+/**
+ * A GET handler serving a descriptor built from code: ETag, 304, freshness.
+ * The agent cards, the manifest and the server card were each a three-line
+ * route around `descriptorResponse`, written out nine times.
+ */
+export function descriptorHandler(
+  body: unknown,
+  opts: { maxAge?: number; extra?: Record<string, string> } = {},
+): (request: Request) => Response {
+  return request => descriptorResponse(request, body, opts);
+}
+
+/** The whole `<mcp-url>/server-card` route, projected from server.json. */
+export const serverCardHandler = (manifest: ServerManifest): ((request: Request) => Response) =>
+  descriptorHandler(serverCard(manifest, MCP_PROTOCOL_VERSIONS));

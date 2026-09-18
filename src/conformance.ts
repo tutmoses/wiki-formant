@@ -512,7 +512,17 @@ export async function conditionalGetChecks(t: Tester, paths: readonly string[]):
  * document moving, which is worse than none. The body-derived ETag is the whole
  * validator, and it is enough.
  */
-export async function descriptorChecks(t: Tester, paths: readonly string[]): Promise<void> {
+/** The JSON descriptors every S10 origin serves: the two agent-card paths, the OpenAPI pair, the MCP manifest and the server card. */
+export const S10_DESCRIPTORS: readonly string[] = [
+  '.well-known/agent-card.json',
+  '.well-known/agent.json',
+  '.well-known/openapi.json',
+  'openapi.json',
+  '.well-known/mcp.json',
+  'api/mcp/server-card',
+];
+
+export async function descriptorChecks(t: Tester, paths: readonly string[] = S10_DESCRIPTORS): Promise<void> {
   for (const path of paths) {
     const url = path.startsWith('http') ? path : `${t.base}/${path.replace(/^\//, '')}`;
     const label = path.replace(t.base, '');
@@ -533,6 +543,22 @@ export async function descriptorChecks(t: Tester, paths: readonly string[]): Pro
       `cache-control: ${fresh.headers.get('cache-control')}`,
     );
   }
+}
+
+/**
+ * Documents that project one corpus at different depths carry different ETags.
+ *
+ * Depths sharing a validator pass every conditional-GET check and still never
+ * move when only one of them changes. Every one must also HAVE an ETag: a Set
+ * of three nulls is size one and fails, but one null among two tags would pass
+ * a size check alone — the copy of this check one repo carried had exactly
+ * that hole.
+ */
+export async function distinctEtagChecks(t: Tester, paths: readonly string[], label = 'llms depths have distinct ETags'): Promise<void> {
+  const tags = await Promise.all(
+    paths.map(p => fetch(`${t.base}/${p.replace(/^\//, '')}`).then(r => r.headers.get('etag'))),
+  );
+  t.check(label, tags.every(Boolean) && new Set(tags).size === paths.length, tags.join(' '));
 }
 
 /**

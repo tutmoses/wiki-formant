@@ -62,6 +62,11 @@ export const BANNER_VARIANTS: ReadonlyArray<{ value: BannerVariant; label: strin
     label: BANNER_LABELS[value],
   }));
 
+/** A stored variant this package knows, or `cleanup` for one it does not. */
+export function bannerVariant(variant: string): BannerVariant {
+  return Object.hasOwn(BANNER_LABELS, variant) ? (variant as BannerVariant) : 'cleanup';
+}
+
 /** A maintenance notice, inline: `[Notice: Needs citations] …`. */
 export function bannerToText(label: string, text?: string | null): string {
   return `[Notice: ${label}]${text ? ' ' + stripHtml(text) : ''}`;

@@ -50,7 +50,11 @@ test('BUG: a named group always carries a disallow', () => {
     assert.ok(rule.disallow, `${rule.userAgent} has no disallow`);
   }
   assert.equal(rules.length, AI_CRAWLERS.length + 1);
-  assert.deepEqual(rules[1], { userAgent: 'GPTBot', allow: ['/', '/llms.txt'], disallow: ['/api/'] });
+  assert.deepEqual(rules[1], {
+    userAgent: 'GPTBot',
+    allow: ['/', '/llms.txt', '/api/mcp', '/llms-index.txt', '/llms-full.txt', '/openapi.json', '/.well-known/'],
+    disallow: ['/api/'],
+  });
 });
 
 test('the default group can reach everything the descriptors advertise', () => {

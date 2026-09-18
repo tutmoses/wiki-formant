@@ -65,6 +65,8 @@ export interface FacetBarClassNames {
   label?: string;
   control?: string;
   controlActive?: string;
+  /** Set it and each count is its own `<span>` with this class, not ` (n)` text. */
+  count?: string;
 }
 
 export interface FacetBarProps {
@@ -73,6 +75,8 @@ export interface FacetBarProps {
   letters: Control[];
   /** The label on the A–Z row. */
   alphaLabel?: string;
+  /** Lead with the A–Z row: two lines against a facet block's twenty. */
+  alphaFirst?: boolean;
   classNames?: FacetBarClassNames;
 }
 
@@ -91,6 +95,7 @@ export function FacetBar({
   facets,
   letters,
   alphaLabel = 'A–Z',
+  alphaFirst = false,
   classNames = {},
 }: FacetBarProps) {
   if (!facets.length && !letters.length) return null;
@@ -101,43 +106,47 @@ export function FacetBar({
     label = 'form-label',
     control = 'tag',
     controlActive = 'tag tag-removable',
+    count,
   } = classNames;
 
-  return (
-    <div className={root}>
-      {facets.map(facet => (
-        <div key={facet.key} className={row}>
-          <span className={label}>{facet.label}</span>
-          {facet.options.map(option => (
-            <Link
-              key={option.value}
-              href={option.href}
-              className={option.active ? controlActive : control}
-              aria-current={option.active ? 'true' : undefined}
-            >
-              {option.value} ({option.count})
-            </Link>
-          ))}
-        </div>
-      ))}
+  const chip = (c: { key: string; href: string; active: boolean; text: string; n: number; title?: string }) => (
+    <Link
+      key={c.key}
+      href={c.href}
+      className={c.active ? controlActive : control}
+      aria-current={c.active ? 'true' : undefined}
+      {...(c.title ? { title: c.title } : {})}
+    >
+      {c.text}
+      {count ? <span className={count}>{c.n}</span> : ` (${c.n})`}
+    </Link>
+  );
 
-      {letters.length > 0 && (
-        <div className={row}>
-          <span className={label}>{alphaLabel}</span>
-          {letters.map(letter => (
-            <Link
-              key={letter.value || 'all'}
-              href={letter.href}
-              className={letter.active ? controlActive : control}
-              aria-current={letter.active ? 'true' : undefined}
-            >
-              {letter.label} ({letter.count})
-            </Link>
-          ))}
-        </div>
+  const facetRows = facets.map(facet => (
+    <div key={facet.key} className={row}>
+      <span className={label}>{facet.label}</span>
+      {facet.options.map(o => chip({ key: o.value, href: o.href, active: o.active, text: o.value, n: o.count }))}
+    </div>
+  ));
+
+  // The reset control leads the letters and says what it resets to.
+  const alphaRow = letters.length > 0 && (
+    <div key="alpha" className={row}>
+      <span className={label}>{alphaLabel}</span>
+      {letters.map(l =>
+        chip({
+          key: l.value || 'all',
+          href: l.href,
+          active: l.active,
+          text: l.label,
+          n: l.count,
+          ...(l.reset ? { title: `All ${l.count} pages` } : {}),
+        }),
       )}
     </div>
   );
+
+  return <div className={root}>{alphaFirst ? [alphaRow, ...facetRows] : [...facetRows, alphaRow]}</div>;
 }
 
 // ---- structured data --------------------------------------------------------

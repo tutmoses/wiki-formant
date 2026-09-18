@@ -13,7 +13,9 @@
 // this file from dragging an icon library in behind it.
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Node as TiptapNode, mergeAttributes, type Editor } from '@tiptap/core';
+import { Extension, Node as TiptapNode, mergeAttributes, type Editor } from '@tiptap/core';
+import { Plugin } from '@tiptap/pm/state';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import TiptapYoutube from '@tiptap/extension-youtube';
 import TiptapCodeBlock from '@tiptap/extension-code-block';
@@ -21,6 +23,7 @@ import { onTweetResize, tweetEmbedSrc } from './dom.js';
 import { toMapEmbedUrl } from './maps.js';
 import { useClickOutside } from './react.js';
 import { cx } from './html.js';
+import { slugifyHeading, uniqueHeadingId } from './headings.js';
 
 /** Local `cn`. Both wikis import one; the package will not depend on one. */
 
@@ -506,4 +509,41 @@ export function createTabs({
   });
 
   return { TabGroup, TabItem };
+}
+
+// ---- heading ids while editing ---------------------------------------------------
+
+/**
+ * Gives each heading in the editor the id its published copy will carry, so an
+ * "on this page" rail can list it while the page is being written.
+ *
+ * A decoration, not an attribute: the id is in the editor's DOM and never in
+ * `getHTML()`, so stored HTML stays id-free and `injectHeadingIds` still mints
+ * the published ids. Pass the same `slug` the wiki passes there. The dedupe is
+ * `uniqueHeadingId`, the one `injectHeadingIds` uses; the copy this replaced
+ * restated it, and would have drifted the first time either changed.
+ */
+export function createHeadingIds({ slug = slugifyHeading }: { slug?: (text: string) => string } = {}) {
+  return Extension.create({
+    name: 'headingIds',
+    addProseMirrorPlugins: () => [
+      new Plugin({
+        props: {
+          decorations: ({ doc }) => {
+            const used = new Set<string>();
+            const decorations: Decoration[] = [];
+            doc.descendants((node, pos) => {
+              if (node.type.name !== 'heading') return;
+              const id = uniqueHeadingId(slug(node.textContent), used);
+              if (!id) return false;
+              used.add(id);
+              decorations.push(Decoration.node(pos, pos + node.nodeSize, { id }));
+              return false;
+            });
+            return DecorationSet.create(doc, decorations);
+          },
+        },
+      }),
+    ],
+  });
 }

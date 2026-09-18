@@ -134,6 +134,25 @@ export function markdownHeaders(
 }
 
 /**
+ * Whether a request to a URL that serves both JSON and markdown asked for the
+ * markdown: `?format=text`, or an Accept naming text/markdown or text/plain.
+ * The `.md` suffix is the caller's to add — it lives in the path, not here.
+ *
+ * Both branches of such a route must send `VARY_ACCEPT`. Two wikis answered
+ * one URL in two formats under `public, s-maxage` with no Vary, so a shared
+ * cache could hand the markdown to the next JSON client, or the reverse.
+ */
+export function wantsMarkdown(request: { url: string; headers: { get(name: string): string | null } }): boolean {
+  return (
+    new URL(request.url).searchParams.get('format') === 'text' ||
+    /text\/(markdown|plain)/.test(request.headers.get('accept') ?? '')
+  );
+}
+
+/** The header every response from a content-negotiated URL carries. */
+export const VARY_ACCEPT = { Vary: 'Accept' } as const;
+
+/**
  * Headers for a JSON descriptor — an agent card, an OpenAPI document, a
  * registry manifest. These are the documents a client refetches most and the
  * ones that had no validator at all: served as `Cache-Control: public` with no

@@ -25,3 +25,4 @@ export * from './revisions.js';
 export * from './feed.js';
 export * from './license.js';
 export * from './seeded.js';
+export * from './metadata.js';

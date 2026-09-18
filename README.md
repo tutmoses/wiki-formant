@@ -165,6 +165,8 @@ process.exit(t.summary());
 
 What stays in your repo is fixtures: which tools you expect, what a good answer from each looks like, and which text surfaces you publish. `payloadBudget` weighs every listed call **and** every read-only tool that takes no required arguments, because the one tool nobody thought to list is the one that answers with 3.3 MB; pass a per-call `maxBytes` for a bulk-export tool that is deliberately large. It also asserts that a JSON answer arrived with `structuredContent`.
 
+`descriptorChecks(t)` defaults to `S10_DESCRIPTORS`, the six JSON descriptors every surface here serves, and `distinctEtagChecks(t, ['llms.txt', 'llms-index.txt', 'llms-full.txt'])` asserts that depths projecting one corpus carry different ETags — every one present, which a bare Set-size check misses.
+
 ## Markdown twins
 
 Pass an `etag` and answer `notModified` before rendering: a twin is the single most recrawled URL a page has, so a twin with no validator is a full render on every pass, forever — the same arithmetic that justifies the corpus ETag, applied per page.
@@ -191,6 +193,8 @@ Block trees stay in your app — every project owns its own type set. Give this 
 ## Conditional GET
 
 The `llms.txt` / `llms-index.txt` / `llms-full.txt` trio are the most-recrawled URLs a wiki serves and the most expensive to render. Without a corpus-derived ETag, every AI crawler pays full price on every pass, forever.
+
+A URL that answers JSON or markdown by `Accept` asks `wantsMarkdown(request)` and sends `VARY_ACCEPT` on both branches. Without the Vary, a shared cache hands one client the other's format.
 
 ```ts
 import { corpusEtag, notModified, textHeaders } from 'wiki-formant/http';
@@ -269,7 +273,8 @@ are unit-tested without a DOM.
 
 `wiki-formant/react` carries `'use client'`, and that is a module-level boundary: anything exported from it hydrates in the consumer's tree whether or not it uses a hook. `wiki-formant/react-server` is the same React, without the directive — for the parts of a wiki that are pure functions of their props and should ship no JavaScript at all.
 
-`FacetBar` renders the rows `createTaxonomy` already produces. This is why the taxonomy exports a rows model rather than markup: the rows could always cross the boundary and, until this subpath existed, the markup could not, so all three wikis hand-rendered it and two put `aria-pressed` on an `<a>`. `Breadcrumbs` renders the trail and its `BreadcrumbList` JSON-LD together, because a trail whose structured data is written somewhere else is a trail that will one day disagree with its own markup — which is the case Google penalises. It takes a `base` origin: structured-data URLs must be absolute and a package cannot know the site. Its JSON-LD goes out through `JsonLd`, which is exported for every other payload a page emits: it re-encodes each `<` as `\u003c`, because these payloads carry authored titles and an authored `</script>` would otherwise close the tag.
+`FacetBar` renders the rows `createTaxonomy` already produces. This is why the taxonomy exports a rows model rather than markup: the rows could always cross the boundary and, until this subpath existed, the markup could not, so all three wikis hand-rendered it and two put `aria-pressed` on an `<a>`. `Breadcrumbs` renders the trail and its `BreadcrumbList` JSON-LD together, because a trail whose structured data is written somewhere else is a trail that will one day disagree with its own markup — which is the case Google penalises. It takes a `base` origin: structured-data URLs must be absolute and a package cannot know the site.
+`FacetBar` takes a `count` class to render each count as its own element, and `alphaFirst` to lead with the A–Z row. Its JSON-LD goes out through `JsonLd`, which is exported for every other payload a page emits: it re-encodes each `<` as `\u003c`, because these payloads carry authored titles and an authored `</script>` would otherwise close the tag.
 
 `PageNav` is the previous/next pair at the foot of an article — the sequential read the infobox rail's lateral links do not cover. Ordering is the caller's, because it is the one part that is never portable: a wiki's sequence is its section's configured sort, a knowledge base's is a taxonomy walk. Pair it with `adjacentPages` from `wiki-formant/pagination` over a list you already hold — neither wiki needs a query for it, and the two indexed lookups the neighbours used to cost were the reason one of them dropped the control.
 
@@ -313,6 +318,19 @@ Meta-ExternalFetcher were matched by every proxy and named by no robots.txt —
 and a crawler obeys only its most-specific matching group, so an agent with no
 group of its own falls through to `*`. Three wikis were measuring five crawlers
 they had never addressed.
+
+Every group also allows `AGENT_SURFACE_PATHS` — `/api/mcp`, the three `llms` exports, `/openapi.json`, `/.well-known/` — without being told. `aiAllow` is what an origin serves beyond that.
+
+## Page metadata
+
+`wiki-formant/metadata`'s `pageMetadata` builds a page's canonical, markdown-twin alternate, Open Graph and Twitter card from one input. Next replaces those objects per route segment rather than merging them, and does not derive `twitter.title` from `openGraph`, so a page that sets one and forgets the other falls back to the layout's generic card. Two wikis wrote a helper around that, covering different halves.
+
+```ts
+export const generateMetadata = () => ({
+  title,
+  ...pageMetadata({ title, description, url, type: 'article', image: ogImageUrl(title), siteName, handle, markdownTwin: true }),
+});
+```
 
 ## Revisions
 
@@ -358,6 +376,7 @@ carries no build date rather than a fictional one.
 
 ## Licence declarations
 
+
 S10 wants a licence on every surface, and each repo satisfied that by writing the
 same block again. What is genuinely per-project is the *scope* — which half of a
 site the grant covers and what it excludes — so that is the parameter.
@@ -366,6 +385,8 @@ site the grant covers and what it excludes — so that is the parameter.
 const license = ccBy40({ siteName: 'AcuiQ', siteUrl: SITE_URL });
 const block = licenseBlock({ license, scope: 'The protocol compilation and prose', excludes });
 ```
+
+The same `License` goes to `agentCard({ license, licenseScope })` and to `openApiLicense(license)` for a spec's `info.license`. The three cards and three specs here had each projected it differently, one from a hand-typed name.
 
 ## Rendered-article passes
 
@@ -380,11 +401,17 @@ const off = onTweetResize(h => sizeTweetEmbeds(el, h));
 
 `addCopyButton` was **byte-identical** in two BlockRenderers, down to the SVG path data. Its idempotence guard now lives inside the function rather than in a `pre:not(:has(…))` at the call site, where it can be — and was — retyped.
 
+In React, `useArticlePasses(ref, [blocks])` runs the three passes and `useTweetEmbeds(ref, [html])` the embed pair, from `wiki-formant/react`. Three renderers had the effect written out and disagreed on its dependencies: two ran once on mount, so a page swapped in without a remount kept its old tables unsortable.
+
 `activateTabGroups` turns stored `[data-tabs]` markup into a working tab group. The editor persists tabs as nested divs, which is the right thing to store — it survives a markdown twin, a plain HTML render and a reader with JavaScript off, all of which show every tab in order. Making one of them pressable is a reader-side job, and it sits beside the other passes rather than inside a component.
 
 `sortTables` makes the tables stored in article HTML sortable by their headers. They arrive as a string a `dangerouslySetInnerHTML` wrote, so React never sees their rows and cannot sort them. A column is dates if every filled cell starts with one, numbers if every one does, and text otherwise — one stray value makes the whole column text, which beats sorting half of it by one rule and half by another. A third press restores the author's order, which is often chronological or ranked and otherwise needs a reload. Label/value tables and tables with merged cells are left alone. The markup it writes — `aria-sort` on the cell, a `.sort-header` button inside it — is the markup a React sortable header should write too, so both kinds of table draw their arrows from one stylesheet rule.
 
 `TWITTER_ORIGIN` is written down once. It is both the embed host and the allow-list `onTweetResize` checks before believing a posted height, and it had been spelled out at four call sites across two repos. Any page can `postMessage`; only the embed host may size the embed.
+
+## Search
+
+`proseSql`, `searchTsvSql`, `HEADLINE_OPTIONS` and `FTS_RANK_NORMALIZATION` are what a literal tier and a full-text tier must agree on. `searchTsvDdl(table)` is the statements that build the generated `search_tsv` column and its index — dropped and re-added in one transaction every run, because a skip-if-present script is blind to a changed expression.
 
 ## Block trees
 
@@ -440,6 +467,8 @@ const CodeBlock = createCodeBlock({
 The ones that take config take it because that is exactly where the two copies differed — class tokens, the language list, and the API route a shortened map URL has to be resolved through. Injecting them is what lets one wiki keep `text-jupiter` and the other `text-accent` without either forking the node, and it keeps this file from dragging an icon library in behind it.
 
 `createTabs` returns `TabGroup` and `TabItem` together: `tabGroup`'s content expression is `tabItem+`, so registering one without the other leaves a node type the schema cannot satisfy. A pasted short map link inserts immediately with `about:blank` and swaps its `src` when the redirect resolves — pasting must not block on a network hop, and the node has to exist for the reader to see anything happen.
+
+`createHeadingIds({ slug })` decorates each heading in the editor with the id its published copy will carry, through `uniqueHeadingId` — the dedupe `injectHeadingIds` uses — so a rail listing headings mid-edit links to the anchors readers will get. `uploadImageTo('/api/upload')` is the `uploadImage` two editors had written identically.
 
 The redirect resolves through the wiki's own route, because the editor cannot read it cross-origin. `resolveMapUrl` is the client half and `resolveMapHandler` the whole route: exact shortener hosts, one hop, an allowlisted landing host, a timeout, and your sign-in check as `authorize`. One of the two copies it replaced matched `goo.gl` as a substring and followed every redirect for anyone who asked.
 

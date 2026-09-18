@@ -88,3 +88,12 @@ export function licenseBlock(opts: LicenseBlockOptions): string {
 export function licenseNote(license: License): string {
   return `${license.name} (${license.spdx}): ${license.url}`;
 }
+
+/**
+ * The OpenAPI 3.1 `info.license` object. Name plus SPDX `identifier` — the
+ * spec makes `identifier` and `url` mutually exclusive, and the three specs
+ * here had each picked a different pair, one of them a hand-typed name.
+ */
+export function openApiLicense(license: License): { name: string; identifier: string } {
+  return { name: license.name, identifier: license.spdx };
+}

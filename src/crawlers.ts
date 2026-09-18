@@ -80,6 +80,20 @@ export interface RobotsGroup {
 }
 
 /**
+ * The agent surface an S10 origin serves, allowed in every group. All three
+ * `robots.ts` files listed these by hand, and a path missing from one list is
+ * an endpoint the origin advertises and then closes to the callers it named.
+ */
+export const AGENT_SURFACE_PATHS: readonly string[] = [
+  '/api/mcp',
+  '/llms.txt',
+  '/llms-index.txt',
+  '/llms-full.txt',
+  '/openapi.json',
+  '/.well-known/',
+];
+
+/**
  * The wildcard group followed by one group per crawler.
  *
  * Every named agent gets an explicit `disallow`. Omitting it is the failure the
@@ -90,9 +104,10 @@ export interface RobotsGroup {
 export function aiCrawlerRules(opts: {
   allow: string | string[];
   disallow: string | string[];
-  aiAllow: string | string[];
+  /** Beyond `AGENT_SURFACE_PATHS`, which every group gets regardless. */
+  aiAllow?: string | string[];
 }): RobotsGroup[] {
-  const aiAllow = [opts.aiAllow].flat();
+  const aiAllow = [...new Set([...[opts.aiAllow ?? []].flat(), ...AGENT_SURFACE_PATHS])];
   return [
     // `aiAllow` rides on the default group too, not only on the named roster.
     // The agent surface an origin advertises has to be reachable by a caller it

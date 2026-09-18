@@ -31,6 +31,19 @@ export function slugifyHeading(text: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+/**
+ * `base`, or `base-2`, `base-3`… — the first one `used` does not hold. Records
+ * nothing: the caller adds the id it keeps. Shared with the editor's heading
+ * decoration, so the id a heading shows while it is being written is the id it
+ * is published under.
+ */
+export function uniqueHeadingId(base: string, used: ReadonlySet<string>): string {
+  if (!base) return base;
+  let id = base;
+  for (let n = 2; used.has(id); n++) id = `${base}-${n}`;
+  return id;
+}
+
 const HEADING = /<(h[1-6])([^>]*)>([\s\S]*?)<\/\1>/gi;
 
 
@@ -66,13 +79,8 @@ export function injectHeadingIds(html: string, options: HeadingIdOptions = {}): 
   return html.replace(HEADING, (match, tag: string, attrs: string, content: string) => {
     if (content.includes('heading-anchor')) return match;
     const existing = getAttr(attrs, 'id');
-    let id = existing || slug(stripTags(content));
+    const id = existing || uniqueHeadingId(slug(stripTags(content)), used);
     if (!id) return match;
-    if (!existing) {
-      const base = id;
-      let n = 2;
-      while (used.has(id)) id = `${base}-${n++}`;
-    }
     used.add(id);
     return `<${tag}${existing ? attrs : `${attrs} id="${id}"`}>${content}${anchor(id)}</${tag}>`;
   });

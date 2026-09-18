@@ -28,6 +28,7 @@
 //      sync afterwards, so CSS has one source of truth either side of hydration.
 
 import { resolveSidebarOpen, SIDEBAR_ATTRIBUTE } from './sidebar.js';
+import { activateTabGroups, addCopyButtons, hydrateTweetEmbeds, onTweetResize, sizeTweetEmbeds, sortTables } from './dom.js';
 import type { WikiLinkComponent } from './react-server.js';
 import { comboboxAria, type ComboboxAria } from './combobox.js';
 import {
@@ -42,6 +43,8 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type DependencyList,
+  type RefObject,
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
@@ -1016,3 +1019,34 @@ export function isRailLinkActive(
 }
 
 export type { WikiLinkComponent, WikiLinkProps } from './react-server.js';
+
+// ---- rendered-article passes --------------------------------------------------
+
+/**
+ * The `wiki-formant/dom` passes over a rendered article: tab groups, copy
+ * buttons, sortable tables. All three renderers ran the same three in an
+ * effect, and they disagreed on when: two ran it once on mount, so a page
+ * swapped in without a remount kept its old tables unsortable. Each pass is
+ * idempotent, so running on every `deps` change is safe.
+ */
+export function useArticlePasses(ref: RefObject<HTMLElement | null>, deps: DependencyList): void {
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    activateTabGroups(root);
+    addCopyButtons(root);
+    sortTables(root);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+}
+
+/** Tweet placeholders hydrated, and their iframes kept sized to the posted height. */
+export function useTweetEmbeds(ref: RefObject<HTMLElement | null>, deps: DependencyList): void {
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    hydrateTweetEmbeds(root);
+    return onTweetResize(height => sizeTweetEmbeds(root, height));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+}

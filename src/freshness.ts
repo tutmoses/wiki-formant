@@ -49,3 +49,20 @@ export function freshnessNotice(page: FreshnessInput): string {
     : 'not yet verified against sources';
   return `This page was ${when} and may be out of date. Please help re-check its facts against current sources and the live ledger.`;
 }
+
+/**
+ * A synthetic `outdated` banner block for a stale page, or null when it is
+ * fresh — the shape every wiki's `banner` type already stores, so it drops
+ * into the tree the renderer walks. Two wikis carried this function
+ * identically. `nowMs` comes from a server component: reading the clock
+ * during a client render would let a page near the boundary be stale on the
+ * server and fresh in the browser.
+ */
+export function freshnessBanner(
+  page: FreshnessInput,
+  nowMs: number,
+  maxAgeDays = DEFAULT_MAX_AGE_DAYS,
+): { id: string; type: 'banner'; variant: 'outdated'; text: string } | null {
+  if (!isStale(page, nowMs, maxAgeDays)) return null;
+  return { id: '__freshness__', type: 'banner', variant: 'outdated', text: freshnessNotice(page) };
+}
