@@ -117,10 +117,15 @@ const EDITOR_CLASSES: Record<string, string[]> = {
   a: ['link'],
   code: ['language-*'],
   div: ['iframe-embed', 'map-embed', 'twitter-embed'],
+  img: ['rounded-lg', 'max-w-full'],
   table: ['tiptap-table'],
   th: ['p-2', 'font-semibold', 'bg-surface-1'],
   td: ['p-2'],
 };
+
+// The editor keeps a pasted image inline as base64 (`allowBase64`), so an
+// `<img>` may carry data: — where nothing it holds can run.
+const EDITOR_SCHEMES: Record<string, string[]> = { img: ['http', 'https', 'data'] };
 
 export interface HtmlSanitizerOptions {
   /** Hosts an `<iframe src>` may point at. Defaults to `DEFAULT_IFRAME_HOSTS`. */
@@ -133,7 +138,7 @@ export interface HtmlSanitizerOptions {
   attributes?: Readonly<Record<string, readonly string[]>>;
   /** Class names to allow, per tag (`'language-*'` globs work). Merged with the editor's own. */
   classes?: Readonly<Record<string, readonly string[]>>;
-  /** URL schemes per tag, where one tag needs more than http/https/mailto — `img: ['http', 'https', 'data']`. */
+  /** URL schemes per tag, where one tag needs more than http/https/mailto. `img` already takes data:. */
   schemesByTag?: Readonly<Record<string, readonly string[]>>;
 }
 
@@ -166,7 +171,7 @@ export function createHtmlSanitizer(options: HtmlSanitizerOptions = {}): (html: 
     allowedTags: [...PROSE_TAGS, ...(svg ? SVG_TAGS : []), ...tags],
     allowedAttributes,
     allowedClasses: merge(EDITOR_CLASSES, classes),
-    allowedSchemesByTag: Object.fromEntries(Object.entries(schemesByTag).map(([t, v]) => [t, [...v]])),
+    allowedSchemesByTag: merge(EDITOR_SCHEMES, schemesByTag),
     allowedStyles: { '*': Object.fromEntries(STYLE_PROPS.map(p => [p, [SAFE_CSS_VALUE]])) },
     allowedSchemes: ['http', 'https', 'mailto'],
     allowedSchemesAppliedToAttributes: ['href', 'src', 'cite'],

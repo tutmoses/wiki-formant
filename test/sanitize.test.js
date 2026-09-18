@@ -50,10 +50,12 @@ test('classes pass by name only, so utilities cannot build an overlay', () => {
   assert.equal(own('<span class="citation-needed fixed">x</span>'), '<span class="citation-needed">x</span>');
 });
 
-test('a tag can widen its schemes without widening every tag', () => {
-  const own = createHtmlSanitizer({ schemesByTag: { img: ['http', 'https', 'data'] } });
-  assert.match(own('<img src="data:image/png;base64,AAAA">'), /data:image/);
-  assert.equal(own('<a href="data:text/html,x">x</a>'), '<a>x</a>');
+test('what the editor inserts keeps its classes and its inline image', () => {
+  assert.equal(clean('<img src="data:image/png;base64,AAAA" class="rounded-lg max-w-full">'), '<img src="data:image/png;base64,AAAA" class="rounded-lg max-w-full" />');
+  assert.equal(clean('<a href="data:text/html,x">x</a>'), '<a>x</a>');
+  const own = createHtmlSanitizer({ tags: ['image'], attributes: { image: ['href'] }, schemesByTag: { image: ['data'] } });
+  assert.match(own('<svg><image href="data:image/png;base64,AAAA"></image></svg>'), /data:image/);
+  assert.equal(own('<svg><image href="https://evil.example/x.png"></image></svg>'), '<svg><image></image></svg>');
 });
 
 test('the core leaves are cleaned field by field, and other blocks pass through', () => {
