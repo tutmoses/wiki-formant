@@ -97,6 +97,8 @@ test('one input sets canonical, twin, Open Graph and the Twitter card together',
   assert.deepEqual(m.twitter.images, ['https://w.test/og?t=T']);
   assert.equal(m.openGraph.section, 'S');
   assert.equal(m.openGraph.images[0].width, 1200);
+  const square = pageMetadata({ title: 'T', image: 'https://w.test/d.png', imageSize: { width: 500, height: 500 } });
+  assert.deepEqual([square.openGraph.images[0].width, square.openGraph.images[0].height], [500, 500]);
   const bare = pageMetadata({ title: 'T', url: 'https://w.test/b' });
   assert.equal('images' in bare.openGraph, false);
   assert.deepEqual(bare.alternates, { canonical: 'https://w.test/b' });

@@ -323,7 +323,7 @@ Every group also allows `AGENT_SURFACE_PATHS` — `/api/mcp`, the three `llms` e
 
 ## Page metadata
 
-`wiki-formant/metadata`'s `pageMetadata` builds a page's canonical, markdown-twin alternate, Open Graph and Twitter card from one input. Next replaces those objects per route segment rather than merging them, and does not derive `twitter.title` from `openGraph`, so a page that sets one and forgets the other falls back to the layout's generic card. Two wikis wrote a helper around that, covering different halves.
+`wiki-formant/metadata`'s `pageMetadata` builds a page's canonical, markdown-twin alternate, Open Graph and Twitter card from one input. Next replaces those objects per route segment rather than merging them, and fills a missing twitter card from `openGraph` only when no `twitter` object was inherited — so under a layout that sets its own card, a page that sets one and forgets the other shows the layout's. Two wikis wrote a helper around that, covering different halves.
 
 ```ts
 export const generateMetadata = () => ({
