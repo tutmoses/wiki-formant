@@ -78,6 +78,8 @@ export interface FacetBarProps {
   /** Lead with the A–Z row: two lines against a facet block's twenty. */
   alphaFirst?: boolean;
   classNames?: FacetBarClassNames;
+  /** The landmark's accessible name. */
+  label?: string;
 }
 
 /**
@@ -97,6 +99,7 @@ export function FacetBar({
   alphaLabel = 'A–Z',
   alphaFirst = false,
   classNames = {},
+  label: navLabel = 'Filter pages',
 }: FacetBarProps) {
   if (!facets.length && !letters.length) return null;
 
@@ -146,7 +149,100 @@ export function FacetBar({
     </div>
   );
 
-  return <div className={root}>{alphaFirst ? [alphaRow, ...facetRows] : [...facetRows, alphaRow]}</div>;
+  // A landmark: every control in it narrows the list below, and a screen
+  // reader user skipping between regions should be able to land on it.
+  return (
+    <nav className={root} aria-label={navLabel}>
+      {alphaFirst ? [alphaRow, ...facetRows] : [...facetRows, alphaRow]}
+    </nav>
+  );
+}
+
+// ---- the line under the facet bar -------------------------------------------
+
+export interface FacetSummaryProps {
+  shown: number;
+  total: number;
+  /** The section, as a reader names it. */
+  name: string;
+  /** The un-narrowed section. Pass it exactly when a facet or letter is active. */
+  clearHref?: string;
+  link?: WikiLinkComponent;
+}
+
+/**
+ * How much of the section the reader is looking at, and the way back to all of
+ * it. Two wikis printed the same sentence and one printed none; one had the
+ * Clear link and another had the only filtered-empty state. This is all three.
+ */
+export function FacetSummary({ shown, total, name, clearHref, link: Link = Anchor }: FacetSummaryProps) {
+  const clear = clearHref ? (
+    <>
+      {' '}
+      <Link href={clearHref} className="facet-summary-clear">
+        Clear filters
+      </Link>
+    </>
+  ) : null;
+  if (total === 0) return <p className="facet-summary">This section has no pages yet.</p>;
+  if (shown === 0) return <p className="facet-summary">No pages match these filters.{clear}</p>;
+  return (
+    <p className="facet-summary">
+      {shown === total ? (
+        <>
+          The following <strong>{total}</strong> {total === 1 ? 'page is' : 'pages are'} in {name}.
+        </>
+      ) : (
+        <>
+          Showing <strong>{shown}</strong> of {total} pages in {name}.
+        </>
+      )}
+      {clear}
+    </p>
+  );
+}
+
+// ---- see also ------------------------------------------------------------------
+
+export interface RelatedPagesProps {
+  /** `rankRelated`'s pages, with the hrefs the wiki builds. */
+  pages: readonly { href: string; title: string; detail?: string }[];
+  /** The heading's words — the wiki's own, since they name its sections. */
+  heading: ReactNode;
+  /**
+   * The set the heading opens: the section filtered to the facet `rankRelated`
+   * found in common. Omit and the heading is plain text.
+   */
+  href?: string;
+  link?: WikiLinkComponent;
+  /** Unique on the page; ties the landmark to its heading. */
+  id?: string;
+}
+
+/**
+ * The foot-of-article "see also". A labelled complementary landmark over a real
+ * list, because the two copies this replaced split those between them: one had
+ * the landmark and the list, the other neither.
+ */
+export function RelatedPages({ pages, heading, href, link: Link = Anchor, id = 'see-also-heading' }: RelatedPagesProps) {
+  if (!pages.length) return null;
+  return (
+    <aside className="see-also" aria-labelledby={id}>
+      <h2 id={id} className="see-also-heading">
+        {href ? <Link href={href}>{heading}</Link> : heading}
+      </h2>
+      <ul className="see-also-list">
+        {pages.map(p => (
+          <li key={p.href}>
+            <Link href={p.href} className="see-also-item">
+              <span className="see-also-title">{p.title}</span>
+              {p.detail && <span className="see-also-detail">{p.detail}</span>}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </aside>
+  );
 }
 
 // ---- structured data --------------------------------------------------------
