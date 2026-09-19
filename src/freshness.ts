@@ -123,8 +123,10 @@ export function relativeTime(then: When, now: number, options: RelativeTimeOptio
   const day = Math.floor(sec / 86_400);
   if (absoluteAfterDays !== undefined && day >= absoluteAfterDays) return formatDay(then);
 
-  const months = Math.max(1, Math.floor(day / 30.4375));
-  const years = Math.max(1, Math.floor(day / 365.25));
+  // Nearest, not floor: 60 days is two months to a reader, and flooring by the
+  // mean month length made it one.
+  const months = Math.max(1, Math.round(day / 30.4375));
+  const years = Math.max(1, Math.round(day / 365.25));
 
   if (style === 'long') {
     if (day === 0) return 'today';

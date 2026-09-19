@@ -58,8 +58,13 @@ test('compact relative time walks the units', () => {
 });
 
 test('360 to 364 days is months, never zero years', () => {
-  for (let d = 355; d < 365; d++) assert.match(relativeTime(ago(d * DAY), NOW), /^1[01]mo$/);
+  for (let d = 355; d < 365; d++) assert.match(relativeTime(ago(d * DAY), NOW), /^1[12]mo$/);
   assert.equal(relativeTime(ago(365 * DAY), NOW), '1y');
+});
+
+test('months and years round to the nearest', () => {
+  assert.equal(relativeTime(ago(60 * DAY), NOW), '2mo');
+  assert.equal(relativeTime(ago(700 * DAY), NOW), '2y');
 });
 
 test('long relative time is day-grained and singular where it should be', () => {
