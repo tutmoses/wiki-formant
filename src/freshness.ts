@@ -11,6 +11,8 @@
 
 import { isoDate } from './html.js';
 
+export { isoDate };
+
 export interface FreshnessInput {
   lastVerifiedAt?: Date | string | null;
   updatedAt?: Date | string | null;
@@ -65,4 +67,76 @@ export function freshnessBanner(
 ): { id: string; type: 'banner'; variant: 'outdated'; text: string } | null {
   if (!isStale(page, nowMs, maxAgeDays)) return null;
   return { id: '__freshness__', type: 'banner', variant: 'outdated', text: freshnessNotice(page) };
+}
+
+// ---- dates for display ------------------------------------------------------
+
+type When = Date | string | number;
+
+const toMs = (d: When): number => (typeof d === 'number' ? d : d instanceof Date ? d.getTime() : Date.parse(d));
+
+/**
+ * A calendar day for a reader: `Sep 19, 2026`. Always in UTC. A stored
+ * timestamp formatted in the server's zone, or the browser's, lands on the
+ * previous day for half the world, and the server and the hydrating client
+ * disagree about which day it is.
+ */
+export function formatDay(date: When, options?: Intl.DateTimeFormatOptions): string {
+  return new Date(toMs(date)).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+    ...options,
+  });
+}
+
+/**
+ * - `compact`: `now`, `2m`, `3h`, `5d`, `2mo`, `1y` — for dense rows.
+ * - `short`: `just now`, `2m ago` … `1y ago`.
+ * - `long`: `today`, `yesterday`, `3 days ago`, `1 month ago` — day-grained,
+ *   because it suits a page cached for hours, where "3 hours ago" would be
+ *   frozen and wrong by the next reader.
+ */
+export type RelativeTimeStyle = 'compact' | 'short' | 'long';
+
+export interface RelativeTimeOptions {
+  style?: RelativeTimeStyle;
+  /** From this many whole days on, the date itself (`formatDay`) rather than a distance. */
+  absoluteAfterDays?: number;
+}
+
+const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'} ago`;
+
+/**
+ * How long before `now` a moment was. `now` is the render's time, passed in:
+ * a server render that read the clock would hydrate against a later one and
+ * the text would disagree. A moment after `now` (clock skew) reads as now.
+ *
+ * Three copies of this had drifted into three bugs between them: `0y` for a
+ * moment 360–364 days old, where twelve 30-day months fell through to a floor
+ * of zero years, and `1 months ago`.
+ */
+export function relativeTime(then: When, now: number, options: RelativeTimeOptions = {}): string {
+  const { style = 'compact', absoluteAfterDays } = options;
+  const sec = Math.max(0, Math.floor((now - toMs(then)) / 1000));
+  const day = Math.floor(sec / 86_400);
+  if (absoluteAfterDays !== undefined && day >= absoluteAfterDays) return formatDay(then);
+
+  const months = Math.max(1, Math.floor(day / 30.4375));
+  const years = Math.max(1, Math.floor(day / 365.25));
+
+  if (style === 'long') {
+    if (day === 0) return 'today';
+    if (day === 1) return 'yesterday';
+    if (day < 30) return plural(day, 'day');
+    return day < 365 ? plural(months, 'month') : plural(years, 'year');
+  }
+
+  const min = Math.floor(sec / 60);
+  const hr = Math.floor(min / 60);
+  const span =
+    sec < 60 ? '' : min < 60 ? `${min}m` : hr < 24 ? `${hr}h` : day < 30 ? `${day}d` : day < 365 ? `${months}mo` : `${years}y`;
+  if (style === 'compact') return span || 'now';
+  return span ? `${span} ago` : 'just now';
 }
