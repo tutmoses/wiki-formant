@@ -14,6 +14,8 @@
 // What stays with the caller is the channel's identity and the block walk that
 // turns a page into HTML. Every project owns its own type set.
 
+import { corpusEtag, notModified } from './http.js';
+
 // Numeric reference for the apostrophe: `&apos;` is an XML entity that older
 // readers parsing the feed as HTML do not carry in their entity table.
 const XML_ESCAPES: Record<string, string> = {
@@ -109,9 +111,7 @@ export interface FeedChannel {
  * exist to prevent. An empty feed has no build date rather than a fictional one.
  */
 export function renderFeed(channel: FeedChannel, items: readonly FeedItem[]): string {
-  const newest =
-    channel.lastBuild ??
-    items.reduce<Date | null>((max, item) => (!max || item.date > max ? item.date : max), null);
+  const newest = lastBuild(channel, items);
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">',
@@ -129,7 +129,33 @@ export function renderFeed(channel: FeedChannel, items: readonly FeedItem[]): st
   ].join('\n');
 }
 
+const lastBuild = (channel: FeedChannel, items: readonly FeedItem[]): Date | null =>
+  channel.lastBuild ?? items.reduce<Date | null>((max, item) => (!max || item.date > max ? item.date : max), null);
+
 export const FEED_HEADERS: Record<string, string> = {
   'Content-Type': 'application/rss+xml; charset=utf-8',
   'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
 };
+
+/**
+ * The feed as a response, with the validators a poller revalidates against.
+ *
+ * All four feeds in the workspace were `new Response(renderFeed(...))` with
+ * `Cache-Control: public` and no ETag or Last-Modified, so a reader polling
+ * hourly could never be told "unchanged" and took the whole channel every time.
+ * The tag comes from the rendered XML, so it moves exactly when the feed does;
+ * Last-Modified is the channel's build date.
+ */
+export function feedResponse(
+  request: Request,
+  channel: FeedChannel,
+  items: readonly FeedItem[],
+  headers: Record<string, string> = FEED_HEADERS,
+): Response {
+  const xml = `${renderFeed(channel, items)}\n`;
+  const etag = corpusEtag([xml]);
+  const built = lastBuild(channel, items);
+  const lastModified = built ? built.toUTCString() : null;
+  const sent = { ...headers, ETag: etag, ...(lastModified ? { 'Last-Modified': lastModified } : {}) };
+  return notModified(request, etag, lastModified, sent) ?? new Response(xml, { headers: sent });
+}

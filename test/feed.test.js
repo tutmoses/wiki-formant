@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { absolutise, cdata, clampWords, escXml, renderFeed, renderItem } from 'wiki-formant/feed';
+import { absolutise, cdata, clampWords, escXml, feedResponse, renderFeed, renderItem } from 'wiki-formant/feed';
 
 const item = (over = {}) => ({
   title: 'A & B',
@@ -96,4 +96,26 @@ test('a channel may date itself by a rule only it can express', () => {
     item({ date: new Date('2026-03-01T00:00:00Z') }),
   ]);
   assert.ok(out.includes('<lastBuildDate>Wed, 09 Sep 2026 00:00:00 GMT</lastBuildDate>'));
+});
+
+test('a feed response carries validators and answers a conditional GET with 304', async () => {
+  const channel = { title: 'T', link: 'https://x.org', description: 'd', self: 'https://x.org/f.xml' };
+  const items = [{ title: 'A', url: 'https://x.org/a', description: 'a', date: new Date('2026-09-18T10:00:00Z') }];
+  const first = feedResponse(new Request('https://x.org/f.xml'), channel, items);
+  assert.equal(first.status, 200);
+  const etag = first.headers.get('etag');
+  assert.ok(etag);
+  assert.equal(first.headers.get('last-modified'), 'Fri, 18 Sep 2026 10:00:00 GMT');
+  assert.match(first.headers.get('content-type'), /rss\+xml/);
+  assert.match(await first.text(), /<lastBuildDate>Fri, 18 Sep 2026 10:00:00 GMT<\/lastBuildDate>/);
+
+  const again = feedResponse(new Request('https://x.org/f.xml', { headers: { 'If-None-Match': etag } }), channel, items);
+  assert.equal(again.status, 304);
+  assert.equal(again.headers.get('cache-control'), first.headers.get('cache-control'));
+
+  const moved = feedResponse(new Request('https://x.org/f.xml', { headers: { 'If-None-Match': etag } }), channel, [
+    ...items,
+    { title: 'B', url: 'https://x.org/b', description: 'b', date: new Date('2026-09-19T10:00:00Z') },
+  ]);
+  assert.equal(moved.status, 200);
 });
