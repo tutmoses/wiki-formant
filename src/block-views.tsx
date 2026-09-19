@@ -64,15 +64,13 @@ export function CodeTabsView({ tabs, highlighted = false }: CodeTabsViewProps) {
           </button>
         ))}
       </div>
+      {/* The `hidden` attribute, not a utility class: a class reaches the page
+          only if the site's Tailwind scans this package, and one did not. */}
       {tabs.map((tab, i) =>
         highlighted ? (
-          <div
-            key={i}
-            className={i === activeTab ? 'block' : 'hidden'}
-            dangerouslySetInnerHTML={{ __html: tab.code }}
-          />
+          <div key={i} className="code-tabs-panel" hidden={i !== activeTab} dangerouslySetInnerHTML={{ __html: tab.code }} />
         ) : (
-          <div key={i} className={i === activeTab ? 'block' : 'hidden'}>
+          <div key={i} className="code-tabs-panel" hidden={i !== activeTab}>
             <pre>
               <code className={tab.language ? `language-${tab.language}` : undefined}>{tab.code}</code>
             </pre>
@@ -100,6 +98,10 @@ export interface ColumnsViewProps<B extends { id: string }> {
  * it was a layout bug rather than a style: `.column-view` is the flow context
  * its stylesheet spaces children in, and an extra element between them means
  * every gap rule inside a column silently matches nothing.
+ *
+ * Gap and alignment are data attributes that `wiki-formant/base.css` reads.
+ * They were Tailwind utilities, which reached a page only if the site's
+ * Tailwind scanned this package — and on one site `end` and `stretch` did not.
  */
 export function ColumnsView<B extends { id: string }>({
   columns,
@@ -107,16 +109,8 @@ export function ColumnsView<B extends { id: string }>({
   align = 'start',
   render,
 }: ColumnsViewProps<B>) {
-  const gapClass = { sm: 'gap-2', md: 'gap-4', lg: 'gap-6' }[gap];
-  const alignClass = {
-    start: 'items-start',
-    center: 'items-center',
-    end: 'items-end',
-    stretch: 'items-stretch',
-  }[align];
-
   return (
-    <div className={cx('columns-layout', gapClass, alignClass)}>
+    <div className="columns-layout" data-gap={gap} data-align={align}>
       {columns.map(col => (
         <div key={col.id} className="column-view">
           {(col.blocks ?? []).map(bl => (

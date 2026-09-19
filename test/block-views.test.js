@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { CodeTabsView, PageRefsView } from 'wiki-formant/block-views';
+import { CodeTabsView, ColumnsView, PageRefsView } from 'wiki-formant/block-views';
 import { pageRef } from 'wiki-formant/blocks';
 
 const tabs = [{ label: 'Rust', language: 'rust', code: 'fn f<T>() -> Vec<T> { a < b && c > d }' }];
@@ -41,4 +41,17 @@ test('an empty page list says so only when asked to', () => {
 test('renderItem swaps the row, not the list', () => {
   const html = renderToStaticMarkup(createElement(PageRefsView, { refs: [{ title: 'T', href: '/t' }], renderItem: r => createElement('b', null, r.title) }));
   assert.equal(html, '<ul class="page-refs"><li><b>T</b></li></ul>');
+});
+
+test('inactive code tabs are hidden by attribute, not by a utility class', () => {
+  const two = [...tabs, { label: 'TS', code: 'let x' }];
+  const out = renderToStaticMarkup(createElement(CodeTabsView, { tabs: two }));
+  assert.match(out, /<div class="code-tabs-panel"><pre>/);
+  assert.match(out, /<div class="code-tabs-panel" hidden=""><pre>/);
+  assert.doesNotMatch(out, /class="(block|hidden)"/);
+});
+
+test('columns carry gap and alignment as data, for base.css', () => {
+  const out = renderToStaticMarkup(createElement(ColumnsView, { columns: [{ id: 'a', blocks: [] }], align: 'end', render: () => null }));
+  assert.equal(out, '<div class="columns-layout" data-gap="md" data-align="end"><div class="column-view"></div></div>');
 });

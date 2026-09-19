@@ -18,7 +18,7 @@
     "markdown",
     "agent"
   ],
-  "sideEffects": false,
+  "sideEffects": ["*.css"],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -144,6 +144,7 @@
       "types": "./dist/x402.d.ts",
       "import": "./dist/x402.js"
     },
+    "./base.css": "./dist/base.css",
     "./block-views": {
       "types": "./dist/block-views.d.ts",
       "import": "./dist/block-views.js"
@@ -184,7 +185,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && cp src/base.css dist/base.css",
     "test": "npm run build && node --test 'test/*.test.js'"
   },
   "devDependencies": {

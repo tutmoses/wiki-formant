@@ -274,6 +274,10 @@ const { inputProps, listProps, optionProps } = combobox();
 The arithmetic is `wiki-formant/combobox`, which imports nothing, so the rules
 are unit-tested without a DOM.
 
+`SortHeader` is the React half of `sortTables`: spread `useTableSort`'s `headerProps(key)` onto it and it renders a `<th aria-sort>` holding a `<button>`, the markup `sortTables` writes into stored tables, so one stylesheet rule draws both arrows. One of the copies it replaced put `onClick` on the cell, which no keyboard can reach.
+
+`useBlockOperations(blocks, setBlocks, { duplicate })` is the five list edits every block editor makes, with ref-stable callbacks, and `BlockActions` is their button bar — every button named, the moves disabled at the ends, clicks kept from bubbling into a row that selects on click. `useRevisionRestore(restore, { onRestored })` confirms, restores and reports an error; `restoreViaPost(endpoint)` is the `restore` for a wiki whose route takes `{ revisionId }`. Of the three restores it replaced, one asked no confirmation and one dropped a failure silently.
+
 ## Server components
 
 `wiki-formant/react` carries `'use client'`, and that is a module-level boundary: anything exported from it hydrates in the consumer's tree whether or not it uses a hook. `wiki-formant/react-server` is the same React, without the directive — for the parts of a wiki that are pure functions of their props and should ship no JavaScript at all.
@@ -284,6 +288,8 @@ are unit-tested without a DOM.
 `PageNav` is the previous/next pair at the foot of an article — the sequential read the infobox rail's lateral links do not cover. Ordering is the caller's, because it is the one part that is never portable: a wiki's sequence is its section's configured sort, a knowledge base's is a taxonomy walk. Pair it with `adjacentPages` from `wiki-formant/pagination` over a list you already hold — neither wiki needs a query for it, and the two indexed lookups the neighbours used to cost were the reason one of them dropped the control.
 
 `RailShell` stays in `wiki-formant/react`, because it calls `useSidebar` and genuinely is a client component. It renders the rail's landmark, its scroll wrapper and the three collapse states — including the `--instant` class that keeps a remembered-closed rail from animating shut on first paint, and the close-on-tap that a mobile rail needs. Compose your own rail inside it and mark the active link with `isRailLinkActive`; all three wikis do, and the pre-composed component that used to sit here had one consumer and had already lost both of those behaviours.
+
+`FacetSummary` is the line under the facet bar — how much of the section is showing, and a Clear link when anything is narrowed — with the filtered-empty and empty-section states. `RelatedPages` is the see-also list: a labelled `<aside>` over a `<ul>`, its heading linked to the set `rankRelated` found in common. `InfoboxAside` is the facts panel's named landmark with its "Part of a series on" line, and `InfoboxFacts` renders `metadataRows` as a row-headed table. That table was an HTML string in two wikis, injected as a fake content block; one re-escaped a `"` before each href by hand and the other did not. As React nodes there is nothing to escape. `formatFactValue` is its default cell: a date as its day, a URL or bare domain as an outbound link, `<br>`-separated values as lines.
 
 All three take the router's link component as a prop:
 
@@ -337,6 +343,12 @@ export const generateMetadata = () => ({
 });
 ```
 
+The schema.org nodes sit beside it, because they state the same facts to a different reader. `articleLd` requires `image` — two of three wikis shipped articles without one while their og:image named a card — so pass it the card `pageMetadata` got. `collectionLd` is an index page over an `ItemList`, and `citationsFromReferences` turns a `references` block into `Article.citation`.
+
+```tsx
+<JsonLd data={articleLd({ headline: title, url, image, published, modified, publisher: { '@id': `${SITE_URL}/#organization` }, citation: citationsFromReferences(refs) })} />
+```
+
 ## Revisions
 
 What changed between two versions of a page, and therefore which semver bump to
@@ -371,8 +383,10 @@ verbatim in two of them, the comment explaining why the apostrophe escapes
 numerically. `renderFeed` is the union.
 
 ```ts
-return new Response(renderFeed(channel, items), { headers: FEED_HEADERS });
+export const GET = async (request: Request) => feedResponse(request, channel, await items());
 ```
+
+`feedResponse` renders the channel and answers a conditional GET: the ETag is the XML's own, Last-Modified the build date. All four feeds used to return the XML bare, so a poller could never be told the channel was unchanged.
 
 **`lastBuildDate` comes from the newest item, not the clock.** One copy stamped
 `new Date()` on every request, telling every poller the feed had changed when it
@@ -442,9 +456,17 @@ if (issues.length) return badRequest(`Invalid content: ${describeBlockIssues(iss
 // Invalid content: [2].columns[0].blocks[1]: malformed linkGrid block
 ```
 
+A `codeTabs` tab's `code` is source text in every wiki here, and every view treats it that way: `CodeTabsView` escapes it into a `<pre><code>`, the sanitiser leaves it alone, the markdown twin fences it verbatim. A wiki that escapes and highlights on the server passes `highlighted` to the view. The package used to assume editors stored highlighted markup; none ever had, and every twin printed `Vec<u8>` as `Vec`.
+
+`recentPages` and `pageList` resolve to `ResolvedPageRef`s — build each with `pageRef(page, now)`, which carries the ISO date a `<time>` needs — and `PageRefsView` renders them as a list, with a `renderItem` slot for a wiki that has its own row.
+
+## Dates
+
+`relativeTime(then, now, { style })` is `compact` (`3h`), `short` (`3h ago`) or `long` (`3 days ago`, day-grained for pages cached for hours), with `absoluteAfterDays` to hand over to the date itself. `now` is always passed in, never read, so a server render and its hydration agree. `formatDay` is always UTC: a stored day formatted in the server's zone, or the browser's, is the previous day for half the world. Both are in `wiki-formant/freshness`, with `isoDate`.
+
 ## Sanitising stored HTML
 
-`wiki-formant/sanitize` is the allowlist between an author's saved HTML and a reader's browser. The block views render three HTML fields themselves, and a repo renders `content.text` beside them, so the guard ships with the renderer. `sanitize-html` is an optional peer; run it server-side, on the render path, so it covers rows written before it existed and no sanitiser ships to the client.
+`wiki-formant/sanitize` is the allowlist between an author's saved HTML and a reader's browser. The block views render two HTML fields themselves — `linkGrid` descriptions and `references` text — and a repo renders `content.text` beside them, so the guard ships with the renderer. `codeTabs` is not one of them: its code is source. `sanitize-html` is an optional peer; run it server-side, on the render path, so it covers rows written before it existed and no sanitiser ships to the client.
 
 ```ts
 import { createHtmlSanitizer, sanitizeCoreLeaf } from 'wiki-formant/sanitize';
@@ -475,6 +497,8 @@ The ones that take config take it because that is exactly where the two copies d
 
 `createHeadingIds({ slug })` decorates each heading in the editor with the id its published copy will carry, through `uniqueHeadingId` — the dedupe `injectHeadingIds` uses — so a rail listing headings mid-edit links to the anchors readers will get. `uploadImageTo('/api/upload')` is the `uploadImage` two editors had written identically.
 
+`TOOLBAR_ACTIONS` are the formatting commands with the labels a screen reader announces — two toolbars titled buttons with the internal key, so one said "codeBlock". Pick yours in order with `toolbarActions([...])`, render each through `ToolbarButton` (named, and `aria-pressed`, since these are toggles), and run a table command with `runTableAction`. Upload and embed stay with the caller; they are the parts that differ.
+
 The redirect resolves through the wiki's own route, because the editor cannot read it cross-origin. `resolveMapUrl` is the client half and `resolveMapHandler` the whole route: exact shortener hosts, one hop, an allowlisted landing host, a timeout, and your sign-in check as `authorize`. One of the two copies it replaced matched `goo.gl` as a substring and followed every redirect for anyone who asked.
 
 ```ts
@@ -504,6 +528,16 @@ Instrumenting the agent lane and not the human one is the easy mistake: it
 leaves a wiki able to say what every crawler asked for and nothing about what
 its readers asked for. The queries that return zero rows are the valuable ones —
 they name a gap in the corpus in the reader's own words.
+
+## Base stylesheet
+
+`wiki-formant/base.css` is the layout the package's markup does not work without, and nothing else: columns that stack until there is room, stored tab panels that show one at a time, a copy button pinned to its block's corner and visible on focus and on touch, and the `aria-sort` arrow as a mask over `currentColor`. No colour and no scale, so a design system's own rules override it at equal specificity.
+
+```css
+@import "wiki-formant/base.css" layer(components);
+```
+
+No view emits a Tailwind utility any more — `ColumnsView` states its gap and alignment as data attributes, and an inactive code tab is `hidden` — so a site no longer needs its Tailwind to scan this package for the markup to work.
 
 ## API
 

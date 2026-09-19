@@ -1,0 +1,100 @@
+/* wiki-formant/base.css — the layout the package's markup does not work without.
+
+   Structure only: no colour, no type scale, no design token. Every value that
+   is a look rather than a mechanism is left to the importing stylesheet, which
+   loads this first and overrides anything here with an equally specific rule.
+
+     @import "wiki-formant/base.css" layer(components);
+
+   Three wikis had each restated these rules, and each had one missing: one
+   emitted the stored-tab and copy-button markup with no CSS for it, so every
+   panel showed at once; one never received the utility classes ColumnsView
+   used to emit, so two of its four alignments did nothing. */
+
+/* ---- ColumnsView ----------------------------------------------------------
+   Stacked until there is room for a row. `data-gap` and `data-align` replace
+   the Tailwind utilities the view used to emit, which only reached a site whose
+   Tailwind happened to scan node_modules. */
+.columns-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--columns-gap, 1rem);
+}
+.columns-layout[data-gap='sm'] { --columns-gap: 0.5rem; }
+.columns-layout[data-gap='lg'] { --columns-gap: 1.5rem; }
+.columns-layout[data-align='start'] { align-items: flex-start; }
+.columns-layout[data-align='center'] { align-items: center; }
+.columns-layout[data-align='end'] { align-items: flex-end; }
+.columns-layout[data-align='stretch'] { align-items: stretch; }
+.column-view {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+@media (min-width: 48rem) {
+  .columns-layout { flex-direction: row; }
+  .column-view { flex: 1 1 0%; }
+}
+/* A stacked column is as wide as the row, whatever the alignment. */
+@media (max-width: 47.99rem) {
+  .columns-layout > .column-view { align-self: stretch; }
+}
+
+/* ---- stored tab groups (activateTabGroups) --------------------------------
+   Only the active panel shows. Before the script runs, the first tab's content
+   stands in for the group rather than every tab at once. */
+.tab-panel:not(.active) { display: none; }
+[data-tabs]:not([data-tabs-init]) [data-tab-item] ~ [data-tab-item] { display: none; }
+
+/* ---- code copy buttons (addCopyButtons) -----------------------------------
+   The script positions the <pre>; this pins the button in its corner. Shown
+   on hover, on keyboard focus, and always where there is no hover to show it. */
+.code-copy-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: inline-flex;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+pre:hover > .code-copy-btn,
+.code-copy-btn:focus-visible { opacity: 1; }
+@media (hover: none) {
+  .code-copy-btn { opacity: 1; }
+}
+
+/* ---- sortable headers (SortHeader, sortTables) ----------------------------
+   The arrow is read from `aria-sort` on the cell, so it cannot point one way
+   while the rows go the other. It is a mask over currentColor, so it takes the
+   header's colour, whatever that is. */
+.sort-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+.sort-header::after {
+  content: '';
+  flex: none;
+  width: 0.75em;
+  height: 0.75em;
+  background-color: currentColor;
+  opacity: 0.4;
+  --sort-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 15 5 5 5-5'/%3E%3Cpath d='m7 9 5-5 5 5'/%3E%3C/svg%3E");
+  mask: var(--sort-icon) center / contain no-repeat;
+}
+:is([aria-sort='ascending'], [aria-sort='descending']) > .sort-header::after { opacity: 1; }
+[aria-sort='ascending'] > .sort-header::after {
+  --sort-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12 7-7 7 7'/%3E%3Cpath d='M12 19V5'/%3E%3C/svg%3E");
+}
+[aria-sort='descending'] > .sort-header::after {
+  --sort-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v14'/%3E%3Cpath d='m19 12-7 7-7-7'/%3E%3C/svg%3E");
+}
