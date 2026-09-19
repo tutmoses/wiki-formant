@@ -61,7 +61,9 @@ test('what the editor inserts keeps its classes and its inline image', () => {
 test('the core leaves are cleaned field by field, and other blocks pass through', () => {
   const bad = '<b onclick="x()">b</b>';
   assert.equal(sanitizeCoreLeaf({ type: 'content', text: bad }, clean).text, '<b>b</b>');
-  assert.equal(sanitizeCoreLeaf({ type: 'codeTabs', tabs: [{ label: 'a', code: bad }] }, clean).tabs[0].code, '<b>b</b>');
+  // Source text, escaped by the view — cleaning it as HTML ate every `<T>`.
+  const code = { type: 'codeTabs', tabs: [{ label: 'a', code: 'fn f<T>(x: Vec<T>) {}' }] };
+  assert.equal(sanitizeCoreLeaf(code, clean), code);
   assert.equal(sanitizeCoreLeaf({ type: 'linkGrid', groups: [{ heading: 'h', description: bad, links: [] }] }, clean).groups[0].description, '<b>b</b>');
   assert.equal(sanitizeCoreLeaf({ type: 'references', items: [{ id: '1', text: bad }] }, clean).items[0].text, '<b>b</b>');
   const own = { type: 'tipJar', message: bad };

@@ -30,13 +30,23 @@ import { BANNER_LABELS, bannerVariant } from './text.js';
 
 // ---- codeTabs ---------------------------------------------------------------
 
+export interface CodeTabsViewProps {
+  tabs: readonly CodeTab[];
+  /**
+   * Every tab's `code` has already been escaped and highlighted into markup on
+   * the server, and is written as HTML. Only a wiki whose render path does that
+   * for every tree reaching this view may pass it: without it, `code` is source
+   * and renders escaped in a `<pre><code>`, which is the safe default.
+   */
+  highlighted?: boolean;
+}
+
 /**
  * Tabbed code samples. Every tab's body stays mounted and the inactive ones are
- * hidden rather than unmounted: the panels carry pre-highlighted markup, and
- * remounting one would re-run whatever the consumer's highlighter attached to
- * it on every tab press.
+ * hidden rather than unmounted: remounting a highlighted panel would re-run
+ * whatever the consumer's highlighter attached to it on every tab press.
  */
-export function CodeTabsView({ tabs }: { tabs: readonly CodeTab[] }) {
+export function CodeTabsView({ tabs, highlighted = false }: CodeTabsViewProps) {
   const [activeTab, setActiveTab] = useState(0);
   if (!tabs.length) return null;
 
@@ -54,13 +64,21 @@ export function CodeTabsView({ tabs }: { tabs: readonly CodeTab[] }) {
           </button>
         ))}
       </div>
-      {tabs.map((tab, i) => (
-        <div
-          key={i}
-          className={i === activeTab ? 'block' : 'hidden'}
-          dangerouslySetInnerHTML={{ __html: tab.code }}
-        />
-      ))}
+      {tabs.map((tab, i) =>
+        highlighted ? (
+          <div
+            key={i}
+            className={i === activeTab ? 'block' : 'hidden'}
+            dangerouslySetInnerHTML={{ __html: tab.code }}
+          />
+        ) : (
+          <div key={i} className={i === activeTab ? 'block' : 'hidden'}>
+            <pre>
+              <code className={tab.language ? `language-${tab.language}` : undefined}>{tab.code}</code>
+            </pre>
+          </div>
+        ),
+      )}
     </div>
   );
 }

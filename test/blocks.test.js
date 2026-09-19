@@ -49,11 +49,18 @@ test('a tree with no renderable content is the empty string, not whitespace', ()
 
 // ---- the leaf renderers ----
 
-test('code tabs lose their syntax highlighting before the fence goes on', () => {
+test('code tabs are source: generics, comparisons and entities survive the fence', () => {
+  // The bug this pins: the converter stripped tags from source it took for
+  // markup, and every markdown twin printed `Vec<u8>` as `Vec`.
   const out = codeTabsToMarkdown([
-    { label: 'Rust', language: 'rust', code: '<span class="k">let</span> x = &amp;1;' },
+    { label: 'Rust', language: 'rust', code: 'let v: Vec<u8> = if a < b && c > d { x } else { &amp; };' },
   ]);
-  assert.equal(out, '**Rust**\n\n```rust\nlet x = &1;\n```');
+  assert.equal(out, '**Rust**\n\n```rust\nlet v: Vec<u8> = if a < b && c > d { x } else { &amp; };\n```');
+});
+
+test('a code tab containing a fence gets a longer one', () => {
+  const out = codeTabsToMarkdown([{ label: 'Markdown', code: '```ts\nx\n```' }]);
+  assert.equal(out, '**Markdown**\n\n````\n```ts\nx\n```\n````');
 });
 
 test('a code tab with no language still fences', () => {

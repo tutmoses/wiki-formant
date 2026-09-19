@@ -11,7 +11,6 @@
 // from here. Each renderer takes the block's DATA rather than the block, which
 // keeps this file free of any one repo's type union.
 
-import { decodeEntities } from './markdown.js';
 import { htmlToMarkdown, inlineToMarkdown } from './markdown.js';
 import type { BlockGroup } from './revisions.js';
 
@@ -20,6 +19,7 @@ import type { BlockGroup } from './revisions.js';
 export interface CodeTab {
   label: string;
   language?: string;
+  /** Source text, never markup: every view escapes it unless told otherwise. */
   code: string;
 }
 
@@ -229,16 +229,19 @@ export function someBlock<B>(
 /**
  * Fenced blocks, one per tab, each under its label.
  *
- * The editor stores highlighted code, so the tags come out before the fence
- * goes on — a fenced block full of `<span class="hljs-keyword">` is worse than
- * no code at all.
+ * `code` is source, so it goes in verbatim. This used to strip tags on the
+ * belief that editors stored highlighted markup; none of the three wikis ever
+ * did, and the strip turned `Vec<u8>` into `Vec` in every markdown twin. The
+ * fence outgrows any backtick run in the code, so a sample that itself
+ * contains a fence cannot close this one early.
  */
 export function codeTabsToMarkdown(tabs: readonly CodeTab[]): string {
   return tabs
-    .map(
-      t =>
-        `**${t.label}**\n\n\`\`\`${t.language || ''}\n${decodeEntities(t.code.replace(/<[^>]+>/g, '')).trim()}\n\`\`\``,
-    )
+    .map(t => {
+      const longest = Math.max(0, ...(t.code.match(/`+/g) ?? []).map(run => run.length));
+      const fence = '`'.repeat(Math.max(3, longest + 1));
+      return `**${t.label}**\n\n${fence}${t.language || ''}\n${t.code.trim()}\n${fence}`;
+    })
     .join('\n\n');
 }
 

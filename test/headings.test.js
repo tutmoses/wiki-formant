@@ -54,3 +54,22 @@ test('a heading with no sluggable text is left untouched', () => {
 test('slugifyHeading strips punctuation and collapses separators', () => {
   assert.equal(slugifyHeading('  The 412 “outside” — a note  '), 'the-412-outside-a-note');
 });
+
+test('one used set across fragments dedupes a whole page, not one block', () => {
+  // The bug this pins: every consumer ran the injector once per block with a
+  // fresh set, so a heading repeated in two blocks shipped two identical ids.
+  const used = new Set(['page-title']);
+  const a = injectHeadingIds('<h2>Notes</h2><h2>Page title</h2>', { used });
+  const b = injectHeadingIds('<h2>Notes</h2>', { used });
+  assert.match(a, /id="notes"/);
+  assert.match(a, /id="page-title-2"/);
+  assert.match(b, /id="notes-2"/);
+  assert.deepEqual(headingsFrom(a + b).map(h => h.id), ['notes', 'page-title-2', 'notes-2']);
+});
+
+test('an already-decorated heading still reserves its id', () => {
+  const used = new Set();
+  const stored = injectHeadingIds('<h2>Notes</h2>');
+  injectHeadingIds(stored, { used });
+  assert.match(injectHeadingIds('<h2>Notes</h2>', { used }), /id="notes-2"/);
+});

@@ -78,7 +78,12 @@ const toc  = headingsFrom(html);            // [{ id, text, level }]
 Two behaviours worth knowing:
 
 - **The slug rule is a parameter.** A heading id is a live URL — readers link to `#the-shape-of-a-code`, and so does the page's own permalink anchor. The two wikis this was lifted from had drifted onto different rules, and unifying them would have silently moved every published anchor on whichever one lost. Pass `slug` to keep the rule you already ship.
-- **Deduping is not a parameter.** Two headings with the same text otherwise mint the same id twice, and every link to the second lands on the first. The copy that lacked it had that bug.
+- **Deduping is not a parameter, but its scope is.** Two headings with the same text otherwise mint the same id twice, and every link to the second lands on the first. The unit that must be unique is the page, so a block wiki that injects block by block passes one `used` set to every call — seeded with any id the template renders itself, such as the title's. All three consumers once passed none, and a heading repeated across two blocks shipped two identical ids.
+
+```ts
+const used = new Set([slug(page.title)]);
+const blocks = page.blocks.map(b => ({ ...b, text: injectHeadingIds(b.text, { used }) }));
+```
 
 `headingsFrom` reads the string, not the rendered DOM — possible only where the body IS a string at render time. A wiki whose content streams in as blocks after mount has to query the DOM, and uses only the injector.
 

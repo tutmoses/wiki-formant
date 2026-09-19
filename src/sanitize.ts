@@ -196,25 +196,21 @@ const each = (v: unknown, map: (item: Record<string, unknown>) => Record<string,
 const str = (v: unknown): v is string => typeof v === 'string';
 
 /**
- * The core leaf types' HTML fields, cleaned: `content.text`, `codeTabs` code,
- * `linkGrid` group descriptions and `references` item text. Every other field
- * those blocks carry renders as a React text node and is escaped already.
+ * The core leaf types' HTML fields, cleaned: `content.text`, `linkGrid` group
+ * descriptions and `references` item text. Every other field those blocks
+ * carry renders as a React text node and is escaped already.
  *
  * Returns any other block untouched, so it drops straight into a
  * `mapBlockTree` pass — a repo whose own types render HTML cleans those itself.
  *
- * `codeTabs` code is treated as stored HTML, which is what the editor writes.
- * A wiki whose highlighter takes the code as SOURCE and escapes it on render
- * must not pass it through here — every `<T>` in a signature would go — and
- * cleans its other three fields with its own switch.
+ * `codeTabs` passes through: its `code` is source text, which `CodeTabsView`
+ * escapes. Cleaning it as HTML was a bug — every `<T>` in a signature went.
  */
 export function sanitizeCoreLeaf<B extends { type: string }>(block: B, clean: (html: string) => string): B {
   const b = block as unknown as Leaf;
   switch (b.type) {
     case 'content':
       return str(b.text) ? ({ ...b, text: clean(b.text) } as unknown as B) : block;
-    case 'codeTabs':
-      return { ...b, tabs: each(b.tabs, t => (str(t.code) ? { ...t, code: clean(t.code) } : t)) } as unknown as B;
     case 'linkGrid':
       return {
         ...b,

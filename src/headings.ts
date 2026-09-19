@@ -9,7 +9,10 @@
 //
 // Deduping, by contrast, is not a choice: two headings with the same text
 // otherwise mint the same id twice and every link to the second one lands on
-// the first, so this always dedupes.
+// the first, so this always dedupes. The unit is the DOCUMENT, not the call: a
+// block wiki calls the injector once per block, and all three consumers did
+// that with a fresh set each time, so a "Notes" in two blocks shipped two
+// `id="notes"`. One `used` set per page is what makes the dedupe hold.
 
 import { getAttr, stripTags } from './html.js';
 
@@ -61,6 +64,13 @@ export interface HeadingIdOptions {
    * into a TOC label.
    */
   anchor?: (id: string) => string;
+  /**
+   * Ids already taken on this page, added to as headings are decorated. Pass
+   * ONE set across every fragment of a document — each content block of a page,
+   * seeded with any id the page template renders itself — or two fragments with
+   * the same heading text mint the same id. Omitted, dedupe covers this call only.
+   */
+  used?: Set<string>;
 }
 
 const defaultAnchor = (id: string): string =>
@@ -75,10 +85,15 @@ export function injectHeadingIds(html: string, options: HeadingIdOptions = {}): 
   if (!html.trim()) return html;
   const slug = options.slug ?? slugifyHeading;
   const anchor = options.anchor ?? defaultAnchor;
-  const used = new Set<string>();
+  const used = options.used ?? new Set<string>();
   return html.replace(HEADING, (match, tag: string, attrs: string, content: string) => {
-    if (content.includes('heading-anchor')) return match;
     const existing = getAttr(attrs, 'id');
+    // Already decorated, by an earlier pass or by whoever stored it: left as it
+    // is, but its id is still taken, or the next fragment could mint it again.
+    if (content.includes('heading-anchor')) {
+      if (existing) used.add(existing);
+      return match;
+    }
     const id = existing || uniqueHeadingId(slug(stripTags(content)), used);
     if (!id) return match;
     used.add(id);
