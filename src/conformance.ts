@@ -102,7 +102,7 @@ export interface TesterOptions {
 export interface Tester {
   base: string;
   endpoint: string;
-  /** One JSON-RPC call. Backs off once and retries on a 429. */
+  /** One JSON-RPC call. Waits out a 429 as `Retry-After` asks, up to four tries. */
   rpc(method: string, params?: unknown): Promise<Rpc>;
   /** `tools/call` shorthand. */
   call(name: string, args?: Record<string, unknown>): Promise<Rpc>;
@@ -128,20 +128,24 @@ export function createTester(opts: TesterOptions): Tester {
   const results: CheckResult[] = [];
   let calls = 0;
 
+  // The server's own rate limit is part of what is under test elsewhere; here
+  // it is noise, so it is waited out — for as long as `Retry-After` says, and a
+  // bounded number of times. This used to say "once" and recurse forever at a
+  // fixed 5s, so a suite pointed at a budget it could never get under hung.
+  const RETRIES = 4;
   const rpc = async (method: string, params?: unknown): Promise<Rpc> => {
-    calls++;
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'User-Agent': opts.clientName },
-      body: JSON.stringify({ jsonrpc: '2.0', id: calls, method, params }),
-    });
-    // The server's own rate limit is part of what is under test elsewhere; here
-    // it is just noise, so wait it out once rather than failing the run.
-    if (res.status === 429) {
-      await new Promise(r => setTimeout(r, 5000));
-      return rpc(method, params);
+    for (let attempt = 1; ; attempt++) {
+      calls++;
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': opts.clientName },
+        body: JSON.stringify({ jsonrpc: '2.0', id: calls, method, params }),
+      });
+      if (res.status !== 429) return (await res.json()) as Rpc;
+      if (attempt === RETRIES) throw new Error(`${method}: still rate-limited after ${RETRIES} tries`);
+      const wait = Number(res.headers.get('retry-after'));
+      await new Promise(r => setTimeout(r, Math.min(60, Number.isFinite(wait) && wait > 0 ? wait : 5) * 1000));
     }
-    return (await res.json()) as Rpc;
   };
 
   return {
