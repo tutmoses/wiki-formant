@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveSidebarOpen } from 'wiki-formant/sidebar';
+import { isRailLinkActive } from 'wiki-formant/react';
 
 // The collapse rule carries both bug fixes, so it is tested directly. The
 // component around it is verified in a browser, where a DOM actually exists.
@@ -43,4 +44,27 @@ test('BUG 2: the first paint is open, so a desktop load never flashes shut', () 
   // The initial state feeding the rule on the server and first client paint is
   // `current: true` with nothing chosen and nothing read yet.
   assert.equal(resolveSidebarOpen({ chosen: false, current: true, stored: null, isMobile: false }), true);
+});
+
+// ---- rail link activity -----------------------------------------------------
+
+test('a section stays lit while you read a page inside it', () => {
+  assert.equal(isRailLinkActive('/wiki/tech', '/wiki/tech', true), true);
+  assert.equal(isRailLinkActive('/wiki/tech/core-concepts', '/wiki/tech', true), true);
+  assert.equal(isRailLinkActive('/wiki/tech/core-concepts', '/wiki/tech', false), false);
+  // A sibling whose name merely starts the same is not a descendant.
+  assert.equal(isRailLinkActive('/wiki/technology', '/wiki/tech', true), false);
+});
+
+test("BUG: a catch-all's prerender arrives percent-encoded", () => {
+  // What Next serves for /wiki/tech/core-concepts: the joined segments encoded.
+  // Both wikis rendered every page below the top level with nothing lit.
+  assert.equal(isRailLinkActive('/wiki/tech%2Fcore-concepts', '/wiki/tech', true), true);
+  assert.equal(isRailLinkActive('/wiki/tech%2Fcore-concepts', '/wiki/tech%2Fcore-concepts', false), false);
+  assert.equal(isRailLinkActive('/wiki/tech%2Fcore-concepts', '/wiki/tech/core-concepts', false), true);
+});
+
+test('a path that will not decode answers for itself', () => {
+  assert.equal(isRailLinkActive('/wiki/100%', '/wiki/100%', false), true);
+  assert.equal(isRailLinkActive('/wiki/100%/notes', '/wiki/100%', true), true);
 });

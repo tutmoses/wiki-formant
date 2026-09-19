@@ -281,7 +281,15 @@ export function TableOfContents({
       // article per mutation is what makes a rail janky.
       timer = setTimeout(() => {
         const root = document.querySelector(containerSelector);
-        if (!root) return;
+        // No container is an answer, not a reason to skip: a rail that bailed
+        // here kept the LAST page's headings, so a section index reached from
+        // one of its own articles listed that article's sections under "on this
+        // page". It only looked right when a loading skeleton happened to render
+        // the container and scan to nothing.
+        if (!root) {
+          setScanned(prev => (prev.length ? [] : prev));
+          return;
+        }
         const used = new Set<string>();
         const next: TocHeading[] = [];
 
@@ -1220,14 +1228,32 @@ export function RailShell({ children, prefix, label, className }: RailShellProps
  * matched on the PATH ONLY, deliberately: `?edit=` and `?history=` are modes a
  * page enters, not destinations a rail selects, and reading them would drag
  * `useSearchParams` into a statically-rendered wiki.
+ *
+ * The path is decoded first. Next serves a catch-all route's prerender with the
+ * joined segments percent-encoded — `/wiki/tech%2Fcore-concepts` for
+ * `/wiki/tech/core-concepts` — so an encoded path matches neither its own href
+ * nor its section's prefix, and React does not patch a className on hydration.
+ * Both wikis were shipping every page below the top level with nothing in the
+ * rail marked, and it only came right if you arrived by client navigation.
  */
 export function isRailLinkActive(
   activePath: string,
   href: string,
   tree = false,
 ): boolean {
-  return tree ? activePath === href || activePath.startsWith(`${href}/`) : activePath === href;
+  const path = decodePath(activePath);
+  return tree ? path === href || path.startsWith(`${href}/`) : path === href;
 }
+
+/** `decodeURIComponent` throws on a stray `%`; a path it cannot read is its own answer. */
+const decodePath = (path: string): string => {
+  if (!path.includes('%')) return path;
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
+};
 
 export type { WikiLinkComponent, WikiLinkProps } from './react-server.js';
 
