@@ -20,7 +20,9 @@
 
 import { Fragment } from 'react';
 import type { ComponentType, ReactNode } from 'react';
-import type { Control, FacetControlGroup } from './taxonomy.js';
+import type { Control, FacetControlGroup, MetadataRow } from './taxonomy.js';
+import { safeLinkHref } from './validation.js';
+import { isoDate } from './html.js';
 
 /**
  * The shape a router's link component has to satisfy here.
@@ -477,5 +479,101 @@ export function PageNav({
         </Link>
       )}
     </nav>
+  );
+}
+
+// ---- infobox -------------------------------------------------------------------
+
+export interface InfoboxAsideProps {
+  /** The landmark's accessible name, e.g. `Key facts about ${title}`. */
+  label: string;
+  /** Wikipedia's "Part of a series on": the topic's main article. */
+  series?: { title: string; href: string } | null;
+  link?: WikiLinkComponent;
+  /** Added to `infobox`, for a design system's layout utility. */
+  className?: string;
+  children?: ReactNode;
+}
+
+/**
+ * The facts panel beside an article. Named, because two of the three asides
+ * this replaced had no accessible name, and a complementary landmark without
+ * one reads as "complementary" and nothing else.
+ */
+export function InfoboxAside({ label, series, link: Link = Anchor, className, children }: InfoboxAsideProps) {
+  return (
+    <aside className={className ? `infobox ${className}` : 'infobox'} aria-label={label}>
+      {series && (
+        <div className="infobox-series">
+          <span>Part of a series on</span>
+          <Link href={series.href}>{series.title}</Link>
+        </div>
+      )}
+      {children}
+    </aside>
+  );
+}
+
+const looksLikeUrl = (v: string, type: string) =>
+  type === 'url' || /^https?:\/\//i.test(v) || /^[^\s/]+\.[a-z]{2,}(\/\S*)?$/i.test(v);
+
+function externalLink(v: string): ReactNode {
+  const href = safeLinkHref(/^[a-z][a-z0-9+.-]*:/i.test(v) ? v : `https://${v}`);
+  if (!href) return v;
+  return (
+    <a href={href} target="_blank" rel="noopener">
+      {v.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')}
+    </a>
+  );
+}
+
+/**
+ * A metadata value for reading: a date as its day, a URL (or a bare domain) as
+ * an external link, and a `<br>`-separated list as lines. Rendered as React
+ * nodes, never interpolated into markup: the string builders this replaced had
+ * to re-escape a `"` that would otherwise close an href, and one did not.
+ */
+export function formatFactValue(value: string, type: string): ReactNode {
+  if (type === 'date') {
+    const t = Date.parse(value);
+    if (!Number.isNaN(t)) return isoDate(new Date(t));
+  }
+  const parts = value.split(/<br\s*\/?>/i).map(s => s.trim()).filter(Boolean);
+  if (parts.length > 1) {
+    return parts.map((part, i) => (
+      <Fragment key={i}>
+        {i > 0 && <br />}
+        {looksLikeUrl(part, type) ? externalLink(part) : part}
+      </Fragment>
+    ));
+  }
+  return looksLikeUrl(value, type) ? externalLink(value) : value;
+}
+
+export interface InfoboxFactsProps {
+  /** `metadataRows`, or any rows of the same shape a wiki derives itself. */
+  rows: readonly Pick<MetadataRow, 'label' | 'value' | 'type' | 'href'>[];
+  link?: WikiLinkComponent;
+  /** Overrides how a row without an `href` is shown. */
+  formatValue?: (value: string, type: string) => ReactNode;
+}
+
+/**
+ * The derived facts table. A row with an `href` links into the facet view that
+ * shares its value — the way into the set, not dead text.
+ */
+export function InfoboxFacts({ rows, link: Link = Anchor, formatValue = formatFactValue }: InfoboxFactsProps) {
+  if (!rows.length) return null;
+  return (
+    <table className="infobox-facts">
+      <tbody>
+        {rows.map(row => (
+          <tr key={row.label}>
+            <th scope="row">{row.label}</th>
+            <td>{row.href ? <Link href={row.href}>{row.value}</Link> : formatValue(row.value, row.type)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }

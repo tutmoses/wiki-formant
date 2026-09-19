@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { FacetBar, FacetSummary, RelatedPages, Anchor } from 'wiki-formant/react-server';
+import { FacetBar, FacetSummary, RelatedPages, Anchor, InfoboxAside, InfoboxFacts } from 'wiki-formant/react-server';
 
 const html = (c, p) => renderToStaticMarkup(createElement(c, p));
 
@@ -33,4 +33,35 @@ test('related pages are a labelled aside over a list, and render nothing when em
     out,
     '<aside class="see-also" aria-labelledby="see-also-heading"><h2 id="see-also-heading" class="see-also-heading"><a href="/s?basis=Classical">More Classical in Safety</a></h2><ul class="see-also-list"><li><a href="/a" class="see-also-item"><span class="see-also-title">A</span><span class="see-also-detail">Classical</span></a></li></ul></aside>',
   );
+});
+
+test('infobox facts are a row-headed table; links go to the facet, URLs outward', () => {
+  const out = html(InfoboxFacts, {
+    rows: [
+      { label: 'Basis', value: 'Classical', type: 'select', href: '/wiki/safety?basis=Classical' },
+      { label: 'Website', value: 'https://www.example.org/', type: 'url' },
+      { label: 'Repo', value: 'github.com/x/y', type: 'text' },
+      { label: 'Launched', value: '2021-07-28T00:00:00Z', type: 'date' },
+      { label: 'Links', value: 'a.org<br>plain', type: 'text' },
+    ],
+  });
+  assert.match(out, /<th scope="row">Basis<\/th><td><a href="\/wiki\/safety\?basis=Classical">Classical<\/a><\/td>/);
+  assert.match(out, /<a href="https:\/\/www.example.org\/" target="_blank" rel="noopener">example.org<\/a>/);
+  assert.match(out, /<a href="https:\/\/github.com\/x\/y" target="_blank" rel="noopener">github.com\/x\/y<\/a>/);
+  assert.match(out, /<td>2021-07-28<\/td>/);
+  assert.match(out, /<a href="https:\/\/a.org"[^>]*>a.org<\/a><br\/>plain/);
+});
+
+test('a hostile fact value is text, and a javascript: URL is not a link', () => {
+  const out = html(InfoboxFacts, { rows: [
+    { label: 'X', value: '"><img src=x onerror=alert(1)>', type: 'text' },
+    { label: 'Y', value: 'javascript:alert(1)', type: 'url' },
+  ] });
+  assert.doesNotMatch(out, /<img/);
+  assert.doesNotMatch(out, /href="javascript/);
+});
+
+test('the infobox aside is named and carries its series', () => {
+  const out = html(InfoboxAside, { label: 'Key facts about A', series: { title: 'Consensus', href: '/c' }, className: 'stack' });
+  assert.equal(out, '<aside class="infobox stack" aria-label="Key facts about A"><div class="infobox-series"><span>Part of a series on</span><a href="/c">Consensus</a></div></aside>');
 });
