@@ -47,6 +47,7 @@ import {
   type RefObject,
   type KeyboardEvent,
   type ReactNode,
+  type ThHTMLAttributes,
 } from 'react';
 
 // ---- collapse state ---------------------------------------------------------
@@ -856,6 +857,216 @@ export function useTableSort<T, K extends string>(
   );
 
   return { sorted, sortKey, direction, headerProps, toggle };
+}
+
+/**
+ * The header cell `useTableSort` drives: spread `headerProps(key)` onto it.
+ *
+ * The press target is a `<button>` inside the `<th>`, never the cell itself: a
+ * cell with an `onClick` cannot be reached or pressed from the keyboard, which
+ * is the state one of the two copies this replaced was in. The markup is the
+ * one `sortTables` in `wiki-formant/dom` writes for tables stored in articles,
+ * so one stylesheet rule keyed on `aria-sort` draws both kinds of arrow.
+ */
+export function SortHeader<K extends string>({
+  sortKey,
+  onSort,
+  active: _active,
+  direction: _direction,
+  'aria-sort': ariaSort,
+  label,
+  icon,
+  children,
+  ...th
+}: Omit<ThHTMLAttributes<HTMLTableCellElement>, 'aria-sort' | 'children'> &
+  ReturnType<TableSortState<unknown, K>['headerProps']> & {
+    /** Names a header whose content is an icon, for the button and its tooltip. */
+    label?: string;
+    /** Drawn after the content, e.g. a sort glyph; CSS on `aria-sort` is the default. */
+    icon?: ReactNode;
+    children: ReactNode;
+  }) {
+  return (
+    <th scope="col" {...th} aria-sort={ariaSort}>
+      <button type="button" className="sort-header" onClick={() => onSort(sortKey)} title={label} aria-label={label}>
+        {children}
+        {icon}
+      </button>
+    </th>
+  );
+}
+
+// ---- block editing ------------------------------------------------------------
+
+export interface BlockOperations<T> {
+  selectedIndex: number | null;
+  setSelectedIndex: (i: number | null) => void;
+  update: (i: number, block: T) => void;
+  remove: (i: number) => void;
+  duplicate: (i: number) => void;
+  /** No-op when `to` is off either end. */
+  move: (from: number, to: number) => void;
+  insert: (block: T, at?: number) => void;
+}
+
+/**
+ * The five edits every block editor makes to its list, with stable callbacks.
+ *
+ * The list and its setter are read through refs written after render, so a row
+ * memoised on these callbacks does not re-render on every keystroke elsewhere
+ * — and the setter may be a `useState` setter or a parent's `onChange`, which
+ * is what the three copies this replaced were split between. Creating and
+ * duplicating a block stay with the caller, whose union it is.
+ */
+export function useBlockOperations<T>(
+  blocks: readonly T[],
+  setBlocks: (next: T[]) => void,
+  options: { duplicate: (block: T) => T },
+): BlockOperations<T> {
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const latest = useRef({ blocks, setBlocks, clone: options.duplicate });
+  useEffect(() => {
+    latest.current = { blocks, setBlocks, clone: options.duplicate };
+  });
+
+  const update = useCallback((i: number, block: T) => {
+    const { blocks, setBlocks } = latest.current;
+    setBlocks(blocks.map((b, j) => (j === i ? block : b)));
+  }, []);
+  const remove = useCallback((i: number) => {
+    const { blocks, setBlocks } = latest.current;
+    setBlocks(blocks.filter((_, j) => j !== i));
+    setSelectedIndex(null);
+  }, []);
+  const duplicate = useCallback((i: number) => {
+    const { blocks, setBlocks, clone } = latest.current;
+    const source = blocks[i];
+    if (source === undefined) return;
+    setBlocks([...blocks.slice(0, i + 1), clone(source), ...blocks.slice(i + 1)]);
+    setSelectedIndex(i + 1);
+  }, []);
+  const move = useCallback((from: number, to: number) => {
+    const { blocks, setBlocks } = latest.current;
+    if (to < 0 || to >= blocks.length || from === to) return;
+    const next = [...blocks];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved!);
+    setBlocks(next);
+    setSelectedIndex(to);
+  }, []);
+  const insert = useCallback((block: T, at?: number) => {
+    const { blocks, setBlocks } = latest.current;
+    const i = at ?? blocks.length;
+    setBlocks([...blocks.slice(0, i), block, ...blocks.slice(i)]);
+    setSelectedIndex(i);
+  }, []);
+
+  return { selectedIndex, setSelectedIndex, update, remove, duplicate, move, insert };
+}
+
+export interface BlockActionsProps {
+  index: number;
+  total: number;
+  ops: Pick<BlockOperations<unknown>, 'move' | 'duplicate' | 'remove'>;
+  icons: { up: ReactNode; down: ReactNode; duplicate?: ReactNode; remove: ReactNode };
+  className?: string;
+  buttonClassName?: string;
+  /** Names the block in each button's label, e.g. "Move Table up". */
+  blockLabel?: string;
+}
+
+/**
+ * Move up, move down, duplicate, delete. Every button has an accessible name
+ * and the moves are disabled at the ends — the three bars this replaced had
+ * each of those only sometimes. Clicks do not bubble, so a row that selects on
+ * click is not also selected by pressing delete in it. Omit `icons.duplicate`
+ * for a bar without it.
+ */
+export function BlockActions({ index, total, ops, icons, className, buttonClassName, blockLabel }: BlockActionsProps) {
+  const name = (verb: string, rest = '') => (blockLabel ? `${verb} ${blockLabel}${rest}` : `${verb}${rest}`);
+  const button = (label: string, icon: ReactNode, run: () => void, disabled = false) => (
+    <button
+      type="button"
+      className={buttonClassName}
+      title={label}
+      aria-label={label}
+      disabled={disabled}
+      onClick={e => {
+        e.stopPropagation();
+        run();
+      }}
+    >
+      {icon}
+    </button>
+  );
+  return (
+    <span className={className}>
+      {button(name('Move', ' up'), icons.up, () => ops.move(index, index - 1), index === 0)}
+      {button(name('Move', ' down'), icons.down, () => ops.move(index, index + 1), index === total - 1)}
+      {icons.duplicate !== undefined && button(name('Duplicate'), icons.duplicate, () => ops.duplicate(index))}
+      {button(name('Delete'), icons.remove, () => ops.remove(index))}
+    </span>
+  );
+}
+
+// ---- revision restore ---------------------------------------------------------
+
+/** Resolves to an error message to show, or null on success. */
+export type RestoreRevision<Id> = (id: Id) => Promise<string | null>;
+
+/**
+ * POST `{ revisionId }` to `endpoint`, the transport two of the wikis use; the
+ * third passes its server action instead.
+ */
+export function restoreViaPost<Id>(endpoint: string): RestoreRevision<Id> {
+  return async id => {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ revisionId: id }),
+      });
+      if (res.ok) return null;
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      return body?.error ?? 'Restore failed.';
+    } catch {
+      return 'Restore failed.';
+    }
+  };
+}
+
+/**
+ * Confirm, restore, report. Of the three copies one asked no confirmation, one
+ * dropped a failure silently, and one reported it through `alert`. A restore
+ * writes the old state forward as a new revision in all three, which is what
+ * the default question says.
+ */
+export function useRevisionRestore<Id>(
+  restore: RestoreRevision<Id>,
+  options: { onRestored: () => void; confirm?: (label: string) => string | false },
+): { restore: (id: Id, label: string) => Promise<void>; busyId: Id | null; error: string | null } {
+  const [busyId, setBusyId] = useState<Id | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { onRestored, confirm = (label: string) => `Restore ${label}? The current state stays in the history.` } = options;
+
+  const run = useCallback(
+    async (id: Id, label: string) => {
+      const question = confirm(label);
+      if (question && !window.confirm(question)) return;
+      setBusyId(id);
+      setError(null);
+      try {
+        const failure = await restore(id);
+        if (failure) setError(failure);
+        else onRestored();
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [restore, onRestored, confirm],
+  );
+
+  return { restore: run, busyId, error };
 }
 
 // ---- copy to clipboard ------------------------------------------------------

@@ -29,7 +29,7 @@ import TiptapTableHeader from '@tiptap/extension-table-header';
 import Placeholder from '@tiptap/extension-placeholder';
 import { useEditor } from '@tiptap/react';
 import type { AnyExtension, Editor } from '@tiptap/core';
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode, type RefObject } from 'react';
 import { toMapEmbedUrl } from './maps.js';
 
 /**
@@ -190,6 +190,110 @@ export const TABLE_ACTIONS: ReadonlyArray<[command: string, label: string, dange
 
 /** `editor.isActive` as a toolbar button's `active` descriptor expresses it. */
 export type ActiveDescriptor = string | [string, Record<string, unknown>];
+
+/** Run one of `TABLE_ACTIONS` — the one place the command name is looked up untyped. */
+export function runTableAction(editor: Editor, command: string): void {
+  const chain = editor.chain().focus() as unknown as Record<string, (() => { run: () => boolean }) | undefined>;
+  chain[command]?.().run();
+}
+
+export type ToolbarKey =
+  | 'bold'
+  | 'italic'
+  | 'code'
+  | 'link'
+  | 'h2'
+  | 'h3'
+  | 'h4'
+  | 'bulletList'
+  | 'orderedList'
+  | 'blockquote'
+  | 'codeBlock'
+  | 'divider'
+  | 'table'
+  | 'tabs';
+
+export interface ToolbarAction {
+  key: ToolbarKey;
+  /** What a screen reader announces and a tooltip shows. */
+  label: string;
+  active?: ActiveDescriptor;
+  /** Absent on `link`, which needs a URL: call `withUrl` once you have one. */
+  run?: (editor: Editor) => void;
+  withUrl?: (editor: Editor, url: string) => void;
+}
+
+/**
+ * The formatting commands, labelled. Three toolbars ran these identically and
+ * two titled their buttons with the internal key — a screen reader said
+ * "codeBlock", and inline code and code block shared one icon and one name.
+ * Upload and embed stay with the caller: they are the parts that differ.
+ */
+export const TOOLBAR_ACTIONS: readonly ToolbarAction[] = [
+  { key: 'bold', label: 'Bold', active: 'bold', run: e => e.chain().focus().toggleBold().run() },
+  { key: 'italic', label: 'Italic', active: 'italic', run: e => e.chain().focus().toggleItalic().run() },
+  { key: 'code', label: 'Inline code', active: 'code', run: e => e.chain().focus().toggleCode().run() },
+  { key: 'link', label: 'Link', active: 'link', withUrl: (e, href) => e.chain().focus().setLink({ href }).run() },
+  { key: 'h2', label: 'Heading 2', active: ['heading', { level: 2 }], run: e => e.chain().focus().toggleHeading({ level: 2 }).run() },
+  { key: 'h3', label: 'Heading 3', active: ['heading', { level: 3 }], run: e => e.chain().focus().toggleHeading({ level: 3 }).run() },
+  { key: 'h4', label: 'Heading 4', active: ['heading', { level: 4 }], run: e => e.chain().focus().toggleHeading({ level: 4 }).run() },
+  { key: 'bulletList', label: 'Bulleted list', active: 'bulletList', run: e => e.chain().focus().toggleBulletList().run() },
+  { key: 'orderedList', label: 'Numbered list', active: 'orderedList', run: e => e.chain().focus().toggleOrderedList().run() },
+  { key: 'blockquote', label: 'Quote', active: 'blockquote', run: e => e.chain().focus().toggleBlockquote().run() },
+  { key: 'codeBlock', label: 'Code block', active: 'codeBlock', run: e => e.chain().focus().toggleCodeBlock().run() },
+  { key: 'divider', label: 'Divider', run: e => e.chain().focus().setHorizontalRule().run() },
+  {
+    key: 'table',
+    label: 'Table',
+    active: 'table',
+    run: e => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
+  },
+  {
+    key: 'tabs',
+    label: 'Tabs',
+    active: 'tabGroup',
+    // Two, not one: a group of one is a heading with extra steps, and the node
+    // refuses to delete its last tab anyway.
+    run: e =>
+      e
+        .chain()
+        .focus()
+        .insertContent({
+          type: 'tabGroup',
+          content: [1, 2].map(n => ({ type: 'tabItem', attrs: { title: `Tab ${n}` }, content: [{ type: 'paragraph' }] })),
+        })
+        .run(),
+  },
+];
+
+/** The actions a toolbar shows, in the order it shows them. */
+export function toolbarActions(keys: readonly ToolbarKey[]): ToolbarAction[] {
+  return keys.flatMap(key => TOOLBAR_ACTIONS.filter(a => a.key === key));
+}
+
+/**
+ * A toolbar button that says what it is and whether it is on. `aria-pressed`
+ * is right here, unlike on a facet link: this is a toggle.
+ */
+export function ToolbarButton({
+  label,
+  pressed,
+  onPress,
+  className,
+  children,
+}: {
+  label: string;
+  pressed?: boolean;
+  onPress: () => void;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <button type="button" title={label} aria-label={label} aria-pressed={pressed} className={className} onClick={onPress}>
+      {children}
+    </button>
+  );
+}
 
 // ---- the editor -------------------------------------------------------------
 
