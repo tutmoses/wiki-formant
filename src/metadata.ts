@@ -12,6 +12,15 @@
 // wrote each page's metadata by hand.
 //
 // Plain objects in the shape Next's `Metadata` wants, so no `next` import.
+//
+// The schema.org nodes live here too, because they state the same facts to a
+// different reader. Three wikis built their Article and CollectionPage nodes
+// by hand and each dropped something the others kept: two shipped articles
+// with no image while their og:image named a card, one listed citations, one
+// collection page had no ItemList at all.
+
+import { decodeEntities } from './markdown.js';
+import type { ReferenceItem } from './blocks.js';
 
 export interface ArticleMeta {
   publishedTime?: string;
@@ -77,4 +86,111 @@ export function pageMetadata(o: PageMetadataOptions) {
       ...(images ? { images: images.map(i => i.url) } : {}),
     },
   };
+}
+
+// ---- structured data ----------------------------------------------------------
+
+/** A schema.org node: inline, or an `{ '@id' }` reference into the site's graph. */
+export type LdNode = Record<string, unknown>;
+
+const iso = (d: Date | string): string => new Date(d).toISOString();
+
+export interface ArticleLdOptions {
+  /** `Article` by default; `BlogPosting`, `TechArticle`, `ScholarlyArticle`… */
+  type?: string;
+  headline: string;
+  /** Absolute canonical URL. */
+  url: string;
+  description?: string;
+  /**
+   * Absolute URL, and required: Google wants an image on every article. Pass
+   * the card `pageMetadata` was given, so the two cannot disagree.
+   */
+  image: string;
+  published?: Date | string;
+  modified?: Date | string;
+  publisher: LdNode;
+  isPartOf?: LdNode;
+  /** Omit rather than invent one: a system-authored row has no person to name. */
+  author?: LdNode;
+  license?: string;
+  /** Defaults to `en`. */
+  inLanguage?: string;
+  /** See `citationsFromReferences`. Left out when empty. */
+  citation?: LdNode[];
+  /** What only this wiki states — wordCount, articleSection, about, hasPart. Spread last. */
+  extra?: LdNode;
+}
+
+export function articleLd(o: ArticleLdOptions): LdNode {
+  return {
+    '@context': 'https://schema.org',
+    '@type': o.type ?? 'Article',
+    headline: o.headline,
+    url: o.url,
+    mainEntityOfPage: { '@type': 'WebPage', '@id': o.url },
+    ...(o.description ? { description: o.description } : {}),
+    image: o.image,
+    ...(o.published ? { datePublished: iso(o.published) } : {}),
+    ...(o.modified ? { dateModified: iso(o.modified) } : {}),
+    inLanguage: o.inLanguage ?? 'en',
+    ...(o.author ? { author: o.author } : {}),
+    publisher: o.publisher,
+    ...(o.isPartOf ? { isPartOf: o.isPartOf } : {}),
+    ...(o.license ? { license: o.license } : {}),
+    ...(o.citation?.length ? { citation: o.citation } : {}),
+    ...o.extra,
+  };
+}
+
+export interface CollectionLdOptions {
+  name: string;
+  /** Absolute. */
+  url: string;
+  description?: string;
+  isPartOf?: LdNode;
+  license?: string;
+  /** In display order; `url` absolute. */
+  items: readonly { name: string; url: string }[];
+  /** How many are listed. `numberOfItems` still counts every one. Defaults to 100. */
+  max?: number;
+  extra?: LdNode;
+}
+
+/** An index page and the pages it lists, as a CollectionPage over an ItemList. */
+export function collectionLd(o: CollectionLdOptions): LdNode {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: o.name,
+    url: o.url,
+    ...(o.description ? { description: o.description } : {}),
+    ...(o.isPartOf ? { isPartOf: o.isPartOf } : {}),
+    ...(o.license ? { license: o.license } : {}),
+    mainEntity: {
+      '@type': 'ItemList',
+      numberOfItems: o.items.length,
+      itemListElement: o.items.slice(0, o.max ?? 100).map((item, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        name: item.name,
+        url: item.url,
+      })),
+    },
+    ...o.extra,
+  };
+}
+
+/**
+ * A page's `references` items as `Article.citation`, read off the block data
+ * rather than re-parsed out of rendered HTML. Tags out and entities decoded, so
+ * an authored `&amp;` is not what a crawler reads.
+ */
+export function citationsFromReferences(items: readonly ReferenceItem[], max = 50): LdNode[] {
+  return items
+    .flatMap(ref => {
+      const name = decodeEntities(ref.text.replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
+      return name ? [{ '@type': 'CreativeWork', name: name.slice(0, 250), ...(ref.url ? { url: ref.url } : {}) }] : [];
+    })
+    .slice(0, max);
 }
