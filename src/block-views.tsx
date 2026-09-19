@@ -20,7 +20,7 @@
 // HTML processor, the router's link — arrives as a prop.
 
 import { Fragment, useState, type ReactNode } from 'react';
-import type { CodeTab, LinkGridGroup, ReferenceItem, StatItem } from './blocks.js';
+import type { CodeTab, LinkGridGroup, ReferenceItem, ResolvedPageRef, StatItem } from './blocks.js';
 import { Anchor } from './react-server.js';
 import type { WikiLinkComponent } from './react-server.js';
 import { safeLinkHref } from './validation.js';
@@ -173,6 +173,56 @@ export function LinkGridView({
         </section>
       ))}
     </div>
+  );
+}
+
+// ---- recentPages / pageList -------------------------------------------------
+
+/**
+ * A list of resolved page references — the body of a `recentPages` or
+ * `pageList` block. A real list, with each age in a `<time>` carrying its ISO
+ * date: the copies this replaced were bare `<div>` rows, one emitted a
+ * `<time>` with no `dateTime`, and their empty states were three different
+ * things (a sentence, a different sentence, nothing).
+ *
+ * `renderItem` replaces the row's inner markup for a wiki with its own row
+ * component; the list, its semantics and the empty state stay here.
+ */
+export function PageRefsView({
+  refs,
+  empty,
+  link: Link = Anchor,
+  renderItem,
+}: {
+  refs: readonly ResolvedPageRef[];
+  /** Said when there are none. Omit to render nothing. */
+  empty?: string;
+  link?: WikiLinkComponent;
+  renderItem?: (ref: ResolvedPageRef) => ReactNode;
+}) {
+  if (!refs.length) return empty ? <p className="page-refs-empty">{empty}</p> : null;
+  return (
+    <ul className="page-refs">
+      {refs.map(ref => (
+        <li key={ref.href}>
+          {renderItem ? (
+            renderItem(ref)
+          ) : (
+            <Link href={ref.href} className="page-ref">
+              <span className="page-ref-title">{ref.title}</span>
+              {ref.timeAgo &&
+                (ref.updated ? (
+                  <time className="page-ref-time" dateTime={ref.updated}>
+                    {ref.timeAgo}
+                  </time>
+                ) : (
+                  <span className="page-ref-time">{ref.timeAgo}</span>
+                ))}
+            </Link>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 

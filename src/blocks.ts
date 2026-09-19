@@ -12,6 +12,7 @@
 // keeps this file free of any one repo's type union.
 
 import { htmlToMarkdown, inlineToMarkdown } from './markdown.js';
+import { relativeTime, type RelativeTimeStyle } from './freshness.js';
 import type { BlockGroup } from './revisions.js';
 
 // ---- the shapes the standard block types carry ------------------------------
@@ -21,6 +22,34 @@ export interface CodeTab {
   language?: string;
   /** Source text, never markup: every view escapes it unless told otherwise. */
   code: string;
+}
+
+/**
+ * A page a `recentPages` or `pageList` block points at, resolved on the server
+ * so the list renders with no client fetch and no client clock. Build it with
+ * `pageRef`, which is what fills `updated`: a `<time>` with no `dateTime`
+ * states an age no machine can read.
+ */
+export interface ResolvedPageRef {
+  title: string;
+  href: string;
+  /** `relativeTime` of `updated`, as of the render. */
+  timeAgo?: string;
+  /** ISO timestamp. */
+  updated?: string;
+}
+
+export function pageRef(
+  page: { title: string; href: string; updatedAt: Date | string },
+  now: number,
+  style: RelativeTimeStyle = 'long',
+): ResolvedPageRef {
+  return {
+    title: page.title,
+    href: page.href,
+    timeAgo: relativeTime(page.updatedAt, now, { style }),
+    updated: new Date(page.updatedAt).toISOString(),
+  };
 }
 
 export interface ReferenceItem {
