@@ -207,6 +207,18 @@ export function citationsFromReferences(items: readonly ReferenceItem[], max = 5
 export const TITLE_BUDGET = 60;
 
 /**
+ * Past this, a title is not merely trimmed but cut into.
+ *
+ * Between the budget and this limit a title loses its tail, which is often the
+ * site name and no loss at all. Past it, the words carrying what the page is
+ * about are going too: the radix.wiki ideas board spent its first sixteen
+ * characters on a working group and reached 93, and the symptom pages on
+ * acuiq.com reached 88 before naming the symptom. That is the line worth
+ * failing a build over; the band below it is worth reporting and no more.
+ */
+export const TITLE_LIMIT = 70;
+
+/**
  * The document `<title>` for a page: its short form where the page carries one,
  * else its own title.
  *

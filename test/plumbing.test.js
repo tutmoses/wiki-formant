@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { corpusEtag, notModified, textHeaders, markdownHeaders, descriptorHeaders, descriptorResponse, cleanSnippet, pageLine } from 'wiki-formant/http';
 import { parsePagination, paginatedResponse, listEnvelope, toOffset, adjacentPages } from 'wiki-formant/pagination';
 import { parseVersion, formatVersion, bump, compareVersions } from 'wiki-formant/versioning';
-import { documentTitle, TITLE_BUDGET } from 'wiki-formant/metadata';
+import { documentTitle, TITLE_BUDGET, TITLE_LIMIT } from 'wiki-formant/metadata';
 
 test('an ETag is stable for the same corpus revision and moves when it changes', () => {
   const a = corpusEtag([349, new Date('2026-08-29T00:00:00Z')]);
@@ -209,6 +209,8 @@ test('documentTitle prefers a stored short form and falls back to the title', ()
   assert.equal(documentTitle(long, { short: 'x' }, 'short'), 'x');
   // The budget covers the rendered title, template included.
   assert.equal(TITLE_BUDGET, 60);
+  assert.equal(TITLE_LIMIT, 70);
+  assert.ok(TITLE_LIMIT > TITLE_BUDGET);
   assert.ok('Working Group Framework & WG Charters | RADIX Wiki'.length <= TITLE_BUDGET);
   assert.ok(`${long} | RADIX Wiki`.length > TITLE_BUDGET);
 });

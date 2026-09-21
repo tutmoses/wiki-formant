@@ -28,7 +28,7 @@
 // which is the right default, since an unlisted route is one nobody asked a
 // crawler to read.
 import { outlineIssues } from '../dist/headings.js';
-import { TITLE_BUDGET } from '../dist/metadata.js';
+import { TITLE_BUDGET, TITLE_LIMIT } from '../dist/metadata.js';
 
 const arg = name => {
   const i = process.argv.indexOf(name);
@@ -118,7 +118,8 @@ for (const url of checked) {
   const title = decode(titleOf(page.body));
   if (!title) faults.push({ url, fault: 'noTitle', detail: '' });
   else {
-    if (title.length > TITLE_BUDGET) faults.push({ url, fault: 'titleTooLong', detail: `${title.length} chars: ${title}` });
+    if (title.length > TITLE_LIMIT) faults.push({ url, fault: 'titleTooLong', detail: `${title.length} chars: ${title}` });
+    else if (title.length > TITLE_BUDGET) faults.push({ url, fault: 'titleTight', detail: `${title.length} chars: ${title}` });
     const sharing = titles.get(title);
     if (sharing) sharing.push(url);
     else titles.set(title, [url]);
@@ -135,12 +136,14 @@ for (const [title, sharing] of titles) {
   }
 }
 
-// `noSubheading` is advisory and never sets the exit code. A page that is one
-// h1 and one table — a leaderboard, a token list — has no second section to
-// name, and inventing an h2 to satisfy a checker is the noise this is supposed
-// to remove. It is still reported, because the same shape on a category index
-// meant 190 words of links with no outline at all.
-const ADVISORY = new Set(['noSubheading']);
+// Two faults are reported and never set the exit code. `noSubheading`: a page
+// that is one h1 and one table — a leaderboard, a token list — has no second
+// section to name, and inventing an h2 to satisfy a checker is the noise this
+// is supposed to remove; it is still reported, because the same shape on a
+// category index meant 190 words of links with no outline at all.
+// `titleTight`: between TITLE_BUDGET and TITLE_LIMIT what a result drops is
+// usually the site name, which is a judgement rather than a defect.
+const ADVISORY = new Set(['noSubheading', 'titleTight']);
 const failing = faults.filter(f => !ADVISORY.has(f.fault));
 
 if (JSON_OUT) {
@@ -150,6 +153,7 @@ if (JSON_OUT) {
   for (const f of faults) byFault.set(f.fault, [...(byFault.get(f.fault) ?? []), f]);
   console.log(`check-pages: ${checked.length} of ${urls.length} sitemap URLs on ${site}\n`);
   if (!faults.length) console.log('  clean — one h1 per page, no skipped levels, every title inside the budget.');
+  else if (!failing.length) console.log('  no failures; everything below is advisory.\n');
   for (const [fault, list] of [...byFault].sort((a, b) => b[1].length - a[1].length)) {
     console.log(`  ${fault} (${list.length})${ADVISORY.has(fault) ? '  — advisory, does not fail' : ''}`);
     for (const f of list.slice(0, 12)) console.log(`    ${f.url.replace(site, '') || '/'}${f.detail ? `  ${f.detail}` : ''}`);
