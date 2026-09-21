@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { corpusEtag, notModified, textHeaders, markdownHeaders, descriptorHeaders, descriptorResponse, cleanSnippet, pageLine } from 'wiki-formant/http';
 import { parsePagination, paginatedResponse, listEnvelope, toOffset, adjacentPages } from 'wiki-formant/pagination';
 import { parseVersion, formatVersion, bump, compareVersions } from 'wiki-formant/versioning';
+import { documentTitle, TITLE_BUDGET } from 'wiki-formant/metadata';
 
 test('an ETag is stable for the same corpus revision and moves when it changes', () => {
   const a = corpusEtag([349, new Date('2026-08-29T00:00:00Z')]);
@@ -195,4 +196,19 @@ test('adjacentPages yields nothing for a page its own list does not carry', () =
 
 test('adjacentPages handles a list of one', () => {
   assert.deepEqual(adjacentPages([{ slug: 'a' }], p => p.slug === 'a'), { prev: null, next: null });
+});
+
+test('documentTitle prefers a stored short form and falls back to the title', () => {
+  const long = 'Governance WG · Ratify the Working Group Framework & WG Charters';
+  assert.equal(documentTitle(long, { seoTitle: 'Working Group Framework & WG Charters' }),
+    'Working Group Framework & WG Charters');
+  assert.equal(documentTitle(long, {}), long);
+  assert.equal(documentTitle(long, null), long);
+  // Whitespace is not a short form; a page that stored one by accident keeps its title.
+  assert.equal(documentTitle(long, { seoTitle: '   ' }), long);
+  assert.equal(documentTitle(long, { short: 'x' }, 'short'), 'x');
+  // The budget covers the rendered title, template included.
+  assert.equal(TITLE_BUDGET, 60);
+  assert.ok('Working Group Framework & WG Charters | RADIX Wiki'.length <= TITLE_BUDGET);
+  assert.ok(`${long} | RADIX Wiki`.length > TITLE_BUDGET);
 });

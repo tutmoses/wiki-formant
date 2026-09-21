@@ -194,3 +194,32 @@ export function citationsFromReferences(items: readonly ReferenceItem[], max = 5
     })
     .slice(0, max);
 }
+
+/**
+ * Characters a document `<title>` has before a search result truncates it.
+ *
+ * Google measures pixels, not characters, so this is the round number that
+ * approximates ~580px of the default result font and is what every audit in
+ * these repos has counted against. The budget covers the WHOLE rendered title,
+ * template included: a wiki spending 13 of it on " | RADIX Wiki" has 47 left,
+ * which is the number that matters to whoever writes the title.
+ */
+export const TITLE_BUDGET = 60;
+
+/**
+ * The document `<title>` for a page: its short form where the page carries one,
+ * else its own title.
+ *
+ * A wiki title is written for the H1 and the listing card, where a prefix that
+ * groups the page earns its space — "Governance WG · ", "Radix Week in Review: ".
+ * In a search result the same prefix spends the budget before the topic arrives,
+ * so a page may store a short form under `key` and the document title takes it.
+ * Nothing else does: the H1, the listing card, the markdown twin and the social
+ * card all keep the page's own title, and `pageMetadata` above is deliberately
+ * not wired to this, because a social card is not length-constrained the same
+ * way and the full title reads better on one.
+ */
+export function documentTitle(title: string, metadata: unknown, key = 'seoTitle'): string {
+  const short = (metadata as Record<string, unknown> | null | undefined)?.[key];
+  return typeof short === 'string' && short.trim() ? short : title;
+}

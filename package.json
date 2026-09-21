@@ -1,6 +1,6 @@
 {
   "name": "wiki-formant",
-  "version": "0.24.0",
+  "version": "0.25.0",
   "description": "The portable half of a wiki: derived taxonomy and facet controls, a version-negotiating MCP transport, markdown twins, block rendering, a rich-text editor engine, and conditional-GET plumbing.",
   "type": "module",
   "license": "MIT",
@@ -177,7 +177,8 @@
     }
   },
   "bin": {
-    "check-classes": "./bin/check-classes.mjs"
+    "check-classes": "./bin/check-classes.mjs",
+    "check-pages": "./bin/check-pages.mjs"
   },
   "files": [
     "dist",

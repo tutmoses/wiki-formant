@@ -120,3 +120,72 @@ export function headingsFrom(html: string): Heading[] {
   }
   return out;
 }
+
+/**
+ * Every heading in `html`, in document order, whether or not it carries an id —
+ * the outline a crawler reads. `headingsFrom` above answers a different
+ * question: which headings a rail can link to, which is why it drops the ones
+ * with no id. An audit must not, because a chrome heading with no id still
+ * takes a level in the outline, and the levels are the thing under test.
+ */
+export function headingOutline(html: string): Heading[] {
+  const out: Heading[] = [];
+  for (const [, tag, attrs, content] of html.matchAll(HEADING)) {
+    const text = stripTags(content ?? '');
+    if (text) out.push({ id: getAttr(attrs ?? '', 'id') ?? '', text, level: Number(tag![1]) });
+  }
+  return out;
+}
+
+/**
+ * What is wrong with a page's heading outline.
+ *
+ * `noH1` and `multipleH1` are unambiguous. `skippedLevel` means a heading sits
+ * more than one level below the one before it — an h2 followed by an h4, which
+ * is what acuiq.com's home page shipped. `noSubheading` means the page has an
+ * h1 and nothing under it at all, which is what radix.wiki's /contents shipped:
+ * a category index whose section names were rendered as bare links, leaving a
+ * document with no outline for a reader or a parser to move through.
+ *
+ * What none of these catch is a heading at the right level under the wrong
+ * parent. radix.wiki's /ecosystem listed 140 projects as h3 beneath the single
+ * h2 of an unrelated prose section; every level was legal and the nesting was a
+ * lie. That one needs a person.
+ */
+export type OutlineFault = 'noH1' | 'multipleH1' | 'skippedLevel' | 'noSubheading';
+
+export interface OutlineIssue {
+  fault: OutlineFault;
+  /** The offending heading's level, where the fault names one. */
+  level?: number;
+  /** The level it followed, for `skippedLevel`. */
+  after?: number;
+  /** Its text, trimmed, for `skippedLevel` and `multipleH1`. */
+  text?: string;
+}
+
+/**
+ * `html` is a whole rendered page, not a content fragment: the outline a
+ * crawler sees includes the chrome. A page with no headings at all returns a
+ * single `noH1` and nothing else, since every later rule would restate it.
+ */
+export function outlineIssues(html: string): OutlineIssue[] {
+  const headings = headingOutline(html);
+  const issues: OutlineIssue[] = [];
+  const h1s = headings.filter(h => h.level === 1);
+
+  if (h1s.length === 0) issues.push({ fault: 'noH1' });
+  else for (const extra of h1s.slice(1)) issues.push({ fault: 'multipleH1', level: 1, text: extra.text });
+  if (!headings.length) return issues;
+
+  let previous = 0;
+  for (const h of headings) {
+    if (previous && h.level > previous + 1) {
+      issues.push({ fault: 'skippedLevel', level: h.level, after: previous, text: h.text });
+    }
+    previous = h.level;
+  }
+
+  if (h1s.length === 1 && headings.length === 1) issues.push({ fault: 'noSubheading', level: 1 });
+  return issues;
+}
