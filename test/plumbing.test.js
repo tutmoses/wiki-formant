@@ -214,3 +214,13 @@ test('documentTitle prefers a stored short form and falls back to the title', ()
   assert.ok('Working Group Framework & WG Charters | RADIX Wiki'.length <= TITLE_BUDGET);
   assert.ok(`${long} | RADIX Wiki`.length > TITLE_BUDGET);
 });
+
+test('cleanSnippet drops a root-relative link target, and keeps ordinary parentheses', () => {
+  assert.equal(
+    cleanSnippet('Decentralized science (DeSci) (/wiki/desci/what-is-desci) runs into the same wall.'),
+    'Decentralized science (DeSci) runs into the same wall.');
+  assert.equal(cleanSnippet('See the notes (#appendix) for the rest.'), 'See the notes for the rest.');
+  assert.equal(cleanSnippet('A paper (Hellings and Sadoghi, 2020) says so.'),
+    'A paper (Hellings and Sadoghi, 2020) says so.');
+  assert.equal(cleanSnippet('Read it (https://example.com/x) today.'), 'Read it today.');
+});

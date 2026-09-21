@@ -200,10 +200,21 @@ export function descriptorResponse(
   return notModified(request, etag, null, sent) ?? new Response(text, { headers: sent });
 }
 
-/** Strip URLs and collapse whitespace so an excerpt stays one readable line. */
+/**
+ * Strip URLs and collapse whitespace so an excerpt stays one readable line.
+ *
+ * A markdown link whose text is kept and whose target is not leaves the target
+ * behind in parentheses, and only the absolute form was being removed: an
+ * excerpt opening "[Decentralized science (DeSci)](/wiki/desci/what-is-desci)
+ * runs into…" reached a meta description as "Decentralized science (DeSci)
+ * (/wiki/desci/what-is-desci) runs into…". Root-relative targets and bare
+ * anchors go the same way as absolute ones. The leading character is what
+ * separates a target from ordinary parenthetical prose, so "(DeSci)" survives.
+ */
 export function cleanSnippet(text: string, max = 160): string {
   return text
-    .replace(/\(https?:\/\/[^)]*\)/g, '')
+    .replace(/\((?:https?:\/\/|mailto:)[^)]*\)/g, '')
+    .replace(/\((?:\/|#)[^)\s]*\)/g, '')
     .replace(/https?:\/\/\S+/g, '')
     .replace(/\(\s*\)/g, '')
     .replace(/\s{2,}/g, ' ')
