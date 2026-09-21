@@ -38,6 +38,73 @@ export function resolveSidebarOpen({
 export const SIDEBAR_ATTRIBUTE = 'data-sidebar';
 
 /**
+ * The custom property a consumer's stylesheet sets inside its own rail media
+ * query — `1` where the rail stops being a column beside the article, `0`
+ * elsewhere.
+ *
+ * The rail's breakpoint is necessarily known twice: this hook needs it in JS
+ * (to close the rail on navigate, and to default a first-ever visit), and the
+ * stylesheet needs it in CSS (to lay the rail out, before any script runs and
+ * whether or not one ever does). A media query cannot read a JS constant and a
+ * JS constant cannot read a media query, so the two numbers cannot be merged —
+ * but they can be made unable to disagree QUIETLY, which is the actual hazard.
+ *
+ * All three wikis matched by hand and all three happened to be right; nothing
+ * said so. Declaring this property is what opts a stylesheet into the check.
+ */
+export const RAIL_FLOATING_PROPERTY = '--rail-floating';
+
+/**
+ * What the stylesheet currently says about the rail: `true` inside the repo's
+ * rail media query, `false` outside it, `null` when the property is not
+ * declared — a consumer that has not opted in, or a render with no DOM.
+ */
+export function readRailFloating(): boolean | null {
+  if (typeof document === 'undefined') return null;
+  try {
+    const value = getComputedStyle(document.documentElement)
+      .getPropertyValue(RAIL_FLOATING_PROPERTY)
+      .trim();
+    return value === '' ? null : value === '1';
+  } catch {
+    // No CSSOM (jsdom without styles, a blocked stylesheet). Not knowing is not
+    // a mismatch, and a diagnostic must never be the thing that breaks a page.
+    return null;
+  }
+}
+
+/**
+ * The complaint to make when CSS and JS disagree about where the rail floats,
+ * or `null` when they agree or the stylesheet has not opted in.
+ *
+ * Pure, and separate from the reading, so the rule is testable without a DOM.
+ */
+export function railBreakpointMismatch({
+  isMobile,
+  floating,
+  breakpoint,
+}: {
+  /** What `matchMedia` told the hook. */
+  isMobile: boolean;
+  /** What the stylesheet says, from `readRailFloating()`. */
+  floating: boolean | null;
+  /** The breakpoint the hook was given, for naming the number in the message. */
+  breakpoint: number;
+}): string | null {
+  if (floating === null || floating === isMobile) return null;
+  return (
+    `wiki-formant: the rail's breakpoint disagrees between CSS and JS. ` +
+    `This hook was given breakpoint=${breakpoint}, so it believes the rail ` +
+    `${isMobile ? 'should float' : 'should be a column'} at this width, ` +
+    `while ${RAIL_FLOATING_PROPERTY} says it ` +
+    `${floating ? 'should float' : 'should be a column'}. ` +
+    `Set ${RAIL_FLOATING_PROPERTY}: 1 inside the same media query that lays the ` +
+    `rail out, and give that query the edge of breakpoint=${breakpoint} ` +
+    `(max-width: ${breakpoint - 1}px).`
+  );
+}
+
+/**
  * A blocking inline script for the document head, so the rail's first paint
  * already matches what the reader last chose.
  *

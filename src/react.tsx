@@ -27,7 +27,12 @@
 //      state on <html> before first paint. The hook keeps that attribute in
 //      sync afterwards, so CSS has one source of truth either side of hydration.
 
-import { resolveSidebarOpen, SIDEBAR_ATTRIBUTE } from './sidebar.js';
+import {
+  railBreakpointMismatch,
+  readRailFloating,
+  resolveSidebarOpen,
+  SIDEBAR_ATTRIBUTE,
+} from './sidebar.js';
 import { activateTabGroups, addCopyButtons, hydrateTweetEmbeds, onTweetResize, sizeTweetEmbeds, sortTables } from './dom.js';
 import type { WikiLinkComponent } from './react-server.js';
 import { comboboxAria, type ComboboxAria } from './combobox.js';
@@ -116,6 +121,18 @@ function useCollapsibleSidebar(options: SidebarOptions = {}): SidebarState {
       setOpenState(current =>
         resolveSidebarOpen({ chosen: chosen.current, current, stored, isMobile: matches }),
       );
+      // The same number lives in the stylesheet, and must. Say so out loud the
+      // moment the two part, rather than leaving it to whoever next opens the
+      // rail on a phone. Development only: this is a wiring mistake, caught
+      // once at the desk, not a condition to watch for in production.
+      if (process.env.NODE_ENV !== 'production') {
+        const complaint = railBreakpointMismatch({
+          isMobile: matches,
+          floating: readRailFloating(),
+          breakpoint,
+        });
+        if (complaint) console.error(complaint);
+      }
     };
 
     apply(mql.matches);

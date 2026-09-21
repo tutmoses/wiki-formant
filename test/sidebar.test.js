@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveSidebarOpen } from 'wiki-formant/sidebar';
+import {
+  railBreakpointMismatch,
+  RAIL_FLOATING_PROPERTY,
+  resolveSidebarOpen,
+} from 'wiki-formant/sidebar';
 import { isRailLinkActive } from 'wiki-formant/react';
 
 // The collapse rule carries both bug fixes, so it is tested directly. The
@@ -67,4 +71,35 @@ test("BUG: a catch-all's prerender arrives percent-encoded", () => {
 test('a path that will not decode answers for itself', () => {
   assert.equal(isRailLinkActive('/wiki/100%', '/wiki/100%', false), true);
   assert.equal(isRailLinkActive('/wiki/100%/notes', '/wiki/100%', true), true);
+});
+
+// ---- rail breakpoint agreement ----------------------------------------------
+
+// The breakpoint is necessarily known twice — matchMedia here, a media query in
+// the stylesheet — because neither language can read the other's copy. The rule
+// below cannot merge them; it makes them unable to part in silence.
+
+test('agreement is silent, in both states', () => {
+  const bp = { breakpoint: 768 };
+  assert.equal(railBreakpointMismatch({ ...bp, isMobile: true, floating: true }), null);
+  assert.equal(railBreakpointMismatch({ ...bp, isMobile: false, floating: false }), null);
+});
+
+test('a stylesheet that has not opted in is not a mismatch', () => {
+  // `null` is "the property is not declared" — a consumer using its own
+  // mechanism, or a test with no CSSOM. Not knowing must not read as knowing.
+  assert.equal(railBreakpointMismatch({ breakpoint: 768, isMobile: true, floating: null }), null);
+  assert.equal(railBreakpointMismatch({ breakpoint: 768, isMobile: false, floating: null }), null);
+});
+
+test('disagreement names both sides and the number to fix', () => {
+  // The case this exists for: CSS floats the rail at one width, JS at another,
+  // so between them the rail closes on navigate while still a column.
+  const msg = railBreakpointMismatch({ breakpoint: 900, isMobile: false, floating: true });
+  assert.ok(msg, 'a disagreement must be reported');
+  assert.match(msg, /breakpoint=900/);
+  assert.match(msg, /max-width: 899px/);
+  assert.ok(msg.includes(RAIL_FLOATING_PROPERTY));
+  // And the converse direction is reported too, not just one of them.
+  assert.ok(railBreakpointMismatch({ breakpoint: 900, isMobile: true, floating: false }));
 });

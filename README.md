@@ -225,6 +225,17 @@ export async function GET(request: Request) {
 
 `SidebarProvider` / `useSidebar` hold the rail's collapse state — remembered across loads, defaulted from the viewport only when the reader has never chosen. Pair it with `sidebarBootScript` from `wiki-formant/sidebar` (framework-free, so a server component can stamp it into `<head>`) or a remembered-closed rail paints open and animates shut on every load. `TableOfContents` is the "on this page" list, with scroll-spy, reading either headings you already know or the rendered article.
 
+The rail's breakpoint is necessarily known twice — `matchMedia` here, a media query in your stylesheet — because a media query cannot read a JS constant and a JS constant cannot read a media query. What the two can be stopped from doing is parting in silence, which is the failure that actually happens: all three wikis matched the numbers by hand, all three were right, and nothing said so. Set `--rail-floating: 1` inside the same media query that lays the rail out, and the hook checks the two agree on every breakpoint crossing, in development, naming both sides and the number to change:
+
+```css
+@media (max-width: 767px) {          /* the edge of breakpoint={768} */
+  :root { --rail-floating: 1; }
+  .sidebar { position: fixed; /* … however this wiki floats its rail */ }
+}
+```
+
+Declaring the property is what opts a stylesheet in; without it the check stays quiet, since a package cannot require CSS it does not ship. The mechanism is `railBreakpointMismatch` and `readRailFloating` from `wiki-formant/sidebar`, both exported, the first pure.
+
 `useTypeahead` is the search field's state machine. Five surfaces across the three wikis had three implementations and no two agreed on what a search field does; this is their union, because each had a piece the others lacked:
 
 ```ts
