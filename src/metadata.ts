@@ -235,3 +235,28 @@ export function documentTitle(title: string, metadata: unknown, key = 'seoTitle'
   const short = (metadata as Record<string, unknown> | null | undefined)?.[key];
   return typeof short === 'string' && short.trim() ? short : title;
 }
+
+/**
+ * The longest of `variants` whose rendered length fits, or the shortest one
+ * when none of them do.
+ *
+ * `documentTitle` above is for a page whose short form someone wrote down. A
+ * generated page has no one to write it: acuiq.com composes a point's title
+ * from its code, its pinyin and its English name, which is 37 characters for
+ * LI04 Hegu and 148 for a point carrying three names and three pinyin
+ * readings. A single template cannot serve both, and truncating mid-word
+ * serves neither. Ordering the forms from fullest to barest and taking the
+ * first that fits keeps the English name on the pages where a result would
+ * show it and drops it only where it would have been cut off anyway.
+ *
+ * `suffix` is the template's, counted but not returned - Next applies it.
+ */
+export function fittingTitle(
+  variants: readonly string[],
+  opts: { suffix?: string; limit?: number } = {},
+): string {
+  const { suffix = '', limit = TITLE_LIMIT } = opts;
+  const usable = variants.map(v => v.trim()).filter(Boolean);
+  if (!usable.length) return '';
+  return usable.find(v => v.length + suffix.length <= limit) ?? usable[usable.length - 1]!;
+}

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { corpusEtag, notModified, textHeaders, markdownHeaders, descriptorHeaders, descriptorResponse, cleanSnippet, pageLine } from 'wiki-formant/http';
 import { parsePagination, paginatedResponse, listEnvelope, toOffset, adjacentPages } from 'wiki-formant/pagination';
 import { parseVersion, formatVersion, bump, compareVersions } from 'wiki-formant/versioning';
-import { documentTitle, TITLE_BUDGET, TITLE_LIMIT } from 'wiki-formant/metadata';
+import { documentTitle, fittingTitle, TITLE_BUDGET, TITLE_LIMIT } from 'wiki-formant/metadata';
 
 test('an ETag is stable for the same corpus revision and moves when it changes', () => {
   const a = corpusEtag([349, new Date('2026-08-29T00:00:00Z')]);
@@ -223,4 +223,20 @@ test('cleanSnippet drops a root-relative link target, and keeps ordinary parenth
   assert.equal(cleanSnippet('A paper (Hellings and Sadoghi, 2020) says so.'),
     'A paper (Hellings and Sadoghi, 2020) says so.');
   assert.equal(cleanSnippet('Read it (https://example.com/x) today.'), 'Read it today.');
+});
+
+test('fittingTitle takes the fullest form that fits, and the barest when none do', () => {
+  const full = 'LI04 Hegu (Junction Valley) – acupuncture point';
+  const bare = 'LI04 Hegu – acupuncture point';
+  assert.equal(fittingTitle([full, bare], { suffix: ' | AcuiQ' }), full);
+
+  const huge = 'XC02A Sanjiaojiu/qipang/shanqixue (Moxibustion Triangle / Beside The Umbilicus) – acupuncture point';
+  const shorter = 'XC02A Sanjiaojiu/qipang/shanqixue – acupuncture point';
+  assert.equal(fittingTitle([huge, shorter], { suffix: ' | AcuiQ' }), shorter);
+
+  // Nothing fits: the shortest is still the best answer, not a truncation.
+  const a = 'A'.repeat(90), b = 'B'.repeat(80);
+  assert.equal(fittingTitle([a, b], { suffix: ' | AcuiQ' }), b);
+  assert.equal(fittingTitle([]), '');
+  assert.equal(fittingTitle(['  ', 'ok']), 'ok');
 });
