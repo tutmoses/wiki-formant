@@ -66,7 +66,18 @@ async function sitemapUrls(origin) {
     }
   };
   await read(`${origin}/sitemap.xml`);
-  return seen;
+  // A sitemap states absolute production URLs by definition, so pointing
+  // --site at a dev server would otherwise crawl production and report the
+  // build you were trying to replace. The path is what the sitemap contributes;
+  // the origin is what you asked for.
+  return seen.map(u => {
+    try {
+      const { pathname, search } = new URL(u);
+      return `${origin}${pathname}${search}`;
+    } catch {
+      return u;
+    }
+  });
 }
 
 const titleOf = html => {
