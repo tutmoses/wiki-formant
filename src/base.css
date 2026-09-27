@@ -46,6 +46,11 @@
 .tab-panel:not(.active) { display: none; }
 [data-tabs]:not([data-tabs-init]) [data-tab-item] ~ [data-tab-item] { display: none; }
 
+/* ---- table scroll boxes (scrollTables) -----------------------------------
+   A stored table wider than its column scrolls inside its own box, at every
+   width, instead of painting past the column. */
+.table-scroll { overflow-x: auto; }
+
 /* ---- code copy buttons (addCopyButtons) -----------------------------------
    The script positions the <pre>; this pins the button in its corner. Shown
    on hover, on keyboard focus, and always where there is no hover to show it. */

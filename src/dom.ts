@@ -353,3 +353,29 @@ export function sortTables(root: ParentNode, options: SortTablesOptions = {}): v
     });
   }
 }
+
+// ---- scroll boxes -----------------------------------------------------------
+
+const SCROLL_BOX = '<div class="table-scroll">';
+
+/**
+ * Wrap every table in stored article HTML in a `.table-scroll` box, which
+ * `base.css` lets scroll sideways.
+ *
+ * A table box ignores `overflow`, and a stored table is as wide as its longest
+ * unbreakable token, an address or a URL, however narrow its column. radix-wiki
+ * gave it a scroll box only on phones, keyed to the viewport; at 1024px its
+ * column was 425px and a 1,068px ledger ran under the sticky infobox beside it.
+ * Unlike `sortTables` this runs on the string, before render: an effect would
+ * run after the table had already been laid out too wide.
+ *
+ * A table already in a box keeps it, so a second pass changes nothing.
+ */
+export function scrollTables(html: string): string {
+  const boxed: boolean[] = [];
+  return html.replace(/(<div class="table-scroll">\s*)?<table\b|<\/table>/gi, (tag: string, hadBox?: string) => {
+    if (tag[1] === '/') return boxed.pop() ? `${tag}</div>` : tag;
+    boxed.push(!hadBox);
+    return hadBox ? tag : SCROLL_BOX + tag;
+  });
+}

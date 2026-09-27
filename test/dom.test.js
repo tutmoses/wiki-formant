@@ -7,6 +7,7 @@ import {
   onTweetResize,
   addCopyButtons,
   sortTables,
+  scrollTables,
 } from 'wiki-formant/dom';
 
 // ---- tweet embeds -----------------------------------------------------------
@@ -272,4 +273,35 @@ test("the button class is the caller's to name", () => {
   const root = article(grid(['Name'], [['b'], ['a']]));
   sortTables(root, { className: 'th-sort' });
   assert.equal(root.querySelector('th button').className, 'th-sort');
+});
+
+// ---- scroll boxes -----------------------------------------------------------
+
+const BOX = '<div class="table-scroll">';
+
+test('every stored table gets a scroll box', () => {
+  assert.equal(
+    scrollTables('<p>a</p><table><tr><td>1</td></tr></table><TABLE class="x"></TABLE>'),
+    `<p>a</p>${BOX}<table><tr><td>1</td></tr></table></div>${BOX}<TABLE class="x"></TABLE></div>`,
+  );
+});
+
+test('a second pass adds no second box', () => {
+  const once = scrollTables('<table><tr><td>1</td></tr></table>');
+  assert.equal(scrollTables(once), once);
+});
+
+test('a table stored in its box keeps that box and no other', () => {
+  const html = `${BOX}\n<table></table></div><table></table>`;
+  assert.equal(scrollTables(html), `${BOX}\n<table></table></div>${BOX}<table></table></div>`);
+});
+
+test('a nested table closes its own box, not its parent\'s', () => {
+  const out = scrollTables('<table><tr><td><table></table></td></tr></table>');
+  assert.equal(out, `${BOX}<table><tr><td>${BOX}<table></table></div></td></tr></table></div>`);
+});
+
+test('text that only names a table is left alone', () => {
+  const html = '<p>&lt;table&gt; and <code>&lt;/table&gt;</code></p>';
+  assert.equal(scrollTables(html), html);
 });
