@@ -5,7 +5,9 @@ import {
   RAIL_FLOATING_PROPERTY,
   resolveSidebarOpen,
 } from 'wiki-formant/sidebar';
-import { isRailLinkActive } from 'wiki-formant/react';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { isRailLinkActive, TableOfContents } from 'wiki-formant/react';
 
 // The collapse rule carries both bug fixes, so it is tested directly. The
 // component around it is verified in a browser, where a DOM actually exists.
@@ -102,4 +104,13 @@ test('disagreement names both sides and the number to fix', () => {
   assert.ok(msg.includes(RAIL_FLOATING_PROPERTY));
   // And the converse direction is reported too, not just one of them.
   assert.ok(railBreakpointMismatch({ breakpoint: 900, isMobile: true, floating: false }));
+});
+
+test('a flat table of contents leaves its items\' padding to the stylesheet', () => {
+  const headings = [{ id: 'a', text: 'A', level: 2 }, { id: 'b', text: 'B', level: 3 }];
+  const flat = renderToStaticMarkup(createElement(TableOfContents, { headings, indentRem: 0 }));
+  assert.doesNotMatch(flat, /padding-left/);
+  const nested = renderToStaticMarkup(createElement(TableOfContents, { headings }));
+  assert.match(nested, /padding-left:0.75rem/);
+  assert.match(nested, /padding-left:1.5rem/);
 });

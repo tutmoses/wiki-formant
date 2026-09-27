@@ -250,7 +250,8 @@ export interface TableOfContentsProps {
   offsetVar?: string;
   /** Fallback offset in px when `offsetVar` is unset or unparseable. */
   offsetFallback?: number;
-  /** Indent per heading level, in rem. Set 0 for a flat list. */
+  /** Indent per heading level, in rem. Set 0 for a flat list, whose items then
+   *  take their padding from the stylesheet: an inline `padding-left: 0` beat it. */
   indentRem?: number;
   /** Rendered instead of nothing when the article has no headings. */
   empty?: ReactNode;
@@ -420,7 +421,7 @@ export function TableOfContents({
                   : classNames.item
               }
               aria-current={currentId === h.id ? 'location' : undefined}
-              style={{ paddingLeft: `${(h.level - 1) * indentRem}rem` } as CSSProperties}
+              style={(h.level - 1) * indentRem ? ({ paddingLeft: `${(h.level - 1) * indentRem}rem` } as CSSProperties) : undefined}
             >
               {h.text}
             </button>
