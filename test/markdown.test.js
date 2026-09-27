@@ -116,3 +116,24 @@ test('indented table cells stay clean', () => {
   `);
   assert.equal(md, '| Channel | Code |\n| --- | --- |\n| Kidney | `KD` |');
 });
+
+test('a block inside a div keeps its lines — a boxed table is still a table', () => {
+  const table = '<table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>';
+  assert.equal(htmlToMarkdown(`<div class="table-scroll">${table}</div>`), htmlToMarkdown(table));
+  assert.equal(htmlToMarkdown('<div><ul><li>a</li><li>b</li></ul></div>'), '- a\n- b');
+  assert.equal(htmlToMarkdown('<div><pre><code>x\ny</code></pre></div>'), '```\nx\ny\n```');
+  assert.equal(htmlToMarkdown('<div data-callout><p>One.</p><p>Two.</p></div>'), 'One.\n\nTwo.');
+  // A heading an editor left inside an unclosed <p> no longer swallows the next paragraph.
+  assert.equal(htmlToMarkdown('<p><h2>Title</h2>\n<p>Body.</p>'), '## Title\n\nBody.');
+});
+
+test('inline text in a div still converts inline', () => {
+  assert.equal(htmlToMarkdown('<div>Some <strong>bold</strong> text</div>'), 'Some **bold** text');
+});
+
+test('a list inside a numbered item is nested under it, not run onto its line', () => {
+  assert.equal(
+    htmlToMarkdown('<ol><li>Felix<ul><li>founder</li><li>maxi</li></ul></li><li>Haseeb</li></ol>'),
+    '1. Felix\n   - founder\n   - maxi\n2. Haseeb',
+  );
+});

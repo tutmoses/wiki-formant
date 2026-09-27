@@ -96,60 +96,73 @@ export function tableToMarkdown(html: string): string {
   ].join('\n');
 }
 
+// The spaces either side go with it: at a block boundary they are not text.
+const BLOCK_TOKEN = /[ \t]*\u0000(\d+)\u0000[ \t]*/g;
+
 /** Block-level HTML → markdown. */
 export function htmlToMarkdown(html: string): string {
   let out = html;
 
+  // Each converted block is set aside behind a token and put back at the end.
+  // The `<div>` rule reads its body as inline text and collapses whitespace, so
+  // a block already converted inside a div lost every newline: a boxed table
+  // (`scrollTables`) came out as one line of pipes, and so did a list, a code
+  // listing or a callout's paragraphs.
+  const blocks: string[] = [];
+  const block = (md: string) => `\u0000${blocks.push(`\n\n${md}\n\n`) - 1}\u0000`;
+  const restore = (s: string): string => s.replace(BLOCK_TOKEN, (_m, i: string) => restore(blocks[Number(i)]!));
+  // A list inside an item is already a block by the time its parent converts;
+  // it goes under the item's line, indented, rather than onto it.
+  const listItem = (marker: string, body: string) =>
+    [
+      `${marker} ${inlineToMarkdown(body.replace(BLOCK_TOKEN, ''))}`,
+      ...[...body.matchAll(BLOCK_TOKEN)].map(m => restore(m[0]).trim().replace(/^/gm, '   ')),
+    ].join('\n');
+
   // Tables first — their inner markup must not be eaten by the generic rules.
-  out = out.replace(
-    /<table\b[^>]*>[\s\S]*?<\/table>/gi,
-    m => `\n\n${tableToMarkdown(m)}\n\n`,
-  );
+  out = out.replace(/<table\b[^>]*>[\s\S]*?<\/table>/gi, m => block(tableToMarkdown(m)));
 
   // Lists. `<ol>` numbering is computed per-list, which is why this cannot be a
   // single regex with a `$1` backreference — inside a replace callback `$1` is
   // a literal, not a substitution. (That exact bug shipped once and rendered
   // every ordered list as a column of `1. $1`.)
   out = out.replace(/<ul\b[^>]*>([\s\S]*?)<\/ul>/gi, (_m, body: string) => {
-    const items = [...body.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)].map(
-      i => `- ${inlineToMarkdown(i[1]!)}`,
-    );
-    return `\n\n${items.join('\n')}\n\n`;
+    const items = [...body.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)].map(i => listItem('-', i[1]!));
+    return block(items.join('\n'));
   });
   out = out.replace(/<ol\b[^>]*>([\s\S]*?)<\/ol>/gi, (_m, body: string) => {
-    const items = [...body.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)].map(
-      (i, n) => `${n + 1}. ${inlineToMarkdown(i[1]!)}`,
-    );
-    return `\n\n${items.join('\n')}\n\n`;
+    const items = [...body.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)].map((i, n) => listItem(`${n + 1}.`, i[1]!));
+    return block(items.join('\n'));
   });
 
   out = out
     .replace(
       /<pre\b[^>]*>\s*<code\b[^>]*>([\s\S]*?)<\/code>\s*<\/pre>/gi,
-      (_m, code: string) => `\n\n\`\`\`\n${decodeEntities(code).trim()}\n\`\`\`\n\n`,
+      (_m, code: string) => block(`\`\`\`\n${decodeEntities(code).trim()}\n\`\`\``),
     )
     .replace(
       /<pre\b[^>]*>([\s\S]*?)<\/pre>/gi,
-      (_m, code: string) => `\n\n\`\`\`\n${decodeEntities(code).trim()}\n\`\`\`\n\n`,
+      (_m, code: string) => block(`\`\`\`\n${decodeEntities(code).trim()}\n\`\`\``),
     )
     .replace(
       /<blockquote\b[^>]*>([\s\S]*?)<\/blockquote>/gi,
       (_m, body: string) =>
-        `\n\n${inlineToMarkdown(body)
-          .split('\n')
-          .map(l => `> ${l}`)
-          .join('\n')}\n\n`,
+        block(
+          inlineToMarkdown(body)
+            .split('\n')
+            .map(l => `> ${l}`)
+            .join('\n'),
+        ),
     )
     .replace(
       /<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi,
-      (_m, level: string, body: string) =>
-        `\n\n${'#'.repeat(Number(level))} ${inlineToMarkdown(body)}\n\n`,
+      (_m, level: string, body: string) => block(`${'#'.repeat(Number(level))} ${inlineToMarkdown(body)}`),
     )
-    .replace(/<hr\s*\/?>/gi, '\n\n---\n\n')
-    .replace(/<p\b[^>]*>([\s\S]*?)<\/p>/gi, (_m, body: string) => `\n\n${inlineToMarkdown(body)}\n\n`)
+    .replace(/<hr\s*\/?>/gi, () => block('---'))
+    .replace(/<p\b[^>]*>([\s\S]*?)<\/p>/gi, (_m, body: string) => block(inlineToMarkdown(body)))
     .replace(/<div\b[^>]*>([\s\S]*?)<\/div>/gi, (_m, body: string) => `\n\n${inlineToMarkdown(body)}\n\n`);
 
-  return decodeEntities(out.replace(/<[^>]+>/g, ''))
+  return decodeEntities(restore(out).replace(/<[^>]+>/g, ''))
     .replace(/[ \t]+$/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
