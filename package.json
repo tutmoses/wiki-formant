@@ -177,8 +177,8 @@
     }
   },
   "bin": {
-    "check-classes": "./bin/check-classes.mjs",
-    "check-pages": "./bin/check-pages.mjs"
+    "check-classes": "bin/check-classes.mjs",
+    "check-pages": "bin/check-pages.mjs"
   },
   "files": [
     "dist",
