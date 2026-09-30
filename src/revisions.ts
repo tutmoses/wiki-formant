@@ -68,6 +68,21 @@ interface Located<B> {
   path: string;
 }
 
+/**
+ * A path as a reader says it: `root.1.columns.0.blocks.2` is
+ * "Block 2 → Column 1 → Block 3". Positions count from one; a segment that
+ * names a group (`blocks`, `columns`) only says what the next number counts.
+ */
+export function blockLocation(path: string): string {
+  let group = '';
+  const out: string[] = [];
+  for (const seg of path.split('.').slice(1)) {
+    if (/^\d+$/.test(seg)) out.push(`${group === 'columns' ? 'Column' : 'Block'} ${Number(seg) + 1}`);
+    else group = seg;
+  }
+  return out.join(' → ');
+}
+
 /** Every block in the tree, flattened, each with the path that addresses it. */
 export function extractBlocks<B>(
   blocks: readonly B[],

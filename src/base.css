@@ -103,3 +103,16 @@ pre:hover > .code-copy-btn,
 [aria-sort='descending'] > .sort-header::after {
   --sort-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v14'/%3E%3Cpath d='m19 12-7 7-7-7'/%3E%3C/svg%3E");
 }
+
+/* ---- RevisionChanges ------------------------------------------------------
+   A list of changes rather than a bulleted one, each diff directly under its
+   heading line. `del` and `ins` keep their browser defaults, a strike and an
+   underline, so a diff still reads before a stylesheet colours it. */
+.revision-changes {
+  display: grid;
+  gap: 0.5em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.revision-diff { margin: 0.25em 0 0; }

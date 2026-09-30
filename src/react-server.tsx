@@ -23,6 +23,8 @@ import type { ComponentType, ReactNode } from 'react';
 import type { Control, FacetControlGroup, MetadataRow } from './taxonomy.js';
 import { safeLinkHref } from './validation.js';
 import { isoDate } from './html.js';
+import { blockLocation, type BlockChange } from './revisions.js';
+import type { HistoryChange } from './history.js';
 
 /**
  * The shape a router's link component has to satisfy here.
@@ -575,5 +577,46 @@ export function InfoboxFacts({ rows, link: Link = Anchor, formatValue = formatFa
         ))}
       </tbody>
     </table>
+  );
+}
+
+const ACTION_LABEL: Record<BlockChange['action'], string> = {
+  added: 'Added',
+  removed: 'Removed',
+  modified: 'Modified',
+  moved: 'Moved',
+};
+
+export interface RevisionChangesProps {
+  /** One revision's changes, from `historyChanges` or `withChanges` in `wiki-formant/history`. */
+  changes: readonly HistoryChange[];
+  /** What a block type is called where a reader sees it, such as the editor's label. Defaults to the type. */
+  label?: (type: string) => string;
+}
+
+/**
+ * What one revision changed, block by block, each prose leaf with its text
+ * diff. Struck and added text are `<del>` and `<ins>`, which a screen reader
+ * announces as such; their colours, and the action's, keyed on `data-action`,
+ * are the importing stylesheet's.
+ */
+export function RevisionChanges({ changes, label = type => type }: RevisionChangesProps) {
+  if (!changes.length) return null;
+  return (
+    <ul className="revision-changes">
+      {changes.map((c, i) => (
+        <li key={i} className="revision-change" data-action={c.action}>
+          <span className="revision-change-action">{ACTION_LABEL[c.action]}</span>
+          {` – ${label(c.type)} at ${blockLocation(c.path)}`}
+          {c.leafDiff && (
+            <p className="revision-diff">
+              {c.leafDiff.map(([op, text], j) =>
+                op === -1 ? <del key={j}>{text}</del> : op === 1 ? <ins key={j}>{text}</ins> : <span key={j}>{text}</span>,
+              )}
+            </p>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }

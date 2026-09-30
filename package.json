@@ -1,6 +1,6 @@
 {
   "name": "wiki-formant",
-  "version": "0.26.1",
+  "version": "0.27.0",
   "description": "The portable half of a wiki: derived taxonomy and facet controls, a version-negotiating MCP transport, markdown twins, block rendering, a rich-text editor engine, and conditional-GET plumbing.",
   "type": "module",
   "license": "MIT",
@@ -77,6 +77,10 @@
     "./revisions": {
       "types": "./dist/revisions.d.ts",
       "import": "./dist/revisions.js"
+    },
+    "./history": {
+      "types": "./dist/history.d.ts",
+      "import": "./dist/history.js"
     },
     "./search": {
       "types": "./dist/search.d.ts",
@@ -209,6 +213,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/sanitize-html": "^2.16.1",
+    "fast-diff": "^1.3.0",
     "jose": "^6.2.10",
     "jsdom": "^30.1.0",
     "react": "^19.2.4",
@@ -227,12 +232,13 @@
     "@tiptap/extension-table-header": ">=2.10",
     "@tiptap/extension-table-row": ">=2.10",
     "@tiptap/extension-youtube": ">=2.10",
+    "@tiptap/pm": ">=2.10",
     "@tiptap/react": ">=2.10",
     "@tiptap/starter-kit": ">=2.10",
+    "fast-diff": ">=1.3",
     "jose": ">=5",
     "react": ">=18",
-    "sanitize-html": ">=2",
-    "@tiptap/pm": ">=2.10"
+    "sanitize-html": ">=2"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -284,6 +290,9 @@
       "optional": true
     },
     "@tiptap/pm": {
+      "optional": true
+    },
+    "fast-diff": {
       "optional": true
     }
   }

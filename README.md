@@ -387,6 +387,35 @@ One copy also built two Maps keyed by a recursive `JSON.stringify` of every
 block, on every save, and never read either one. Matching is by id and always
 was. That half is not here.
 
+## History
+
+What each revision changed, as a history view shows it. `revisions` stays free
+of dependencies because every save imports it; this is the reading half, and it
+needs `fast-diff`, an optional peer.
+
+```tsx
+import { withChanges } from 'wiki-formant/history';
+import { RevisionChanges } from 'wiki-formant/react-server';
+
+const rows = withChanges(revisionsNewestFirst); // each row needs its `content`
+<RevisionChanges changes={rows[0].changes} label={type => BLOCK_LABELS[type]} />
+```
+
+- **Diffed on the server, from stored content.** radix-wiki used to send both
+  HTML bodies of every modified block to the browser and diff them there: 887 KB
+  of payload for a 13-revision page whose drawn diffs came to 25 KB. A row
+  leaves `withChanges` without its content.
+- **Words, not letters.** Semantic cleanup is on, so a rewritten sentence reads
+  as the old words struck and the new ones added.
+- **Leaves only.** A container's own entry restates its children. A leaf whose
+  type changed is a replacement and gets no text diff. `leafText` names the prose
+  field of a block beyond the core `content` one.
+- **A window diffs against what precedes it.** The oldest row is diffed against
+  an empty page, so fetch one revision more than you show and drop the last row.
+
+`RevisionChanges` marks struck and added text as `<del>` and `<ins>` and keys
+each change on `data-action`; `base.css` only resets the list.
+
 ## Feeds
 
 Three repos, four feeds, 47 of 64 significant lines identical — including,
