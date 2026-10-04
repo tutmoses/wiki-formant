@@ -193,7 +193,8 @@
   },
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json && cp src/base.css dist/base.css",
-    "test": "npm run build && node --test 'test/*.test.js'"
+    "test": "npm run build && node --test 'test/*.test.js'",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "devDependencies": {
     "@radixdlt/rola": "^2.1.0",

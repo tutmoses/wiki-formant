@@ -1,0 +1,3 @@
+#!/bin/sh
+# Wired by `npm install` (the prepare script sets core.hooksPath).
+exec scripts/unshipped.sh

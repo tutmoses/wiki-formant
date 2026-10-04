@@ -75,26 +75,12 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # The silent-no-op guard. Shipping a src/ change without a version bump is
-      # almost always a mistake, and the old path filter made it invisible.
-      # Scoped to src/ deliberately: docs, tests and CI edits legitimately ship
-      # nothing, and failing those would train everyone to ignore this job.
+      # The silent-no-op guard: a src/ change that npm does not have under the
+      # current version ships nowhere. The pre-push hook runs the same script,
+      # so this should only ever fire for a push made without the hook.
       - name: Refuse a src change that ships nowhere
-        if: github.event_name == 'push' && steps.check.outputs.changed == 'false'
-        run: |
-          BEFORE="${{ github.event.before }}"
-          # A new branch or a force-push leaves no usable base. Skip rather than
-          # guess: a false failure here blocks an innocent push.
-          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
-             || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-            echo "::notice::No usable base commit — skipping the bump check."
-            exit 0
-          fi
-          if git diff --name-only "$BEFORE" "${{ github.sha }}" | grep -q '^src/'; then
-            echo "::error::src/ changed but package.json still says $(jq -r .version package.json), which is already on npm. Bump the version in the same commit, or these changes ship nowhere."
-            exit 1
-          fi
-          echo "::notice::No src/ changes in this push — nothing to publish is correct."
+        if: steps.check.outputs.changed == 'false'
+        run: scripts/unshipped.sh
 
       # Build and test explicitly rather than leaning on prepublishOnly, so a
       # failure lands before the credential is ever in scope and reports as its
