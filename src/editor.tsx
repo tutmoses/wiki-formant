@@ -78,6 +78,26 @@ function cleanPastedHtml(html: string): string {
 
 // ---- extensions -------------------------------------------------------------
 
+/**
+ * Tiptap's Link, storing an href and the `link` class and nothing else.
+ *
+ * Stock Link writes `target="_blank" rel="noopener noreferrer nofollow"` onto
+ * every link, internal ones included, and the schema then reads both back from
+ * stored HTML, so a page edited once kept them for good. Nofollow on a site's
+ * own links throws away its link equity, and a new tab for in-site navigation
+ * is a bug. Whether a link is external depends on the host it is served from,
+ * which the editor cannot know, so the render path decides: `normaliseLinks`
+ * from `wiki-formant/links`. Dropping both attributes from the mark also cleans
+ * a legacy link the next time its page is saved.
+ */
+export const wikiLink = TiptapLink.extend({
+  addAttributes() {
+    return Object.fromEntries(
+      Object.entries(this.parent?.() ?? {}).filter(([name]) => name !== 'target' && name !== 'rel'),
+    );
+  },
+}).configure({ openOnClick: false, HTMLAttributes: { class: 'link', target: null, rel: null } });
+
 export interface WikiEditorExtensionOptions {
   /** Empty-document prompt. */
   placeholder?: string;
@@ -106,7 +126,7 @@ function wikiEditorExtensions({
 }: WikiEditorExtensionOptions = {}): AnyExtension[] {
   return [
     StarterKit.configure({ heading: { levels: [2, 3, 4] }, codeBlock: false }),
-    TiptapLink.configure({ openOnClick: false, HTMLAttributes: { class: 'link' } }),
+    wikiLink,
     TiptapImage.configure({
       inline: false,
       allowBase64: true,

@@ -541,6 +541,8 @@ The ones that take config take it because that is exactly where the two copies d
 
 `TOOLBAR_ACTIONS` are the formatting commands with the labels a screen reader announces — two toolbars titled buttons with the internal key, so one said "codeBlock". Pick yours in order with `toolbarActions([...])`, render each through `ToolbarButton` (named, and `aria-pressed`, since these are toggles), and run a table command with `runTableAction`. Upload and embed stay with the caller; they are the parts that differ.
 
+A link is stored as its `href` and the `link` class, nothing else (`wikiLink`). Stock Tiptap writes `target="_blank" rel="noopener noreferrer nofollow"` onto every link, internal ones included, which on a site throws away its own link equity and opens in-site navigation in new tabs. Whether a link is external depends on the host serving the page, so `normaliseLinks` decides it at render time. A legacy link loses both attributes the next time its page is saved.
+
 The redirect resolves through the wiki's own route, because the editor cannot read it cross-origin. `resolveMapUrl` is the client half and `resolveMapHandler` the whole route: exact shortener hosts, one hop, an allowlisted landing host, a timeout, and your sign-in check as `authorize`. One of the two copies it replaced matched `goo.gl` as a substring and followed every redirect for anyone who asked.
 
 ```ts

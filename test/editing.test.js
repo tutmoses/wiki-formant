@@ -45,3 +45,22 @@ test('toolbar actions come back in the caller\'s order, and every one is labelle
   }
   assert.notEqual(TOOLBAR_ACTIONS.find(a => a.key === 'code').label, TOOLBAR_ACTIONS.find(a => a.key === 'codeBlock').label);
 });
+
+test('a link round-trips with its href and class, and loses a stored target and rel', async () => {
+  const { JSDOM } = await import('jsdom');
+  const { window } = new JSDOM('');
+  Object.assign(globalThis, { window, document: window.document });
+  const { generateHTML, generateJSON } = await import('@tiptap/core');
+  const { default: StarterKit } = await import('@tiptap/starter-kit');
+  const { wikiLink } = await import('wiki-formant/editor');
+  const extensions = [StarterKit, wikiLink];
+  const roundTrip = stored => generateHTML(generateJSON(stored, extensions), extensions);
+  assert.equal(
+    roundTrip('<p><a href="/wholesale" target="_blank" rel="noopener noreferrer nofollow">Wholesale</a></p>'),
+    '<p><a class="link" href="/wholesale">Wholesale</a></p>',
+  );
+  assert.equal(
+    roundTrip('<p><a href="https://example.com">out</a></p>'),
+    '<p><a class="link" href="https://example.com">out</a></p>',
+  );
+});
