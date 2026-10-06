@@ -33,7 +33,7 @@ import {
   resolveSidebarOpen,
   SIDEBAR_ATTRIBUTE,
 } from './sidebar.js';
-import { activateTabGroups, addCopyButtons, hydrateTweetEmbeds, onTweetResize, sizeTweetEmbeds, sortTables } from './dom.js';
+import { activateTabGroups, addCopyButtons, hydrateTweetEmbeds, onTweetResize, sizeTweetEmbeds, sortTables, startBeacon } from './dom.js';
 import type { WikiLinkComponent } from './react-server.js';
 import { comboboxAria, type ComboboxAria } from './combobox.js';
 import {
@@ -1304,4 +1304,13 @@ export function useTweetEmbeds(ref: RefObject<HTMLElement | null>, deps: Depende
     return onTweetResize(height => sizeTweetEmbeds(root, height));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
+}
+
+/**
+ * Counts the page views of the app it is mounted in: place it once, in the root
+ * layout. `endpoint` is the route that hands the beacon to `collect`.
+ */
+export function Beacon({ endpoint = '/api/view' }: { endpoint?: string }): null {
+  useEffect(() => startBeacon(endpoint), [endpoint]);
+  return null;
 }

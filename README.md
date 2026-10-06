@@ -551,27 +551,55 @@ export const GET = resolveMapHandler({ authorize: async () => !!(await currentUs
 
 ## Analytics
 
-Two lanes, one events helper. `mcpCallProps` reads a tool name out of a JSON-RPC
-envelope that is untrusted and may be a batch; `searchQueryProps` normalises a
-search box's free text so the same question aggregates as one row. Sending stays
-with the caller — `plausibleEvent` builds the request, and the framework's own
-deferral (`after()` in a route or server action, `event.waitUntil` in a proxy)
-decides when it goes, so this package keeps its zero-dependency guarantee.
+Page views and events, counted in the site's own Postgres instead of a hosted
+service. No cookie is set and no address is kept: a visitor is a hash of the
+address and browser under a salt that is replaced every UTC day, and the old
+salt is deleted, so a visitor is told apart within a day and never followed
+into the next. Rows are kept 400 days. The package owns the SQL and the app
+owns the connection: `Sql` is one function that runs a statement with `$1, $2…`
+placeholders, and the three tables it needs are stated as Prisma models at the
+top of `src/analytics.ts`.
+
+```ts
+// src/lib/track.ts
+export const sql: Sql = (query, ...values) => prisma.$queryRawUnsafe(query, ...values);
+
+// src/app/api/view/route.ts – the whole beacon route
+export const POST = (request: Request) => collect(request, { sql, defer: after });
+
+// the root layout, once
+<Beacon />
+```
+
+`<Beacon>` (`wiki-formant/react`) sends a view each time the path changes,
+client-side moves included, and a click on a link to another host as an
+"Outbound Link: Click" event; `track(name, props)` (`wiki-formant/dom`) sends
+any other browser event. Server code calls `recordEvent` and leaves the
+deferral to the framework, so this package keeps its zero-dependency
+guarantee:
 
 ```ts
 const props = searchQueryProps({ query, results: rows.length, surface: 'wiki' });
 // null for an empty field, so a blank search cannot fire an event
-if (props) after(() => plausibleEvent({ domain }, 'Search Query', url, props, headers, {
-  // a person triggered this, so it joins their session rather than landing
-  // as the fixed bot-tracker pseudo-visitor
-  userAgent: headers.get('user-agent') ?? undefined,
-}));
+if (props) after(() => recordEvent(sql, { name: 'Search Query', props, url, headers }));
 ```
+
+`mcpCallProps` reads a tool name out of a JSON-RPC envelope that is untrusted
+and may be a batch; `searchQueryProps` normalises a search box's free text so
+the same question aggregates as one row. Pass the request's headers and the
+event joins whoever sent it, person or agent.
+
+`digest(sql, { days })` reads a site back as one JSON object: visitors, page
+views, bounce rate, visit length, sources (a link's `utm_source`, else the
+referring host), top and entry pages, countries, devices, visitors by day, MCP
+tool calls, and the searches that found nothing. A visit is a run of one
+visitor's views with no gap over 30 minutes. A multi-tenant app passes a `site`
+key to every call and a `site` resolver to `collect`.
 
 Instrumenting the agent lane and not the human one is the easy mistake: it
 leaves a wiki able to say what every crawler asked for and nothing about what
-its readers asked for. The queries that return zero rows are the valuable ones —
-they name a gap in the corpus in the reader's own words.
+its readers asked for. The queries that return zero rows are the valuable ones
+– they name a gap in the corpus in the reader's own words.
 
 ## Base stylesheet
 
@@ -603,6 +631,14 @@ subpath-only.
 npx check-classes                # exit 1 on any dead token
 npx check-classes --warn         # report and exit 0
 npx check-classes --compositions # also fail on the inline compositions
+```
+
+`analytics-digest` prints a site's `digest` as JSON for a script outside the app. Run it from the app's root, where `pg` is installed and `.env` holds `DATABASE_URL`:
+
+```sh
+npx analytics-digest --days 7
+npx analytics-digest --days 30 --handle radixwiki --siblings caper.network,acuiq.com
+npx analytics-digest --days 7 --gap "Symptom Miss:term"   # adds an event to the search gaps
 ```
 
 ## Licence

@@ -379,3 +379,68 @@ export function scrollTables(html: string): string {
     return hadBox ? tag : SCROLL_BOX + tag;
   });
 }
+
+// ---- analytics beacon -------------------------------------------------------
+
+let beaconEndpoint = '/api/view';
+let beaconStarted = false;
+
+const sendBeacon = (body: object) => navigator.sendBeacon?.(beaconEndpoint, JSON.stringify(body));
+
+/**
+ * Report each page view to the site's own `endpoint`, whose route hands it to
+ * `collect` (`wiki-formant/analytics`). Same-origin, so no third-party script
+ * runs and no blocklist names the request.
+ *
+ * A client-side router moves between pages with `history.pushState`, which no
+ * load event marks, so both history writes are wrapped and a view is sent
+ * whenever the path changes; a change to the query or hash alone is not a page.
+ * A click on a link to another host is sent as an "Outbound Link: Click" event
+ * carrying its `url`. Starts once per page load however often it is called, so
+ * React's doubled effects in development send one view, not two.
+ */
+export function startBeacon(endpoint = '/api/view'): void {
+  if (beaconStarted || typeof window === 'undefined') return;
+  beaconStarted = true;
+  beaconEndpoint = endpoint;
+
+  let last = '';
+  let first = true;
+  const view = () => {
+    if (location.pathname === last) return;
+    last = location.pathname;
+    // document.referrer belongs to the page load, so only its first view carries it.
+    sendBeacon({
+      path: last,
+      referrer: first ? document.referrer : undefined,
+      utm: new URLSearchParams(location.search).get('utm_source') ?? undefined,
+    });
+    first = false;
+  };
+
+  for (const method of ['pushState', 'replaceState'] as const) {
+    const write = history[method];
+    history[method] = function (this: History, ...args: Parameters<History['pushState']>) {
+      write.apply(this, args);
+      view();
+    };
+  }
+  addEventListener('popstate', view);
+  document.addEventListener(
+    'click',
+    e => {
+      const a = (e.target as Element | null)?.closest?.('a[href]');
+      if (a instanceof HTMLAnchorElement && /^https?:$/.test(a.protocol) && a.host !== location.host) {
+        track('Outbound Link: Click', { url: a.href });
+      }
+    },
+    { capture: true },
+  );
+  view();
+}
+
+/** Record a named event from the browser, on the endpoint `startBeacon` was given. */
+export function track(name: string, props?: Record<string, string | number>): void {
+  if (typeof window === 'undefined') return;
+  sendBeacon({ name, path: location.pathname, props });
+}
