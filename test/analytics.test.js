@@ -205,3 +205,65 @@ test('every placeholder in the digest has a value', async () => {
   const highest = Math.max(...[...query.matchAll(/\$(\d+)/g)].map(m => Number(m[1])));
   assert.equal(highest, values.length);
 });
+
+// ---- the app binding --------------------------------------------------------
+
+import { createTracker } from 'wiki-formant/analytics';
+
+test('a tracker that is not enabled records nothing and answers the beacon 204', async () => {
+  const { sql, calls } = fakeSql();
+  const tasks = [];
+  const t = createTracker({ sql, defer: f => tasks.push(f), enabled: false });
+  await t.trackEvent('X', 'https://a.test/', {});
+  t.trackMcpCall(new Request('https://a.test/api/mcp', { headers: headers() }), { method: 'tools/call' });
+  t.trackSearch(headers(), 'nothing here', 0, 'wiki');
+  const res = await t.viewRoute()(new Request('https://a.test/api/view', { method: 'POST', body: '{"path":"/"}', headers: headers() }));
+  assert.equal(res.status, 204);
+  assert.equal(tasks.length, 0);
+  assert.equal(calls.length, 0);
+});
+
+test('the default gate is a Vercel production deployment', async () => {
+  const { sql, calls } = fakeSql();
+  const before = process.env.VERCEL_ENV;
+  process.env.VERCEL_ENV = 'preview';
+  await createTracker({ sql, defer: () => {} }).trackEvent('X', '/', {});
+  assert.equal(calls.length, 0);
+  process.env.VERCEL_ENV = 'production';
+  await createTracker({ sql, defer: () => {} }).trackEvent('X', '/', {});
+  assert.ok(calls.length > 0);
+  if (before === undefined) delete process.env.VERCEL_ENV;
+  else process.env.VERCEL_ENV = before;
+});
+
+test('a tracker defers the MCP and search events and files a search under its referer', async () => {
+  const { sql, inserts } = fakeSql();
+  const tasks = [];
+  const t = createTracker({ sql, defer: f => tasks.push(f), enabled: true, siteUrl: 'https://a.test' });
+  t.trackMcpCall(new Request('https://a.test/api/mcp', { headers: headers() }), { method: 'tools/call', params: { name: 'search' } }, 'kb');
+  t.trackSearch(headers({ referer: 'https://a.test/wiki/x' }), '  Nothing  Here ', 0, 'wiki');
+  // A reader of headers is called inside the deferred write; a throw drops the event only.
+  t.trackSearch(async () => headers(), 'rooted', 3);
+  t.trackSearch(() => { throw new Error('outside a request'); }, 'lost', 0);
+  t.trackSearch(headers(), '   ', 0);
+  assert.equal(tasks.length, 4);
+  await Promise.all(tasks.map(f => f()));
+  const events = inserts('Event').map(e => [e.values[1], e.values[2], JSON.parse(e.values[3])]);
+  assert.deepEqual(events, [
+    ['MCP Call', '/api/mcp', { server: 'kb', method: 'tools/call', tool: 'search', ua: 'Mozilla/5.0 (iPhone) Mobile' }],
+    ['Search Query', '/wiki/x', { q: 'nothing here', results: '0', surface: 'wiki' }],
+    ['Search Query', '/', { q: 'rooted', results: '3' }],
+  ]);
+});
+
+test('the view route passes a site resolver through to collect', async () => {
+  const { sql } = fakeSql();
+  const tasks = [];
+  const t = createTracker({ sql, defer: f => tasks.push(f), enabled: true });
+  const post = path => new Request('https://a.test/api/view', { method: 'POST', body: JSON.stringify({ path }), headers: headers({ 'x-real-ip': `8.8.8.${tasks.length}` }) });
+  const route = t.viewRoute({ site: (_r, path) => (path === '/missing' ? null : 'site-1') });
+  assert.equal((await route(post('/missing'))).status, 204);
+  assert.equal(tasks.length, 0);
+  await route(post('/here'));
+  assert.equal(tasks.length, 1);
+});

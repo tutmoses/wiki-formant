@@ -62,7 +62,7 @@ import { clientIp, clientKey, rateLimit, type HeaderReader, type RateLimitOption
 export type Sql = (query: string, ...values: unknown[]) => Promise<unknown>;
 
 /** Long enough to compare a month with the same month a year before. */
-export const KEEP_DAYS = 400;
+const KEEP_DAYS = 400;
 const DAY_MS = 86_400_000;
 
 /** A script that runs a page's JavaScript and says what it is. */
@@ -432,5 +432,98 @@ export function searchQueryProps({
     // A string, so `{ results: '0' }` is the filter that yields the gap list.
     results: String(Math.max(0, Math.trunc(results) || 0)),
     ...(surface ? { surface } : {}),
+  };
+}
+
+// ---- the app binding --------------------------------------------------------
+
+export interface TrackerOptions {
+  sql: Sql;
+  /** `after` in Next: the write runs once the response has gone. */
+  defer: (task: () => Promise<unknown>) => void;
+  /**
+   * Whether anything is recorded. Default: only on a Vercel production
+   * deployment, because dev and previews write to production's database.
+   */
+  enabled?: boolean;
+  /** Where an event with no page of its own is filed: a search with no referer. Default `/`. */
+  siteUrl?: string;
+}
+
+/** Headers in hand, or a reader for them run inside the deferred write: Next's `headers`. */
+export type HeaderSource = HeaderReader | (() => HeaderReader | Promise<HeaderReader>);
+
+export interface Tracker {
+  /**
+   * Record one event. `headers` are the request of whoever caused it, so the
+   * event joins their visitor, an agent's included; omit them for an event no
+   * visitor caused. Never rejects, and the caller defers it: `event.waitUntil`
+   * in a proxy, `after` in a route.
+   */
+  trackEvent(name: string, url: string, props: Record<string, string | number>, headers?: HeaderReader): Promise<void>;
+  /**
+   * An "MCP Call" event, deferred. The signature is `McpServerConfig.onCall`'s
+   * plus a server name, so a one-server site passes it as `onCall` as it is.
+   */
+  trackMcpCall(request: Request, body: unknown, server?: string): void;
+  /**
+   * A "Search Query" event, deferred, filed against the page the reader
+   * searched from. A function for `headers` is called inside the deferred
+   * write, and a failure there drops the event rather than the response.
+   */
+  trackSearch(headers: HeaderSource, query: string, results: number, surface?: string): void;
+  /**
+   * The beacon route: `export const POST = tracker.viewRoute()`. `site` is
+   * `collect`'s resolver, for an app that serves many sites or drops a path.
+   */
+  viewRoute(opts?: Pick<CollectOptions, 'site' | 'rateLimit'>): (request: Request) => Promise<Response>;
+}
+
+/**
+ * Everything an app's `track.ts` had written around the functions above: the
+ * production gate, the deferral and the three named events. Four apps carried
+ * it, two with a search signature of their own.
+ *
+ * The tracker holds `sql`, so the module that builds it imports the app's
+ * database client. A proxy must keep reaching it through a dynamic import
+ * inside `waitUntil`, never a static one, or every request the proxy sees
+ * loads Prisma:
+ *
+ *   event.waitUntil(import('@/lib/track').then(m => m.trackEvent('AI Bot Visit', url, { bot }, request.headers)));
+ */
+export function createTracker({
+  sql,
+  defer,
+  enabled = typeof process !== 'undefined' && process.env.VERCEL_ENV === 'production',
+  siteUrl = '/',
+}: TrackerOptions): Tracker {
+  const trackEvent: Tracker['trackEvent'] = (name, url, props, headers) =>
+    enabled ? recordEvent(sql, { name, url, props, headers }) : Promise.resolve();
+
+  return {
+    trackEvent,
+    trackMcpCall(request, body, server) {
+      if (!enabled) return;
+      const props = mcpCallProps(request, body, server);
+      const { url, headers } = request;
+      defer(() => trackEvent('MCP Call', url, props, headers));
+    },
+    trackSearch(source, query, results, surface) {
+      if (!enabled) return;
+      const props = searchQueryProps({ query, results, surface });
+      if (!props) return;
+      defer(async () => {
+        try {
+          const headers = typeof source === 'function' ? await source() : source;
+          await trackEvent('Search Query', headers.get('referer') || siteUrl, props, headers);
+        } catch {
+          // A context with no readable headers loses the event, never the response.
+        }
+      });
+    },
+    viewRoute(opts = {}) {
+      return async request =>
+        enabled ? collect(request, { sql, defer, ...opts }) : new Response(null, { status: 204 });
+    },
   };
 }

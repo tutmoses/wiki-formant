@@ -132,7 +132,7 @@ export function renderFeed(channel: FeedChannel, items: readonly FeedItem[]): st
 const lastBuild = (channel: FeedChannel, items: readonly FeedItem[]): Date | null =>
   channel.lastBuild ?? items.reduce<Date | null>((max, item) => (!max || item.date > max ? item.date : max), null);
 
-export const FEED_HEADERS: Record<string, string> = {
+const FEED_HEADERS: Record<string, string> = {
   'Content-Type': 'application/rss+xml; charset=utf-8',
   'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
 };

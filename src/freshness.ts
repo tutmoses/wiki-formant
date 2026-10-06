@@ -80,14 +80,18 @@ const toMs = (d: When): number => (typeof d === 'number' ? d : d instanceof Date
  * timestamp formatted in the server's zone, or the browser's, lands on the
  * previous day for half the world, and the server and the hydrating client
  * disagree about which day it is.
+ *
+ * `locale` defaults to `en-US`; `{ locale: 'en-GB', month: 'long' }` reads
+ * `19 September 2026`.
  */
-export function formatDay(date: When, options?: Intl.DateTimeFormatOptions): string {
-  return new Date(toMs(date)).toLocaleDateString('en-US', {
+export function formatDay(date: When, options: Intl.DateTimeFormatOptions & { locale?: string } = {}): string {
+  const { locale = 'en-US', ...format } = options;
+  return new Date(toMs(date)).toLocaleDateString(locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     timeZone: 'UTC',
-    ...options,
+    ...format,
   });
 }
 

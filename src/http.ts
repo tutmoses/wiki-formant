@@ -243,6 +243,26 @@ export interface CorpusValidators {
 }
 
 /**
+ * The validators for an aggregate: the ETag seeded from `seed` (the depth or
+ * scope, then the row count) with the newest stamp appended, and that stamp as
+ * Last-Modified. A corpus with no rows, or stamps all null, dates from the
+ * epoch, so an empty corpus still revalidates rather than throwing.
+ *
+ * Every wiki here wrote this after its `aggregate` call: newest of the `_max`
+ * columns, `?? new Date(0)`, then the same two lines.
+ */
+export function corpusValidatorsFrom(
+  seed: ReadonlyArray<string | number | null | undefined>,
+  stamps: ReadonlyArray<Date | null | undefined>,
+): CorpusValidators {
+  const newest = stamps.reduce<Date>(
+    (max, d) => (d instanceof Date && d.getTime() > max.getTime() ? d : max),
+    new Date(0),
+  );
+  return { etag: corpusEtag([...seed, newest]), lastModified: newest.toUTCString() };
+}
+
+/**
  * A GET handler serving `build()` under corpus validators — or a 304 instead.
  *
  * The build is not called on a 304, which is the whole point: these are the

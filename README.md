@@ -148,7 +148,7 @@ handler: async (args, ctx) => {
 }
 ```
 
-`config.gate` is envelope-level middleware: it may withhold entries before dispatch and merge its own responses back afterwards. A payment gate has to sit there rather than in a handler, because the demand *replaces* the call and the receipt rides on the envelope.
+`config.gate` is envelope-level middleware: it may withhold entries before dispatch and merge its own responses back afterwards. A payment gate has to sit there rather than in a handler, because the demand *replaces* the call and the receipt rides on the envelope. `RpcRequest` and `toolText` are exported for a gate to build with; acuiq2's x402 gate is the one that does.
 
 ### Tool arguments and the corpus tool
 
@@ -211,6 +211,13 @@ export async function GET(request: Request) {
   return notModified(request, etag, lastModified)
     ?? new Response(buildCorpus(), { headers: textHeaders(etag, lastModified) });
 }
+```
+
+`corpusValidatorsFrom(seed, stamps)` is that pair from an aggregate: the newest of `stamps` (the epoch when every one is null), appended to `seed` for the tag. `corpusRoute(validators, build)` is the whole handler, and skips the build on a 304.
+
+```ts
+const agg = await prisma.page.aggregate({ _count: true, _max: { updatedAt: true } });
+corpusValidatorsFrom([depth, agg._count], [agg._max.updatedAt]);
 ```
 
 ## Pagination and versioning
@@ -310,14 +317,6 @@ import Link from 'next/link';
 ```
 
 There is no `next` peer dependency here and there is not going to be one, but a rail that falls back to a bare `<a>` turns every press into a full page load — which is the whole reason a wiki has a persistent rail. So the router arrives through the door.
-
-## Payment gating
-
-`wiki-formant/x402` gates an MCP envelope on payment, for a wiki that charges for a bulk export over HTTP and would otherwise hand the same bytes over free through the equivalent MCP tool. Payment travels in-band — `params._meta["x402/payment"]` in, `result._meta["x402/payment-response"]` out — because one HTTP 402 cannot answer a batch of twenty in which one call is priced and nineteen are not.
-
-`gatePaidCalls` returns what `handleMcp` should dispatch and a `finish` that puts the answer back together. The ordering is the part worth owning once: verify before dispatch, settle only after a non-error answer, splice the challenges back into the caller's original order. A tool that raises cancels rather than settles — the caller pays for an answer, not an attempt.
-
-It imports nothing. `@x402/core`, `@x402/evm`, `@x402/extensions`, `@x402/next` and `viem` are optional peers, and the resource server arrives as a structural port instead of an import, so a wiki that never imports this subpath never resolves any of them. Which surfaces cost what, the prices and the terms text stay with the caller: those are policy, and this is the envelope surgery.
 
 ## AI crawlers
 
@@ -490,6 +489,27 @@ leafBlocks(blocks, BLOCK_SHAPE.containers);
 
 The dispatch over a repo's own block union stays in that repo; the bodies come from here. `wiki-formant/text` has a prose body for every core leaf — `statsToText`, `linkGridToText` and `pageListToText` joined the originals when two of the three wikis turned out to extract nothing from them, so their MCP `get_page` answered a hub page as nearly empty.
 
+The core leaves — `content`, `codeTabs`, `banner`, `references`, `stats`, `linkGrid`, `recentPages`, `pageList` — had the same case bodies in every wiki's text export, markdown twin, validator and new-block record. A repo's switch hands those cases over and keeps its own, so it stays exhaustive over its union:
+
+```ts
+import { coreAtomicText, coreAtomicToMarkdown, coreBlockDefaults } from 'wiki-formant/blocks';
+import { coreAtomicValidator } from 'wiki-formant/validation';
+
+switch (block.type) {
+  case 'content': case 'codeTabs': case 'banner': case 'references':
+  case 'stats': case 'linkGrid': case 'recentPages': case 'pageList':
+    return coreAtomicToMarkdown(block, { siteUrl: SITE_URL, referencesTitle: 'Sources' });
+  case 'corpusStats':
+    return block.resolvedHtml ? htmlToMarkdown(block.resolvedHtml) : '';
+}
+
+const BLOCK_DEFAULTS = { ...coreBlockDefaults({ stats }), daoTimeline: () => ({ type: 'daoTimeline', limit: 25 }) };
+const core = coreAtomicValidator({ pageId: id => /^\d{1,9}$/.test(id) });
+// validateAtomic: b => { switch (b.type) { case 'daoTimeline': …; default: return core(b); } }
+```
+
+`coreAtomicToMarkdown` joins a resolved page's site-relative `href` to `siteUrl`, because a twin is read off-site; a wiki whose lists hold its own page rows keeps those two cases. `coreAtomicValidator` caps `recentPages.limit` and `pageIds` at `MAX_BLOCK_ROWS`, a whole number of rows, because both end in a database `take:`; `blockLimit` is the same bound on the read side.
+
 `createBlockValidator` returns `blockIssues` beside the boolean validators: the same walk, reporting where each failure is.
 
 ```ts
@@ -504,7 +524,7 @@ A `codeTabs` tab's `code` is source text in every wiki here, and every view trea
 
 ## Dates
 
-`relativeTime(then, now, { style })` is `compact` (`3h`), `short` (`3h ago`) or `long` (`3 days ago`, day-grained for pages cached for hours), with `absoluteAfterDays` to hand over to the date itself. `now` is always passed in, never read, so a server render and its hydration agree. `formatDay` is always UTC: a stored day formatted in the server's zone, or the browser's, is the previous day for half the world. Both are in `wiki-formant/freshness`, with `isoDate`.
+`relativeTime(then, now, { style })` is `compact` (`3h`), `short` (`3h ago`) or `long` (`3 days ago`, day-grained for pages cached for hours), with `absoluteAfterDays` to hand over to the date itself. `now` is always passed in, never read, so a server render and its hydration agree. `formatDay` is always UTC: a stored day formatted in the server's zone, or the browser's, is the previous day for half the world. It reads `en-US` unless given a `locale`: `formatDay(day, { locale: 'en-GB', month: 'long' })` is `19 September 2026`. Both are in `wiki-formant/freshness`, with `isoDate`.
 
 ## Sanitising stored HTML
 
@@ -562,21 +582,32 @@ top of `src/analytics.ts`.
 
 ```ts
 // src/lib/track.ts
-export const sql: Sql = (query, ...values) => prisma.$queryRawUnsafe(query, ...values);
+const sql: Sql = (query, ...values) => prisma.$queryRawUnsafe(query, ...values);
+export const { trackEvent, trackMcpCall, trackSearch, viewRoute } =
+  createTracker({ sql, defer: after, siteUrl: SITE_URL });
 
 // src/app/api/view/route.ts – the whole beacon route
-export const POST = (request: Request) => collect(request, { sql, defer: after });
+export const POST = viewRoute();
 
 // the root layout, once
 <Beacon />
 ```
 
+`createTracker` records only on a Vercel production deployment unless told
+otherwise (`enabled`), because dev and previews write to production's
+database. `trackMcpCall(request, body, server?)` fits `McpServerConfig.onCall`;
+`trackSearch(headers, query, results, surface?)` takes the headers or Next's
+`headers` itself, which it reads inside the deferred write. `viewRoute({ site })`
+passes a site resolver to `collect`. The module that builds the tracker
+imports the app's database client, so a proxy reaches it through a dynamic
+`import()` inside `event.waitUntil`, never a static one.
+
 `<Beacon>` (`wiki-formant/react`) sends a view each time the path changes,
 client-side moves included, and a click on a link to another host as an
 "Outbound Link: Click" event; `track(name, props)` (`wiki-formant/dom`) sends
-any other browser event. Server code calls `recordEvent` and leaves the
-deferral to the framework, so this package keeps its zero-dependency
-guarantee:
+any other browser event. Underneath the tracker, server code calls
+`recordEvent` and leaves the deferral to the framework, so this package keeps
+its zero-dependency guarantee:
 
 ```ts
 const props = searchQueryProps({ query, results: rows.length, surface: 'wiki' });
@@ -613,15 +644,23 @@ No view emits a Tailwind utility any more — `ColumnsView` states its gap and a
 
 ## API
 
-Every module has a subpath — `wiki-formant/taxonomy`, `wiki-formant/mcp`, and so on.
-The emitted `.d.ts` files are the reference. There is no hand-maintained symbol list
-here, because the one that used to be here drifted from them.
+Every module has a subpath — `wiki-formant/taxonomy`, `wiki-formant/mcp`, and so on —
+and there is no root export: `import … from 'wiki-formant'` does not resolve. A
+barrel loads every module it names for the one symbol a route wanted, and had
+already re-exported one module twice. The emitted `.d.ts` files are the reference.
+There is no hand-maintained symbol list here, because the one that used to be here
+drifted from them.
 
-The package root re-exports the runtime modules that need no peer dependency and no
-client boundary, so `import … from 'wiki-formant'` stays importable from a route
-handler with nothing else installed. Everything that reaches for React, a browser
-global, tiptap or a wallet — and the tooling modules, which no route imports — is
-subpath-only.
+`wiki-formant/db` holds `pgPoolConfig(url)`, the options every app here hands to
+`new pg.Pool()`: ten clients on Supabase's 6543 transaction pooler, three on the
+5432 session pooler, whose fifteen-client cap a build's workers share.
+
+`rateLimit` takes `blockMs` (and a `blockKey`, default the bucket's own) for a
+caller already shown to be abusive: running dry blocks the key outright for that
+long, across every bucket that names it, rather than letting the refill trickle
+one token through at a time. `clientIp` reads `x-real-ip` first — Vercel sets it
+and overwrites any inbound copy — and the leftmost `x-forwarded-for` only where no
+`x-real-ip` was set, since a proxy that appends hands the client that slot.
 
 ## A bin
 

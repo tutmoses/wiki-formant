@@ -93,5 +93,6 @@ test('formatDay is the UTC day whatever the zone', () => {
   // 00:30 UTC is still the previous day in every zone west of Greenwich.
   assert.equal(formatDay('2026-09-19T00:30:00Z'), 'Sep 19, 2026');
   assert.equal(formatDay('2026-09-19T23:30:00Z', { month: 'long' }), 'September 19, 2026');
+  assert.equal(formatDay('2026-09-19', { locale: 'en-GB', month: 'long' }), '19 September 2026');
   assert.equal(isoDate(new Date('2026-09-19T23:30:00Z')), '2026-09-19');
 });

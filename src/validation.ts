@@ -98,6 +98,79 @@ export function validateStatItems(items: unknown): boolean {
   );
 }
 
+// ---- the core leaf set ------------------------------------------------------
+
+/**
+ * The most rows an author-supplied count may ask for. Every `limit` and every
+ * `pageIds` list ends up in a database `take:` or `in:`, so the bound belongs
+ * between the editor and the query: a fractional `take` is a validation error
+ * against an Int column and an unbounded one is a table scan on every render.
+ */
+export const MAX_BLOCK_ROWS = 100;
+
+/** Clamp an author-supplied row count to a positive integer within the cap. The read-side twin of the check below. */
+export function blockLimit(value: unknown, fallback: number, max = MAX_BLOCK_ROWS): number {
+  const n = typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : fallback;
+  return Math.min(Math.max(n, 1), max);
+}
+
+const okLimit = (value: unknown, max: number): boolean =>
+  Number.isSafeInteger(value) && (value as number) > 0 && (value as number) <= max;
+
+const optionalString = (v: unknown): boolean => v === undefined || typeof v === 'string';
+
+export interface CoreAtomicValidatorOptions {
+  /**
+   * Whether one `pageIds` entry is an id this wiki can look up. The format is
+   * each wiki's own — a cuid, an Int read back with `Number()`, a
+   * `section/slug` — so the default accepts any string.
+   */
+  pageId?: (id: string) => boolean;
+  /** Default `MAX_BLOCK_ROWS`. */
+  maxRows?: number;
+}
+
+/**
+ * The leaf checks for the core types, as one function a repo's `validateAtomic`
+ * falls through to: `default: return core(b)`. False for any type outside the
+ * core, so the repo's own cases still decide its native types.
+ *
+ * `recentPages.limit` must be a whole number within the cap and `pageIds` no
+ * longer than it — caper's rule, which the other two lacked. A scope field
+ * (`tagPath`, `section`) is a string when present.
+ */
+export function coreAtomicValidator(
+  opts: CoreAtomicValidatorOptions = {},
+): (block: Record<string, unknown>) => boolean {
+  const { pageId = () => true, maxRows = MAX_BLOCK_ROWS } = opts;
+  return b => {
+    switch (b.type) {
+      case 'content':
+        return typeof b.text === 'string';
+      case 'recentPages':
+        return okLimit(b.limit, maxRows) && optionalString(b.tagPath) && optionalString(b.section);
+      case 'pageList':
+        return (
+          Array.isArray(b.pageIds) &&
+          b.pageIds.length <= maxRows &&
+          b.pageIds.every(id => typeof id === 'string' && pageId(id))
+        );
+      case 'codeTabs':
+        return validateCodeTabs(b.tabs);
+      case 'stats':
+        return validateStatItems(b.items);
+      case 'banner':
+        return typeof b.variant === 'string';
+      case 'references':
+        return validateReferenceItems(b.items);
+      case 'linkGrid':
+        return validateLinkGroups(b.groups);
+      default:
+        return false;
+    }
+  };
+}
+
 export interface BlockValidatorOptions {
   /** True for a type this wiki knows at all. */
   isKnownType: (type: string) => boolean;

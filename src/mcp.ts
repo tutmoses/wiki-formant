@@ -27,7 +27,7 @@ export const MCP_MODERN_VERSIONS = ['2026-07-28'] as const;
  * endpoint speak both, and a legacy client meeting a dual-era server works;
  * going modern-only would fail the handshake of every client in the field.
  */
-export const MCP_LEGACY_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'] as const;
+const MCP_LEGACY_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'] as const;
 
 /**
  * Every version this transport speaks, newest first. It is the `supported` list
@@ -336,8 +336,8 @@ export const withAdjustments = <T extends object>(
 ): T | (T & { adjustments: readonly ArgAdjustment[] }) =>
   args.adjustments.length ? { ...result, adjustments: args.adjustments } : result;
 
-/** One entry in a JSON-RPC envelope. Exported because `wiki-formant/x402`
- *  gates the envelope before `handleMcp` ever sees it. */
+/** One entry in a JSON-RPC envelope. Exported for an `McpServerConfig.gate`,
+ *  which rewrites the envelope before `handleMcp` sees it (acuiq2's x402 gate). */
 export type RpcRequest = { jsonrpc: '2.0'; id: string | number | null; method: string; params?: unknown };
 type RpcId = string | number | null;
 
@@ -359,8 +359,9 @@ const rpcError = (id: RpcId, code: number, message: string, data?: object) => ({
 });
 
 /**
- * A tool result envelope. Exported because `x402.ts` builds the same shape when
- * it withholds a paid call, and had grown two more copies of it doing so.
+ * A tool result envelope. Exported for an envelope gate, which builds the same
+ * shape when it withholds a call: acuiq2's x402 gate had grown two more copies
+ * of it doing so.
  */
 export const toolText = (
   id: RpcRequest['id'],

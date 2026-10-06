@@ -14,6 +14,16 @@
 import { htmlToMarkdown, inlineToMarkdown } from './markdown.js';
 import { relativeTime, type RelativeTimeStyle } from './freshness.js';
 import type { BlockGroup } from './revisions.js';
+import {
+  BANNER_LABELS,
+  bannerToText,
+  codeTabsToText,
+  linkGridToText,
+  pageListToText,
+  referencesToText,
+  statsToText,
+  stripHtml,
+} from './text.js';
 
 // ---- the shapes the standard block types carry ------------------------------
 
@@ -317,4 +327,140 @@ export function linkGridToMarkdown(
 /** A flat bullet list of links — resolved page lists, feed items, link rails. */
 export function linkList(items: readonly LinkGridLink[]): string {
   return items.map(l => `- [${l.label}](${l.href})`).join('\n');
+}
+
+// ---- the core leaf set ------------------------------------------------------
+
+/**
+ * The core leaves as the helpers below read them: the shape every wiki here
+ * stores, built from the leaf types above. `P` is what a resolved page list
+ * carries, because radix-wiki's lists hold its own page rows and the other two
+ * hold `ResolvedPageRef`s.
+ *
+ * Structural on purpose. A repo's own switch narrows its block to one of these
+ * cases and hands it over — `case 'stats': case 'linkGrid': … return
+ * coreAtomicText(block)` — so the switch stays exhaustive over the repo's union
+ * and the case bodies stop being written three times.
+ */
+export type CoreAtomicBlock<P = ResolvedPageRef> =
+  | { type: 'content'; text: string }
+  | { type: 'codeTabs'; tabs: readonly CodeTab[] }
+  | { type: 'banner'; variant: string; text?: string | null }
+  | { type: 'references'; title?: string | null; items: readonly ReferenceItem[] }
+  | { type: 'stats'; items: readonly StatItem[] }
+  | { type: 'linkGrid'; intro?: string | null; groups: readonly LinkGridGroup[] }
+  | { type: 'recentPages' | 'pageList'; resolvedPages?: readonly P[] | null };
+
+const bannerLabel = (variant: string): string =>
+  (BANNER_LABELS as Record<string, string>)[variant] ?? variant;
+
+/**
+ * One core leaf as prose, for the LLM and MCP exports. A page list reads only
+ * after the server has resolved it; unresolved, it extracts to nothing.
+ */
+export function coreAtomicText(block: CoreAtomicBlock<{ title: string }>): string {
+  switch (block.type) {
+    case 'content': return stripHtml(block.text);
+    case 'codeTabs': return codeTabsToText(block.tabs);
+    case 'banner': return bannerToText(bannerLabel(block.variant), block.text);
+    case 'references': return referencesToText(block.items);
+    case 'stats': return statsToText(block.items);
+    case 'linkGrid': return linkGridToText(block.groups, block.intro);
+    case 'recentPages':
+    case 'pageList': return pageListToText(block.resolvedPages ?? []);
+  }
+}
+
+export interface CoreMarkdownOptions {
+  /**
+   * The origin a resolved page's site-relative `href` is joined to. A twin is
+   * read off-site, where a bare `/wiki/…` resolves to nothing.
+   */
+  siteUrl: string;
+  /** A references block's heading when it stores none. Default `References`. */
+  referencesTitle?: string;
+}
+
+/** One core leaf as markdown, for a page's `.md` twin. */
+export function coreAtomicToMarkdown(block: CoreAtomicBlock, opts: CoreMarkdownOptions): string {
+  switch (block.type) {
+    case 'content': return htmlToMarkdown(block.text);
+    case 'codeTabs': return codeTabsToMarkdown(block.tabs);
+    case 'banner': return bannerToMarkdown(bannerLabel(block.variant), block.text);
+    case 'references': return referencesToMarkdown(block.items, block.title || opts.referencesTitle || 'References');
+    case 'stats': return statsToMarkdown(block.items);
+    case 'linkGrid': return linkGridToMarkdown(block.groups, block.intro);
+    case 'recentPages':
+    case 'pageList':
+      return linkList(
+        (block.resolvedPages ?? []).map(p => ({
+          label: p.title,
+          href: p.href.startsWith('/') ? `${opts.siteUrl}${p.href}` : p.href,
+        })),
+      );
+  }
+}
+
+export interface CoreBlockDefaultsOptions {
+  /** Ids for the nested rows a new block starts with. Default `crypto.randomUUID`. */
+  newId?: () => string;
+  /** A new references block's title. Default `References`. */
+  referencesTitle?: string;
+  /** A new code-tabs block's tabs, each empty. Default Rust and TypeScript. */
+  codeTabs?: ReadonlyArray<{ label: string; language: string }>;
+  /** A new stats block's three placeholder cards. */
+  stats?: ReadonlyArray<{ value: string; label: string }>;
+}
+
+/** What inserting each core type makes, without its `id`. */
+export interface CoreBlockDefaults {
+  content: () => { type: 'content'; text: string };
+  recentPages: () => { type: 'recentPages'; limit: number };
+  pageList: () => { type: 'pageList'; pageIds: string[] };
+  columns: () => { type: 'columns'; columns: { id: string; blocks: never[] }[]; gap: 'md'; align: 'start' };
+  infobox: () => { type: 'infobox'; blocks: never[] };
+  codeTabs: () => { type: 'codeTabs'; tabs: { label: string; language: string; code: string }[] };
+  stats: () => { type: 'stats'; items: { id: string; value: string; label: string }[]; columns: 3 };
+  linkGrid: () => { type: 'linkGrid'; groups: { id: string; heading: string; links: never[] }[] };
+  references: () => { type: 'references'; title: string; items: never[] };
+  banner: () => { type: 'banner'; variant: 'stub' };
+}
+
+/**
+ * The new-block factories for the core types, which all three wikis had typed
+ * out identically but for a few labels. Spread into a repo's own record beside
+ * its native types, so that record stays keyed by the repo's union:
+ * `{ ...coreBlockDefaults({ stats }), daoTimeline: () => … }`.
+ */
+export function coreBlockDefaults(opts: CoreBlockDefaultsOptions = {}): CoreBlockDefaults {
+  const {
+    newId = () => crypto.randomUUID(),
+    referencesTitle = 'References',
+    codeTabs = [
+      { label: 'Rust', language: 'rust' },
+      { label: 'TypeScript', language: 'typescript' },
+    ],
+    stats = [
+      { value: '100+', label: 'Customers' },
+      { value: '$1M', label: 'Revenue' },
+      { value: '99%', label: 'Uptime' },
+    ],
+  } = opts;
+  return {
+    content: () => ({ type: 'content', text: '' }),
+    recentPages: () => ({ type: 'recentPages', limit: 5 }),
+    pageList: () => ({ type: 'pageList', pageIds: [] }),
+    columns: () => ({
+      type: 'columns',
+      columns: [{ id: newId(), blocks: [] }, { id: newId(), blocks: [] }],
+      gap: 'md',
+      align: 'start',
+    }),
+    infobox: () => ({ type: 'infobox', blocks: [] }),
+    codeTabs: () => ({ type: 'codeTabs', tabs: codeTabs.map(t => ({ ...t, code: '' })) }),
+    stats: () => ({ type: 'stats', items: stats.map(s => ({ id: newId(), ...s })), columns: 3 }),
+    linkGrid: () => ({ type: 'linkGrid', groups: [{ id: newId(), heading: 'Group', links: [] }] }),
+    references: () => ({ type: 'references', title: referencesTitle, items: [] }),
+    banner: () => ({ type: 'banner', variant: 'stub' }),
+  };
 }

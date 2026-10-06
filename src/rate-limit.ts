@@ -17,11 +17,24 @@ export interface RateLimitOptions {
   capacity: number;
   /** Tokens added per second: the sustained rate. */
   refillPerSec: number;
+  /**
+   * Running dry blocks `blockKey` outright for this long, rather than letting
+   * the bucket refill a token at a time. For a caller already established as
+   * abusive, the trickle the refill allows is the wrong answer.
+   */
+  blockMs?: number;
+  /**
+   * What a block shuts out. Default the bucket's own key; pass the bare
+   * address (`rest:1.2.3.4`) to lock a caller out of every endpoint that names
+   * the same `blockKey` once it blows one endpoint's budget.
+   */
+  blockKey?: string;
 }
 
 export type RateLimitResult =
   | { ok: true; remaining: number }
-  | { ok: false; retryAfterSec: number };
+  /** `blocked` is true when an earlier block refused the call, rather than this one's bucket. */
+  | { ok: false; retryAfterSec: number; blocked?: boolean };
 
 type Bucket = { tokens: number; updatedAt: number };
 
@@ -31,13 +44,49 @@ const buckets = new Map<string, Bucket>();
 const MAX_KEYS = 10_000;
 
 /**
+ * Blocks, held as an expiry timestamp rather than a setTimeout: a pending timer
+ * keeps a serverless instance's event loop alive for no reason.
+ */
+const blocks = new Map<string, number>();
+
+/** Seconds left on a block, or 0. An expired block is dropped on the way past. */
+function blockedFor(key: string, now: number): number {
+  const until = blocks.get(key);
+  if (until === undefined) return 0;
+  if (now < until) return Math.ceil((until - now) / 1000);
+  blocks.delete(key);
+  return 0;
+}
+
+function block(key: string, until: number, now: number): void {
+  if (blocks.size >= MAX_KEYS) {
+    for (const [k, expiry] of blocks) if (expiry <= now) blocks.delete(k);
+    // Still full of live blocks: the oldest goes, as with buckets.
+    if (blocks.size >= MAX_KEYS) {
+      const oldest = blocks.keys().next().value;
+      if (oldest !== undefined) blocks.delete(oldest);
+    }
+  }
+  blocks.set(key, until);
+}
+
+/**
  * Spend one token against `key`.
  *
  * Keys are namespaced by the caller (`"mcp:1.2.3.4"`, `"write:page:17"`), so
  * one map backs every limiter in a process without them colliding.
+ *
+ * With `blockMs`, a block on `blockKey` is checked before any token is spent,
+ * and running the bucket dry starts one; the refusal then states the block's
+ * length as its wait.
  */
 export function rateLimit(key: string, opts: RateLimitOptions): RateLimitResult {
   const now = Date.now();
+  const blockKey = opts.blockKey ?? key;
+  if (opts.blockMs) {
+    const blockedSec = blockedFor(blockKey, now);
+    if (blockedSec) return { ok: false, retryAfterSec: blockedSec, blocked: true };
+  }
   const existing = buckets.get(key);
 
   if (!existing && buckets.size >= MAX_KEYS) {
@@ -53,6 +102,10 @@ export function rateLimit(key: string, opts: RateLimitOptions): RateLimitResult 
   buckets.set(key, bucket);
 
   if (bucket.tokens < 1) {
+    if (opts.blockMs) {
+      block(blockKey, now + opts.blockMs, now);
+      return { ok: false, retryAfterSec: Math.ceil(opts.blockMs / 1000) };
+    }
     return { ok: false, retryAfterSec: Math.ceil((1 - bucket.tokens) / opts.refillPerSec) };
   }
 
@@ -66,7 +119,14 @@ export interface HeaderReader {
 }
 
 /**
- * The caller's address, from the proxy header the edge sets.
+ * The caller's address, from the header the edge sets.
+ *
+ * `x-real-ip` first: Vercel sets it to the connecting client and overwrites any
+ * inbound copy, so a client cannot choose it. The leftmost `x-forwarded-for`
+ * entry is only as trustworthy as every proxy in front of the app — one that
+ * appends rather than replaces hands the client the first slot, and with it a
+ * fresh bucket and a fresh visitor per request. It stays as the fallback for a
+ * host that sets no `x-real-ip`.
  *
  * Falls back to a single shared bucket rather than to per-caller buckets, so an
  * unidentifiable caller is still limited — collectively, but limited. Keying on
@@ -75,8 +135,11 @@ export interface HeaderReader {
  * meant to catch.
  */
 export function clientIp(headers: HeaderReader): string {
-  const forwarded = headers.get('x-forwarded-for');
-  return forwarded?.split(',')[0]?.trim() || headers.get('x-real-ip')?.trim() || 'anon';
+  return (
+    headers.get('x-real-ip')?.trim() ||
+    headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    'anon'
+  );
 }
 
 /** `prefix:ip` — the key `rateLimit` expects for a per-IP gate. */
@@ -151,6 +214,7 @@ export function withRateLimit<T extends Response>(
 /** Test seam: the bucket map is module state and outlives a single test. */
 export function resetRateLimits(): void {
   buckets.clear();
+  blocks.clear();
 }
 
 // ---- the MCP budget ---------------------------------------------------------

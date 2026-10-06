@@ -166,7 +166,7 @@ async function attempt(url: string, budgetMs: number): Promise<Probe> {
  * transient code earns one more attempt on the longer budget before it is
  * reported. A 404 does not: it is an answer.
  */
-export async function probeUrl(url: string, opts: ProbeOptions = {}): Promise<Probe> {
+async function probeUrl(url: string, opts: ProbeOptions = {}): Promise<Probe> {
   const { timeoutMs, slowTimeoutMs } = { ...DEFAULTS, ...opts };
   const target = probeUrlFor(url);
 
@@ -180,7 +180,7 @@ export async function probeUrl(url: string, opts: ProbeOptions = {}): Promise<Pr
 
 // ---- YouTube ----------------------------------------------------------------
 
-export const YOUTUBE_EMBED = /^https?:\/\/(?:www\.)?(?:youtube-nocookie\.com|youtube\.com)\/embed\/([\w-]+)/;
+const YOUTUBE_EMBED = /^https?:\/\/(?:www\.)?(?:youtube-nocookie\.com|youtube\.com)\/embed\/([\w-]+)/;
 
 /**
  * The same video cited as a LINK rather than an iframe. `youtu.be/<id>` 303s and
@@ -198,7 +198,7 @@ const YOUTUBE_WATCH =
  *
  *   200 → public and embeddable | 404 → deleted | 401/403 → private or embedding off
  */
-export async function probeYouTube(
+async function probeYouTube(
   videoId: string,
   opts: ProbeOptions = {},
 ): Promise<{ status: number; ok: boolean; reason?: string; error?: string }> {

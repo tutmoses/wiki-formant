@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { corpusEtag, notModified, textHeaders, markdownHeaders, descriptorHeaders, descriptorResponse, cleanSnippet, pageLine } from 'wiki-formant/http';
+import { corpusEtag, corpusValidatorsFrom, notModified, textHeaders, markdownHeaders, descriptorHeaders, descriptorResponse, cleanSnippet, pageLine } from 'wiki-formant/http';
 import { parsePagination, paginatedResponse, listEnvelope, toOffset, adjacentPages } from 'wiki-formant/pagination';
 import { parseVersion, formatVersion, bump, compareVersions } from 'wiki-formant/versioning';
 import { documentTitle, fittingTitle, TITLE_BUDGET, TITLE_LIMIT } from 'wiki-formant/metadata';
@@ -239,4 +239,15 @@ test('fittingTitle takes the fullest form that fits, and the barest when none do
   assert.equal(fittingTitle([a, b], { suffix: ' | AcuiQ' }), b);
   assert.equal(fittingTitle([]), '');
   assert.equal(fittingTitle(['  ', 'ok']), 'ok');
+});
+
+test('corpusValidatorsFrom stamps the newest date and seeds the tag the hand-written way', () => {
+  const older = new Date('2026-08-01T00:00:00Z');
+  const newer = new Date('2026-09-01T12:00:00Z');
+  const v = corpusValidatorsFrom(['kb', 12], [older, null, newer, undefined]);
+  assert.equal(v.etag, corpusEtag(['kb', 12, newer]));
+  assert.equal(v.lastModified, newer.toUTCString());
+  const empty = corpusValidatorsFrom(['', 0], [null]);
+  assert.equal(empty.lastModified, new Date(0).toUTCString());
+  assert.equal(empty.etag, corpusEtag(['', 0, new Date(0)]));
 });
