@@ -1135,6 +1135,69 @@ export function useCopy<K extends string = string>(revertAfter = 2000): {
   return { copied, copy };
 }
 
+// ---- snap row ---------------------------------------------------------------
+
+export interface SnapRow<T extends HTMLElement> {
+  /** The row: give it `overflow-x: auto` and `scroll-snap-type: x mandatory`, and its children `scroll-snap-align: start`. */
+  ref: RefObject<T | null>;
+  /** The row's `onScroll`, which keeps `at` current. */
+  onScroll: () => void;
+  /** The item in view, or the last once the row is scrolled to its end: for a counter or dots. */
+  at: number;
+  /** Most of a view along, as an arrow or an arrow key moves it, wrapping round from either end. */
+  step: (dir: 1 | -1) => void;
+  /** Item `i` to the start of the row, as a dot moves it; `smooth: false` to open on it. */
+  go: (i: number, smooth?: boolean) => void;
+}
+
+/**
+ * A carousel as a row scrolled sideways and snapping into place. A finger
+ * swipes it with no script at all, which a carousel that swaps one item for
+ * the next in state cannot do: AcuiQ's protocol card moved only by its
+ * buttons. This is the rest, with no markup and no class names, since what the
+ * row holds differs from one use to the next.
+ *
+ * `step` scrolls by most of a view and lets the snap settle it, so a row of
+ * items narrower than itself pages a screenful at a time and a row of full-width
+ * ones moves one. It wraps at either end, because an arrow that does nothing
+ * there reads as broken. Motion honours `prefers-reduced-motion`.
+ */
+export function useSnapRow<T extends HTMLElement = HTMLDivElement>(): SnapRow<T> {
+  const ref = useRef<T>(null);
+  const [at, setAt] = useState(0);
+
+  const onScroll = useCallback(() => {
+    const row = ref.current;
+    if (!row) return;
+    const items = [...row.children];
+    const left = row.getBoundingClientRect().left;
+    const offsets = items.map(el => Math.abs(el.getBoundingClientRect().left - left));
+    setAt(row.scrollLeft >= snapEnd(row) - 1 ? items.length - 1 : offsets.indexOf(Math.min(...offsets)));
+  }, []);
+
+  const go = useCallback((i: number, smooth = true) => {
+    const row = ref.current;
+    const n = row?.children.length ?? 0;
+    const el = row?.children[((i % n) + n) % n];
+    if (row && el) snapTo(row, row.scrollLeft + el.getBoundingClientRect().left - row.getBoundingClientRect().left, smooth);
+  }, []);
+
+  const step = useCallback((dir: 1 | -1) => {
+    const row = ref.current;
+    if (!row) return;
+    if (dir > 0 && row.scrollLeft >= snapEnd(row) - 1) snapTo(row, 0);
+    else if (dir < 0 && row.scrollLeft <= 1) snapTo(row, snapEnd(row));
+    else snapTo(row, row.scrollLeft + dir * row.clientWidth * 0.8);
+  }, []);
+
+  return { ref, onScroll, at, step, go };
+}
+
+const snapEnd = (row: HTMLElement) => row.scrollWidth - row.clientWidth;
+
+const snapTo = (row: HTMLElement, left: number, smooth = true) =>
+  row.scrollTo({ left, behavior: smooth && !matchMedia('(prefers-reduced-motion: reduce)').matches ? 'smooth' : 'auto' });
+
 // ---- error boundary ---------------------------------------------------------
 
 /**

@@ -258,6 +258,13 @@ const { query, setQuery, items, highlight, setHighlight, onKeyDown, reset } =
 
 `useLinkPreview` is the Wikipedia-style hover card: one delegated listener rather than a component per link, which is what makes it viable over an article holding hundreds of anchors. Two wikis had written the same ninety lines — same intent delay, same grace period for the cursor to cross into the card, same clamp arithmetic, same cache. They differed in three things, and those three are the options: which anchors are eligible, what fetches a preview, and how tall the card is.
 
+`useSnapRow` is a carousel as a row scrolled sideways under `scroll-snap-type: x mandatory`, so a finger swipes it with no script; AcuiQ's protocol card, which swapped one point for the next in state, could not be swiped at all. The hook is the rest: `step` for arrows and arrow keys, wrapping round at either end, `go(i)` for a dot or for opening a lightbox on the picture clicked, and `at` for the counter. It ships no markup and no class names, since miow's rows hold pictures and AcuiQ's hold whole acupoints.
+
+```tsx
+const { ref, onScroll, at, step, go } = useSnapRow();
+<div ref={ref} onScroll={onScroll} className="row">{items}</div>
+```
+
 `useClickOutside` is fifteen lines and was in all three. Only one had the `offsetParent` check, and without it a container hidden at the current breakpoint still answers outside-clicks — so on a phone, a tap anywhere dismisses the popover the reader is looking at, because the hidden desktop copy got there first.
 
 ### The listbox contract
