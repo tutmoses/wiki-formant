@@ -632,9 +632,44 @@ leaves a wiki able to say what every crawler asked for and nothing about what
 its readers asked for. The queries that return zero rows are the valuable ones
 – they name a gap in the corpus in the reader's own words.
 
+## Passkeys and the stats page
+
+`wiki-formant/passkey` is the door to a site's own admin pages: a passkey and
+nothing else, no account, password or email. `createPasskeyGate({ sql, rpName })`
+returns the whole of it. `gate.route` is the sign-in route,
+`gate.signedIn(cookieValue)` is the check a page makes, and `gate.cookie` is the
+cookie's name. The two tables (`Passkey`, `PasskeyToken`) are stated as Prisma
+models at the top of `src/passkey.ts`, and every token is kept only as its hash.
+`@simplewebauthn/server` is an optional peer.
+
+There is no sign-up. The first passkey is saved from a single-use link that the
+`passkey-invite` bin prints from a machine holding `DATABASE_URL`, so the only
+way in is through someone who can already reach the database. A passkey is bound
+to the host it was saved on, so localhost needs its own.
+
+```ts
+// src/lib/admin.ts
+export const gate = createPasskeyGate({ sql, rpName: 'Caper' });
+
+// src/app/api/passkey/route.ts
+export const POST = gate.route;
+
+// src/app/stats/page.tsx
+if (!(await gate.signedIn((await cookies()).get(gate.cookie)?.value)))
+  return <PasskeyButton endpoint="/api/passkey" invite={invite} />;
+const days = statsDays((await searchParams).days); // 1, 7, 30 or 90, else 30
+return <Stats digest={await digest(sql, { days })} days={days} />;
+```
+
+`PasskeyButton` (`wiki-formant/passkey-button`) is the browser half and has its
+own subpath, because it imports the optional peer `@simplewebauthn/browser`.
+`Stats` (`wiki-formant/react-server`) renders a `digest` as one page: the
+headline figures against the window before, visitors per day, every non-empty
+ranked list, and `?days=` links between windows. It ships no JavaScript.
+
 ## Base stylesheet
 
-`wiki-formant/base.css` is the layout the package's markup does not work without, and nothing else: columns that stack until there is room, stored tab panels that show one at a time, a copy button pinned to its block's corner and visible on focus and on touch, a stored table's scroll box, and the `aria-sort` arrow as a mask over `currentColor`. No colour and no scale, so a design system's own rules override it at equal specificity.
+`wiki-formant/base.css` is the layout the package's markup does not work without, and nothing else: columns that stack until there is room, stored tab panels that show one at a time, a copy button pinned to its block's corner and visible on focus and on touch, a stored table's scroll box, the `aria-sort` arrow as a mask over `currentColor`, and the stats page's grid and bars. No colour and no scale, so a design system's own rules override it at equal specificity.
 
 ```css
 @import "wiki-formant/base.css" layer(components);
@@ -678,6 +713,12 @@ npx check-classes --compositions # also fail on the inline compositions
 npx analytics-digest --days 7
 npx analytics-digest --days 30 --handle radixwiki --siblings caper.network,acuiq.com
 npx analytics-digest --days 7 --gap "Symptom Miss:term"   # adds an event to the search gaps
+```
+
+`passkey-invite` prints a single-use link that saves a passkey for the page it names, good for a day (`--days n` for longer). Run it the same way:
+
+```sh
+npx passkey-invite https://caper.network/stats
 ```
 
 ## Licence

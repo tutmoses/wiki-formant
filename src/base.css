@@ -116,3 +116,57 @@ pre:hover > .code-copy-btn,
   list-style: none;
 }
 .revision-diff { margin: 0.25em 0 0; }
+
+/* ---- Stats ----------------------------------------------------------------
+   `--share` is a row's value over the largest in its list, 0 to 1. Bars take
+   `currentColor` so they show before a stylesheet colours them. */
+.stats { display: grid; gap: 2rem; }
+.stats-ranges { display: flex; flex-wrap: wrap; gap: 1rem; }
+.stats-ranges a[aria-current] { text-decoration: underline; text-underline-offset: 0.3em; }
+.stats-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 1rem;
+  margin: 0;
+}
+.stats-figures dd { margin: 0; font-variant-numeric: tabular-nums; }
+.stats-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 8rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stats-chart li {
+  flex: 1;
+  height: calc(var(--share) * 100%);
+  min-height: 1px;
+  background: currentColor;
+  opacity: 0.4;
+}
+.stats-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 2rem;
+}
+.stats-list ol { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.stats-list li {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.25em 0.5em;
+}
+.stats-list li::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--share) * 100%);
+  background: currentColor;
+  opacity: 0.08;
+  pointer-events: none;
+}
+.stats-list li > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.stats-count { font-variant-numeric: tabular-nums; }
