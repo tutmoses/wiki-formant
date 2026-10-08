@@ -1,10 +1,10 @@
 // passkey.ts – the door to a site's own admin pages: a passkey, and nothing else.
 //
 // No account, no password, no email. Whoever holds a passkey saved for the
-// site is in. The first one is saved from an invite link that the
-// `passkey-invite` bin prints from a machine holding the database URL, and any
-// passkey after that comes from another invite. So the only way in is through
-// someone who can already reach the database.
+// site is in. While none is saved, the page saves the first one without asking
+// for anything, so the owner opens it from the deployed site the way they would
+// any other. Every passkey after that needs an invite link, which the
+// `passkey-invite` bin prints from a machine holding the database URL.
 //
 // A passkey is bound to the host it was saved on. One saved on localhost does
 // not open the deployed site, and one saved on the site does not open localhost.
@@ -28,7 +28,9 @@
 //
 // Every token is stored as its hash, so a read of the table opens nothing. A
 // challenge is spent the moment a response quotes it, and an invite the moment
-// a passkey is saved with it.
+// a passkey is saved with it. The first passkey without an invite is checked
+// against an empty table in the insert itself, so two people racing to it
+// cannot both win.
 
 import {
   generateAuthenticationOptions,
@@ -101,13 +103,15 @@ export interface PasskeyGate {
   cookie: string;
   /** Whether a session cookie's value is a live session. */
   signedIn(session: string | undefined): Promise<boolean>;
+  /** True while no passkey is saved, when the page offers to save the first one. */
+  open(): Promise<boolean>;
   /** A single-use invite token, good for `days`. The bin turns it into a link. */
   invite(days?: number): Promise<string>;
   /**
    * The whole sign-in route: `export const POST = gate.route`. The body is
    * `{ invite?, response? }`: without `response` it answers with the options
    * for the browser's prompt, with one it verifies it and sets the cookie. An
-   * invite turns the prompt into saving a new passkey.
+   * invite, or a site with no passkey yet, turns the prompt into saving one.
    */
   route(request: Request): Promise<Response>;
 }
@@ -123,9 +127,12 @@ export function createPasskeyGate({ sql, rpName, cookie = 'passkey_session', ses
     return new Response(null, { status: 204, headers: { 'set-cookie': attrs.join('; ') } });
   }
 
+  const open = async () => ((await sql(`SELECT 1 FROM "Passkey" LIMIT 1`)) as unknown[]).length === 0;
+
   return {
     cookie,
     signedIn: async value => !!value && live(sql, 'session', value),
+    open,
     invite: (days = 1) => issue(sql, 'invite', days * DAY),
 
     async route(request) {
@@ -145,7 +152,7 @@ export function createPasskeyGate({ sql, rpName, cookie = 'passkey_session', ses
 
       if (!response) {
         if (invite && !(await live(sql, 'invite', invite))) return refuse(403, 'This invite has expired.');
-        const options = invite
+        const options = invite || (await open())
           ? await generateRegistrationOptions({
               rpName,
               rpID,
@@ -159,7 +166,7 @@ export function createPasskeyGate({ sql, rpName, cookie = 'passkey_session', ses
         return Response.json(options);
       }
 
-      if (invite) {
+      if (invite || (await open())) {
         const result = await verifyRegistrationResponse({
           response,
           expectedChallenge,
@@ -169,15 +176,18 @@ export function createPasskeyGate({ sql, rpName, cookie = 'passkey_session', ses
         }).catch(() => null);
         if (!result?.verified) return refuse(400, 'That passkey could not be saved.');
         // Spent after the check, so a failed prompt leaves the invite to try again.
-        if (!(await spend(sql, 'invite', invite))) return refuse(403, 'This invite has expired.');
+        if (invite && !(await spend(sql, 'invite', invite))) return refuse(403, 'This invite has expired.');
         const { credential } = result.registrationInfo;
-        await sql(
-          `INSERT INTO "Passkey" (id, "publicKey", counter, transports) VALUES ($1, $2, $3, $4::text[])`,
+        const saved = (await sql(
+          `INSERT INTO "Passkey" (id, "publicKey", counter, transports)
+           SELECT $1, $2, $3, $4::text[] WHERE $5::boolean OR NOT EXISTS (SELECT 1 FROM "Passkey") RETURNING id`,
           credential.id,
           b64url(credential.publicKey),
           credential.counter,
           credential.transports ?? [],
-        );
+          !!invite,
+        )) as unknown[];
+        if (!saved.length) return refuse(403, 'This site already has a passkey. Adding another takes an invite.');
         return session(protocol === 'https:');
       }
 

@@ -644,15 +644,16 @@ its readers asked for. The queries that return zero rows are the valuable ones
 `wiki-formant/passkey` is the door to a site's own admin pages: a passkey and
 nothing else, no account, password or email. `createPasskeyGate({ sql, rpName })`
 returns the whole of it. `gate.route` is the sign-in route,
-`gate.signedIn(cookieValue)` is the check a page makes, and `gate.cookie` is the
-cookie's name. The two tables (`Passkey`, `PasskeyToken`) are stated as Prisma
+`gate.signedIn(cookieValue)` is the check a page makes, `gate.open()` is true
+while no passkey is saved, and `gate.cookie` is the cookie's name. The two tables (`Passkey`, `PasskeyToken`) are stated as Prisma
 models at the top of `src/passkey.ts`, and every token is kept only as its hash.
 `@simplewebauthn/server` is an optional peer.
 
-There is no sign-up. The first passkey is saved from a single-use link that the
-`passkey-invite` bin prints from a machine holding `DATABASE_URL`, so the only
-way in is through someone who can already reach the database. A passkey is bound
-to the host it was saved on, so localhost needs its own.
+There is no sign-up. While no passkey is saved, the page saves the first one
+from whoever opens it, so the owner should do that as soon as the door ships.
+Every passkey after that is saved from a single-use link that the
+`passkey-invite` bin prints from a machine holding `DATABASE_URL`. A passkey is
+bound to the host it was saved on, so localhost needs its own.
 
 ```ts
 // src/lib/admin.ts
@@ -663,7 +664,7 @@ export const POST = gate.route;
 
 // src/app/stats/page.tsx
 if (!(await gate.signedIn((await cookies()).get(gate.cookie)?.value)))
-  return <PasskeyButton endpoint="/api/passkey" invite={invite} />;
+  return <PasskeyButton endpoint="/api/passkey" invite={invite} create={await gate.open()} />;
 const days = statsDays((await searchParams).days); // 1, 7, 30 or 90, else 30
 return <Stats digest={await digest(sql, { days })} days={days} />;
 ```
@@ -722,7 +723,7 @@ npx analytics-digest --days 30 --handle radixwiki --siblings caper.network,acuiq
 npx analytics-digest --days 7 --gap "Symptom Miss:term"   # adds an event to the search gaps
 ```
 
-`passkey-invite` prints a single-use link that saves a passkey for the page it names, good for a day (`--days n` for longer). Run it the same way:
+`passkey-invite` prints a single-use link that saves another passkey for the page it names, good for a day (`--days n` for longer). Run it the same way:
 
 ```sh
 npx passkey-invite https://caper.network/stats

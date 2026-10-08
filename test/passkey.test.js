@@ -6,8 +6,9 @@ import { createPasskeyGate } from 'wiki-formant/passkey';
 import { Stats, statsDays } from 'wiki-formant/react-server';
 
 // Just enough of PasskeyToken to follow a token through its life. Expiry is
-// the row's own `ttl` against a clock the test can move.
-function fakeDb() {
+// the row's own `ttl` against a clock the test can move. `saved` is how many
+// rows Passkey holds.
+function fakeDb(saved = 1) {
   const rows = new Map();
   let now = 0;
   const sql = async (query, ...v) => {
@@ -29,6 +30,7 @@ function fakeDb() {
       const r = rows.get(v[0]);
       return r && r.kind === v[1] && r.expires > now ? [{}] : [];
     }
+    if (query.startsWith('SELECT 1 FROM "Passkey" LIMIT 1')) return saved ? [{}] : [];
     if (query.startsWith('SELECT id')) return [];
     throw new Error(`unexpected: ${query}`);
   };
@@ -83,6 +85,16 @@ test('a response nobody issued a challenge for is refused, and sets no cookie', 
   const res = await gate.route(post({ response: { id: 'abc', rawId: 'abc', type: 'public-key', response: {} } }, '203.0.113.4'));
   assert.equal(res.status, 403);
   assert.equal(res.headers.get('set-cookie'), null);
+});
+
+test('a site with no passkey asks the browser to save one without an invite', async () => {
+  const db = fakeDb(0);
+  const gate = createPasskeyGate({ sql: db.sql, rpName: 'Site' });
+  assert.equal(await gate.open(), true);
+  const save = await (await gate.route(post({}, '203.0.113.5'))).json();
+  assert.equal(save.rp.id, 'site.test');
+  assert.equal(save.authenticatorSelection.residentKey, 'required');
+  assert.equal(await createPasskeyGate({ sql: fakeDb().sql, rpName: 'Site' }).open(), false);
 });
 
 const DIGEST = {
