@@ -61,16 +61,25 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
+      # npm takes a minute to serve a version it has just accepted, so a push
+      # landing right after a release still reads the old one here, publishes
+      # again and fails 409. A version the parent commit already carried was
+      # that commit's run to publish. A manual run skips the parent check, so it
+      # retries a release whose own run failed.
       - name: Check whether the version actually changed
         id: check
         run: |
           LOCAL="$(jq -r .version package.json)"
           NAME="$(jq -r .name package.json)"
           PUBLISHED="$(npm view "$NAME" version 2>/dev/null || echo none)"
-          echo "local=$LOCAL published=$PUBLISHED"
+          PARENT="$(git show HEAD~1:package.json 2>/dev/null | jq -r .version || echo none)"
+          echo "local=$LOCAL published=$PUBLISHED parent=$PARENT"
           if [ "$LOCAL" = "$PUBLISHED" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "::notice::Version $LOCAL is already on npm — nothing to publish."
+          elif [ "$LOCAL" = "$PARENT" ] && [ "${{ github.event_name }}" = "push" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Version $LOCAL came with the parent commit, whose run publishes it — re-run by hand if that run failed."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
