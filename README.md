@@ -641,8 +641,10 @@ address and browser under a salt that is replaced every UTC day, and the old
 salt is deleted, so a visitor is told apart within a day and never followed
 into the next. Rows are kept 400 days. The package owns the SQL and the app
 owns the connection: `Sql` is one function that runs a statement with `$1, $2…`
-placeholders, and the three tables it needs are stated as Prisma models at the
-top of `src/analytics.ts`.
+placeholders, and the four tables it needs are stated as Prisma models at the
+top of `src/analytics.ts`. The fourth, `ViewDay`, holds days a site counted
+elsewhere before it counted its own; `digest` adds them to any window that
+reaches back that far, and a site with no such history leaves it empty.
 
 ```ts
 // src/lib/track.ts
@@ -722,7 +724,7 @@ export const POST = gate.route;
 // src/app/stats/page.tsx
 if (!(await gate.signedIn((await cookies()).get(gate.cookie)?.value)))
   return <PasskeyButton endpoint="/api/passkey" invite={invite} create={await gate.open()} />;
-const days = statsDays((await searchParams).days); // 1, 7, 30 or 90, else 30
+const days = statsDays((await searchParams).days); // 1, 7, 30, 90 or 365, else 30
 return <Stats digest={await digest(sql, { days })} days={days} />;
 ```
 

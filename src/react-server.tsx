@@ -632,7 +632,7 @@ export interface StatsProps {
 }
 
 /** The windows the stats page offers, in days. */
-export const STATS_RANGES = [1, 7, 30, 90] as const;
+export const STATS_RANGES = [1, 7, 30, 90, 365] as const;
 
 /** A `?days=` value as one of `ranges`, else `fallback`: the page's only input. */
 export const statsDays = (param: unknown, ranges: readonly number[] = STATS_RANGES, fallback = 30) =>
@@ -719,7 +719,7 @@ export function Stats({ digest: d, days, ranges = STATS_RANGES }: StatsProps) {
           </div>
         ))}
       </dl>
-      <ol className="stats-chart" aria-label="Visitors per day">
+      <ol className="stats-chart" aria-label="Visitors per day" style={{ '--bars': series.length } as CSSProperties}>
         {series.map(([date, n]) => (
           <li key={date} title={`${date}: ${count(n)}`} style={{ '--share': n / peak } as CSSProperties} />
         ))}

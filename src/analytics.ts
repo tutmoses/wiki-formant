@@ -14,7 +14,7 @@
 //
 // The package owns the SQL; the app owns the connection. `Sql` is one function
 // that runs a parameterised statement, which Prisma, `pg` and postgres.js can
-// all supply in a line. The app declares the three tables in its own schema,
+// all supply in a line. The app declares the four tables in its own schema,
 // so `prisma db push` keeps them:
 //
 //   model View {
@@ -44,6 +44,28 @@
 //     day   String @id
 //     value String
 //   }
+//
+//   model ViewDay {
+//     siteId     String   @default("")
+//     day        DateTime @db.Date
+//     visitors   Int
+//     pageviews  Int
+//     visits     Int
+//     bounces    Int
+//     seconds    Int
+//     pages      Json     @default("{}")
+//     entryPages Json     @default("{}")
+//     sources    Json     @default("{}")
+//     countries  Json     @default("{}")
+//     devices    Json     @default("{}")
+//     @@id([siteId, day])
+//   }
+//
+// `ViewDay` holds days a site counted somewhere else before it counted its
+// own, one row a day with each breakdown as `{ value: visitors }`. Nothing
+// writes or deletes it: the app loads it once, and `digest` adds the days in a
+// window to the views. Summing days agrees with the views, whose visitor is
+// one browser on one day. A site with no history leaves it empty.
 //
 // `siteId` is "" in an app that serves one site. A multi-tenant app passes its
 // own site key to every call.
@@ -305,7 +327,8 @@ export interface Digest {
 /**
  * Everything a report needs about one site's last `days` days, in one query.
  * Visitor figures count distinct visitors, so a person who comes back on
- * another day counts once for each day.
+ * another day counts once for each day. Days in `ViewDay` add to the visitor,
+ * page, source, country, device and per-day figures; events have no history.
  */
 export async function digest(
   sql: Sql,
@@ -316,6 +339,9 @@ export async function digest(
   const $ = (v: unknown) => `$${values.push(v)}`;
   const list = (select: string, limit?: number, order = '2 DESC, 1') =>
     `(SELECT coalesce(json_agg(t), '[]') FROM (${select} ORDER BY ${order}${limit ? ` LIMIT ${limit}` : ''}) t)`;
+  /** A ranked list from the views, plus the same breakdown from `ViewDay`. */
+  const merged = (label: string, column: string, live: string) =>
+    `SELECT k AS ${label}, sum(n) AS visitors FROM (${live} UNION ALL SELECT key, value::int FROM a, jsonb_each_text(a."${column}")) t(k, n) GROUP BY 1`;
 
   const gapSelects = gaps.map(g => {
     const prop = $(g.prop);
@@ -338,23 +364,45 @@ export async function digest(
       FROM numbered GROUP BY visitor, visit
     ), e AS (
       SELECT name, props, visitor FROM "Event" WHERE "siteId" = $1 AND "createdAt" >= now() - make_interval(days => $2::int)
+    ), a AS (
+      SELECT * FROM "ViewDay" WHERE "siteId" = $1 AND day >= (now() AT TIME ZONE 'UTC' - make_interval(days => $2::int))::date
+    ), sessions AS (
+      SELECT sum(bounces) AS bounces, sum(visits) AS visits, sum(seconds) AS seconds FROM (
+        SELECT count(*) FILTER (WHERE views = 1), count(*), coalesce(sum(seconds), 0) FROM visits
+        UNION ALL SELECT coalesce(sum(bounces), 0), coalesce(sum(visits), 0), coalesce(sum(seconds), 0) FROM a
+      ) s(bounces, visits, seconds)
+    ), src AS (
+      SELECT coalesce(source, '(none)') AS source, count(DISTINCT visitor) AS visitors FROM visits GROUP BY 1
+      UNION ALL SELECT key, value::int FROM a, jsonb_each_text(a.sources)
+    ), archived AS (
+      SELECT coalesce(sum(visitors), 0) AS visitors, coalesce(sum(pageviews), 0) AS pageviews FROM a
     )
     SELECT json_build_object(
-      'visitors', (SELECT count(DISTINCT visitor) FROM v),
-      'pageviews', (SELECT count(*) FROM v),
-      'bounce_rate', (SELECT round(100.0 * count(*) FILTER (WHERE views = 1) / nullif(count(*), 0)) FROM visits),
-      'visit_duration', (SELECT round(avg(seconds)) FROM visits),
-      'visitors_incl_agents', (SELECT count(DISTINCT visitor) FROM (SELECT visitor FROM v UNION SELECT visitor FROM e) a),
+      'visitors', (SELECT count(DISTINCT visitor) FROM v) + (SELECT visitors FROM archived),
+      'pageviews', (SELECT count(*) FROM v) + (SELECT pageviews FROM archived),
+      'bounce_rate', (SELECT round(100.0 * bounces / nullif(visits, 0)) FROM sessions),
+      'visit_duration', (SELECT round(seconds / nullif(visits, 0)) FROM sessions),
+      'visitors_incl_agents', (SELECT count(DISTINCT visitor) FROM (SELECT visitor FROM v UNION SELECT visitor FROM e) u) + (SELECT visitors FROM archived),
       'previous_visitors', (SELECT count(DISTINCT visitor) FROM "View"
-        WHERE "siteId" = $1 AND "createdAt" >= now() - make_interval(days => 2 * $2::int) AND "createdAt" < now() - make_interval(days => $2::int)),
-      'top_sources', ${list(`SELECT coalesce(source, '(none)') AS source, count(DISTINCT visitor) AS visitors FROM visits GROUP BY 1`, 6)},
-      'top_pages', ${list('SELECT path AS page, count(DISTINCT visitor) AS visitors FROM v GROUP BY 1', 6)},
-      'entry_pages', ${list('SELECT entry AS page, count(DISTINCT visitor) AS visitors FROM visits GROUP BY 1', 6)},
+        WHERE "siteId" = $1 AND "createdAt" >= now() - make_interval(days => 2 * $2::int) AND "createdAt" < now() - make_interval(days => $2::int))
+        + (SELECT coalesce(sum(visitors), 0) FROM "ViewDay" WHERE "siteId" = $1
+          AND day >= (now() AT TIME ZONE 'UTC' - make_interval(days => 2 * $2::int))::date
+          AND day < (now() AT TIME ZONE 'UTC' - make_interval(days => $2::int))::date),
+      'top_sources', ${list('SELECT source, sum(visitors) AS visitors FROM src GROUP BY 1', 6)},
+      'top_pages', ${list(merged('page', 'pages', 'SELECT path, count(DISTINCT visitor) FROM v GROUP BY 1'), 6)},
+      'entry_pages', ${list(merged('page', 'entryPages', 'SELECT entry, count(DISTINCT visitor) FROM visits GROUP BY 1'), 6)},
       'from_posts', ${list(`SELECT entry AS page, count(DISTINCT visitor) AS visitors FROM visits WHERE source = 'x' GROUP BY 1`, 15)},
-      'sibling_referrals', ${list(`SELECT source, count(DISTINCT visitor) AS visitors FROM visits WHERE source = ANY(${$(siblings)}::text[]) GROUP BY 1`, 6)},
-      'countries', ${list('SELECT country, count(DISTINCT visitor) AS visitors FROM v WHERE country IS NOT NULL GROUP BY 1', 10)},
-      'devices', ${list('SELECT device, count(DISTINCT visitor) AS visitors FROM v GROUP BY 1')},
-      'by_day', ${list(`SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date, count(DISTINCT visitor) AS visitors FROM v GROUP BY 1`, undefined, '1')},
+      'sibling_referrals', ${list(`SELECT source, sum(visitors) AS visitors FROM src WHERE source = ANY(${$(siblings)}::text[]) GROUP BY 1`, 6)},
+      'countries', ${list(merged('country', 'countries', 'SELECT country, count(DISTINCT visitor) FROM v WHERE country IS NOT NULL GROUP BY 1'), 10)},
+      'devices', ${list(merged('device', 'devices', 'SELECT device, count(DISTINCT visitor) FROM v GROUP BY 1'))},
+      'by_day', ${list(
+        `SELECT date, sum(n) AS visitors FROM (
+          SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD'), count(DISTINCT visitor) FROM v GROUP BY 1
+          UNION ALL SELECT to_char(day, 'YYYY-MM-DD'), visitors FROM a
+        ) t(date, n) GROUP BY 1`,
+        undefined,
+        '1',
+      )},
       'follow_clicks', ${
         handle
           ? `(SELECT json_build_object('events', count(*), 'visitors', count(DISTINCT visitor)) FROM e

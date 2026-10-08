@@ -186,7 +186,8 @@ pre:hover > .code-copy-btn,
 .stats-chart {
   display: flex;
   align-items: flex-end;
-  gap: 2px;
+  /* A year's bars on a phone would be all gap at 2px each. */
+  gap: min(2px, 100% / var(--bars, 1) / 4);
   height: 8rem;
   margin: 0;
   padding: 0;
