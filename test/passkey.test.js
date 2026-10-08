@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createPasskeyGate } from 'wiki-formant/passkey';
-import { Stats, statsDays } from 'wiki-formant/react-server';
+import { Stats, statsDays } from 'wiki-formant/stats';
 
 // Just enough of PasskeyToken to follow a token through its life. Expiry is
 // the row's own `ttl` against a clock the test can move. `saved` is how many
@@ -112,7 +112,7 @@ test('the stats page leaves out empty lists and marks the window shown', () => {
   assert.match(out, /United Kingdom/);
   assert.match(out, /--share:0\.3333/);
   assert.doesNotMatch(out, /Entry pages|Clicks to X/);
-  assert.equal(out.match(/<li title=/g).length, 8);
+  assert.match(out, /<div class="stats-chart" role="img" aria-label="Visitors per day"><\/div>/);
 });
 
 test('no change from the window before is unsigned', () => {

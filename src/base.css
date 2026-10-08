@@ -183,23 +183,9 @@ pre:hover > .code-copy-btn,
   margin: 0;
 }
 .stats-figures dd { margin: 0; font-variant-numeric: tabular-nums; }
-.stats-chart {
-  display: flex;
-  align-items: flex-end;
-  /* A year's bars on a phone would be all gap at 2px each. */
-  gap: min(2px, 100% / var(--bars, 1) / 4);
-  height: 8rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.stats-chart li {
-  flex: 1;
-  height: calc(var(--share) * 100%);
-  min-height: 1px;
-  background: currentColor;
-  opacity: 0.4;
-}
+.stats-chart { height: 15rem; }
+/* The chart lays itself out in a <table>; a site's table styles are not for it. */
+.stats-chart :is(table, tr, td) { background: none; border: 0; border-radius: 0; }
 .stats-lists {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));

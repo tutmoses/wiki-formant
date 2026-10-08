@@ -730,13 +730,16 @@ return <Stats digest={await digest(sql, { days })} days={days} />;
 
 `PasskeyButton` (`wiki-formant/passkey-button`) is the browser half and has its
 own subpath, because it imports the optional peer `@simplewebauthn/browser`.
-`Stats` (`wiki-formant/react-server`) renders a `digest` as one page: the
+`Stats` (`wiki-formant/stats`) renders a `digest` as one page: the
 headline figures against the window before, visitors per day, every non-empty
-ranked list, and `?days=` links between windows. It ships no JavaScript.
+ranked list, and `?days=` links between windows. Everything but the daily chart
+is server-rendered. The chart is a `lightweight-charts` area series with a date
+axis and a count axis from zero, drawn in the box's own `color`, so
+`lightweight-charts` is an optional peer that a stats page needs installed.
 
 ## Base stylesheet
 
-`wiki-formant/base.css` is the layout the package's markup does not work without, and nothing else: columns that stack until there is room, stored tab panels that show one at a time, a copy button pinned to its block's corner and visible on focus and on touch, a table's scroll box, the breadcrumb row, the `aria-sort` arrow as a mask over `currentColor`, and the stats page's grid and bars. It also carries the shape and motion of the primitives every site re-implemented and forked — `.spinner` (a `currentColor` ring sized by `--spinner-size`), `.skeleton`'s pulse, `.empty-state`, the wrap rule for long tokens in inline `code` — and the reduced-motion guard none of them had. No colour and no scale, so a design system's own rules override it at equal specificity.
+`wiki-formant/base.css` is the layout the package's markup does not work without, and nothing else: columns that stack until there is room, stored tab panels that show one at a time, a copy button pinned to its block's corner and visible on focus and on touch, a table's scroll box, the breadcrumb row, the `aria-sort` arrow as a mask over `currentColor`, and the stats page's grid, bars and chart height. It also carries the shape and motion of the primitives every site re-implemented and forked — `.spinner` (a `currentColor` ring sized by `--spinner-size`), `.skeleton`'s pulse, `.empty-state`, the wrap rule for long tokens in inline `code` — and the reduced-motion guard none of them had. No colour and no scale, so a design system's own rules override it at equal specificity.
 
 ```css
 @import "wiki-formant/base.css" layer(components);
