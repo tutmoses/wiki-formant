@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { searchTsvDdl, searchTsvSql } from 'wiki-formant/search';
 import { wantsMarkdown, VARY_ACCEPT } from 'wiki-formant/http';
 import { freshnessBanner } from 'wiki-formant/freshness';
-import { aiCrawlerRules, AGENT_SURFACE_PATHS } from 'wiki-formant/crawlers';
+import { crawlerRules, AGENT_SURFACE_PATHS, SEARCH_ENGINES } from 'wiki-formant/crawlers';
 import { mcpManifest, agentCard, descriptorHandler, serverCardHandler } from 'wiki-formant/well-known';
 import { ccBy40, openApiLicense } from 'wiki-formant/license';
 import { uniqueHeadingId, injectHeadingIds } from 'wiki-formant/headings';
@@ -35,8 +35,8 @@ test('a stale page gets an outdated banner block, a fresh one none', () => {
   assert.match(b.text, /last verified 2025-01-01/);
 });
 
-test('every robots group allows the agent surface without being told', () => {
-  const rules = aiCrawlerRules({ allow: '/', disallow: ['/api/'] });
+test('every agent group allows the agent surface without being told', () => {
+  const rules = crawlerRules({ allow: '/', disallow: ['/api/'] }).filter(g => !SEARCH_ENGINES.includes(g.userAgent));
   for (const group of rules) for (const p of AGENT_SURFACE_PATHS) assert.ok([group.allow].flat().includes(p), `${group.userAgent} ${p}`);
 });
 

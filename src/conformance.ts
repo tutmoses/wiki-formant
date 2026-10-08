@@ -106,6 +106,14 @@ export interface Tester {
   rpc(method: string, params?: unknown): Promise<Rpc>;
   /** `tools/call` shorthand. */
   call(name: string, args?: Record<string, unknown>): Promise<Rpc>;
+  /**
+   * `rpc` against another MCP endpoint on the same surface — a per-tenant
+   * server beside the main one — with the same backoff, User-Agent and tally.
+   * The one surface with a second endpoint had re-implemented the backoff for
+   * it, without the User-Agent.
+   */
+  rpcAt(endpoint: string, method: string, params?: unknown): Promise<Rpc>;
+  callAt(endpoint: string, name: string, args?: Record<string, unknown>): Promise<Rpc>;
   /** The decoded body of a tool result: parsed JSON, raw text, or the error. */
   payload(r: Rpc): unknown;
   /** Record an assertion and print it as it happens. */
@@ -133,10 +141,10 @@ export function createTester(opts: TesterOptions): Tester {
   // bounded number of times. This used to say "once" and recurse forever at a
   // fixed 5s, so a suite pointed at a budget it could never get under hung.
   const RETRIES = 4;
-  const rpc = async (method: string, params?: unknown): Promise<Rpc> => {
+  const rpcAt = async (url: string, method: string, params?: unknown): Promise<Rpc> => {
     for (let attempt = 1; ; attempt++) {
       calls++;
-      const res = await fetch(endpoint, {
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'User-Agent': opts.clientName },
         body: JSON.stringify({ jsonrpc: '2.0', id: calls, method, params }),
@@ -147,12 +155,15 @@ export function createTester(opts: TesterOptions): Tester {
       await new Promise(r => setTimeout(r, Math.min(60, Number.isFinite(wait) && wait > 0 ? wait : 5) * 1000));
     }
   };
+  const rpc = (method: string, params?: unknown) => rpcAt(endpoint, method, params);
 
   return {
     base,
     endpoint,
     rpc,
     call: (name, args = {}) => rpc('tools/call', { name, arguments: args }),
+    rpcAt,
+    callAt: (url, name, args = {}) => rpcAt(url, 'tools/call', { name, arguments: args }),
     payload(r) {
       const text = r.result?.content?.[0]?.text;
       if (text == null) return r.error ? { _error: r.error } : r.result;
@@ -429,6 +440,25 @@ export async function versionCoherence(
     all.every(v => v === expected),
     `expected=${expected} ` + Object.entries(found).map(([k, v]) => `${k}=${v}`).join(' '),
   );
+}
+
+/** The version sources every S10 surface serves, for `versionCoherence`. */
+export function standardVersionSources(
+  t: Pick<Tester, 'base' | 'endpoint'>,
+  /** Every path the OpenAPI document is served at. */
+  openapi: readonly string[] = ['/openapi.json', '/.well-known/openapi.json'],
+): Record<string, { url: string; at: (json: Record<string, unknown>) => unknown }> {
+  const version = (j: Record<string, unknown>) => j.version;
+  return {
+    card: { url: `${t.base}/.well-known/agent-card.json`, at: version },
+    legacyCard: { url: `${t.base}/.well-known/agent.json`, at: version },
+    mcpManifest: { url: `${t.base}/.well-known/mcp.json`, at: version },
+    serverCard: { url: `${t.endpoint}/server-card`, at: version },
+    ...Object.fromEntries(openapi.map(path => [
+      `openapi:${path}`,
+      { url: `${t.base}${path}`, at: (j: Record<string, unknown>) => (j.info as { version?: unknown } | undefined)?.version },
+    ])),
+  };
 }
 
 /**

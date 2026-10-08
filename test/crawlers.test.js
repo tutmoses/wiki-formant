@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AI_CRAWLERS, aiCrawlerRules, aiCrawlerTokens, detectAiBot } from 'wiki-formant/crawlers';
+import { AI_CRAWLERS, crawlerRules, aiCrawlerTokens, detectAiBot, RSC_DISALLOW, SEARCH_ENGINES, trackAiBot } from 'wiki-formant/crawlers';
 
 test('the matcher returns the label the proxies used', () => {
   assert.equal(detectAiBot('Mozilla/5.0 (compatible; GPTBot/1.2; +https://openai.com/gptbot)'), 'GPTBot');
@@ -44,21 +44,21 @@ test('BUG: a named group always carries a disallow', () => {
   // A group that disallows nothing grants that agent everything, because it
   // stops matching `*` the moment it matches itself. This is the failure all
   // three robots.txt files warned about in a comment.
-  const rules = aiCrawlerRules({ allow: '/', disallow: ['/api/'], aiAllow: ['/', '/llms.txt'] });
+  const rules = crawlerRules({ allow: '/', disallow: ['/api/'], aiAllow: ['/', '/llms.txt'] });
   assert.equal(rules[0].userAgent, '*');
   for (const rule of rules) {
     assert.ok(rule.disallow, `${rule.userAgent} has no disallow`);
   }
-  assert.equal(rules.length, AI_CRAWLERS.length + 1);
+  assert.equal(rules.length, AI_CRAWLERS.length + 1 + SEARCH_ENGINES.length);
   assert.deepEqual(rules[1], {
     userAgent: 'GPTBot',
     allow: ['/', '/llms.txt', '/api/mcp', '/llms-index.txt', '/llms-full.txt', '/openapi.json', '/.well-known/'],
-    disallow: ['/api/'],
+    disallow: ['/api/', ...RSC_DISALLOW],
   });
 });
 
 test('the default group can reach everything the descriptors advertise', () => {
-  const [star] = aiCrawlerRules({
+  const [star] = crawlerRules({
     allow: '/',
     disallow: ['/api/', '/admin/'],
     aiAllow: ['/', '/api/mcp', '/llms.txt'],
@@ -71,4 +71,31 @@ test('the default group can reach everything the descriptors advertise', () => {
   // `allow` and `aiAllow` both normally start with '/', and a group listing the
   // same path twice reads as a mistake in a file people inspect by eye.
   assert.equal(star.allow.filter(a => a === '/').length, 1);
+});
+
+test('search engines get the HTML site and none of its twins', () => {
+  const rules = crawlerRules({ allow: '/', disallow: ['/api/upload'], aiAllow: ['/api/wiki/'], searchDisallow: '/api/wiki/' });
+  const google = rules.find(r => r.userAgent === 'Googlebot');
+  // The third origin never wrote this group, so Google crawled every .md twin.
+  assert.deepEqual(google, { userAgent: 'Googlebot', allow: '/', disallow: ['/api/upload', ...RSC_DISALLOW, '/*.md$', '/api/wiki/'] });
+  assert.ok(rules.find(r => r.userAgent === 'Bingbot'));
+});
+
+test('the RSC prefetch payload is refused in every group without being asked', () => {
+  for (const group of crawlerRules({ allow: '/', disallow: [] })) {
+    for (const p of RSC_DISALLOW) assert.ok([group.disallow].flat().includes(p), `${group.userAgent} ${p}`);
+  }
+});
+
+test('a bot visit is counted off the response path, a person is not', async () => {
+  const waited = [];
+  const recorded = [];
+  const event = { waitUntil: p => waited.push(p) };
+  const load = async () => ({ trackEvent: async (...args) => { recorded.push(args); } });
+  const req = ua => ({ url: 'https://w.test/x', headers: new Headers({ 'user-agent': ua }) });
+  assert.equal(trackAiBot(req('Mozilla/5.0 Firefox'), event, load), null);
+  assert.equal(waited.length, 0);
+  assert.equal(trackAiBot(req('Mozilla/5.0 (compatible; GPTBot/1.2)'), event, load), 'GPTBot');
+  await Promise.all(waited);
+  assert.deepEqual(recorded[0].slice(0, 3), ['AI Bot Visit', 'https://w.test/x', { bot: 'GPTBot' }]);
 });

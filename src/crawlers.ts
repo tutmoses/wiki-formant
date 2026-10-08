@@ -12,6 +12,9 @@
 // most-specific matching group: an agent with no group of its own falls through
 // to `*` and is granted whatever that grants.
 
+import type { Tracker } from './analytics.js';
+import type { HeaderReader } from './rate-limit.js';
+
 export interface AiCrawler {
   /** Matched as a substring of the User-Agent, and the robots.txt token. */
   token: string;
@@ -94,20 +97,42 @@ export const AGENT_SURFACE_PATHS: readonly string[] = [
 ];
 
 /**
- * The wildcard group followed by one group per crawler.
+ * The React Server Components payload a `<Link>` prefetches. A crawler that
+ * renders a page runs those prefetches too — 43% of Googlebot's requests on
+ * one wiki, against 10% for HTML — and nothing that reads robots.txt can use
+ * one. Every group gets it.
+ */
+export const RSC_DISALLOW: readonly string[] = ['/*?_rsc=', '/*&_rsc='];
+
+/** The search engines that get the HTML site and none of its twins. */
+export const SEARCH_ENGINES: readonly string[] = ['Googlebot', 'Bingbot'];
+
+/**
+ * Every group robots.txt needs: the wildcard, one per AI crawler, one per
+ * search engine.
  *
  * Every named agent gets an explicit `disallow`. Omitting it is the failure the
  * comment in all three `robots.ts` files warned about and all three then
  * committed for five agents: a named group that disallows nothing grants that
  * agent everything, because it stops matching `*` the moment it matches itself.
+ *
+ * The search-engine groups exist because `*` keeps the machine surface open to
+ * an agent the origin has never heard of, which is right for an agent and wrong
+ * for Google: a `.md` twin or its JSON is a page it already has in another
+ * format. Two origins wrote that group by hand and the third never did, so
+ * Google crawled its twins.
  */
-export function aiCrawlerRules(opts: {
+export function crawlerRules(opts: {
   allow: string | string[];
   disallow: string | string[];
   /** Beyond `AGENT_SURFACE_PATHS`, which every group gets regardless. */
   aiAllow?: string | string[];
+  /** What search engines are refused beyond `disallow`. `/*.md$` always is. */
+  searchDisallow?: string | string[];
 }): RobotsGroup[] {
   const aiAllow = [...new Set([...[opts.aiAllow ?? []].flat(), ...AGENT_SURFACE_PATHS])];
+  const disallow = [...new Set([...[opts.disallow].flat(), ...RSC_DISALLOW])];
+  const searchDisallow = [...new Set([...disallow, '/*.md$', ...[opts.searchDisallow ?? []].flat()])];
   return [
     // `aiAllow` rides on the default group too, not only on the named roster.
     // The agent surface an origin advertises has to be reachable by a caller it
@@ -115,11 +140,26 @@ export function aiCrawlerRules(opts: {
     // their own agent card named `/api/mcp`, so an MCP client that identified
     // honestly as itself was told the endpoint was off limits. The roster is
     // for indexing policy, not for hiding a documented endpoint.
-    { userAgent: '*', allow: [...new Set([...[opts.allow].flat(), ...aiAllow])], disallow: opts.disallow },
-    ...aiCrawlerTokens().map(userAgent => ({
-      userAgent,
-      allow: aiAllow,
-      disallow: opts.disallow,
-    })),
+    { userAgent: '*', allow: [...new Set([...[opts.allow].flat(), ...aiAllow])], disallow },
+    ...aiCrawlerTokens().map(userAgent => ({ userAgent, allow: aiAllow, disallow })),
+    ...SEARCH_ENGINES.map(userAgent => ({ userAgent, allow: '/', disallow: searchDisallow })),
   ];
+}
+
+/**
+ * Count an AI crawler's visit from a proxy, without holding up its response.
+ *
+ * `load` is a dynamic import of the module that records it, because that
+ * module pulls in a database client, and a static import would load it for
+ * every request the proxy sees, bots or not. Three proxies wrote these lines.
+ * Returns the bot's label, or null.
+ */
+export function trackAiBot(
+  request: { url: string; headers: HeaderReader },
+  event: { waitUntil(promise: Promise<unknown>): void },
+  load: () => Promise<Pick<Tracker, 'trackEvent'>>,
+): string | null {
+  const bot = detectAiBot(request.headers.get('user-agent'));
+  if (bot) event.waitUntil(load().then(m => m.trackEvent('AI Bot Visit', request.url, { bot }, request.headers)));
+  return bot;
 }

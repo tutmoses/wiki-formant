@@ -170,6 +170,12 @@ process.exit(t.summary());
 
 What stays in your repo is fixtures: which tools you expect, what a good answer from each looks like, and which text surfaces you publish. `payloadBudget` weighs every listed call **and** every read-only tool that takes no required arguments, because the one tool nobody thought to list is the one that answers with 3.3 MB; pass a per-call `maxBytes` for a bulk-export tool that is deliberately large. It also asserts that a JSON answer arrived with `structuredContent`.
 
+`standardVersionSources(t, openapiPaths)` is the `versionCoherence` map every S10 surface serves — both agent-card paths, `mcp.json`, the server card and each path the OpenAPI document answers at — so a suite names only the paths it adds. `t.rpcAt(endpoint, …)` and `t.callAt` drive a second MCP endpoint on the same surface with the same backoff, User-Agent and tally.
+
+```ts
+await versionCoherence(t, server.version, standardVersionSources(t, ['/openapi.json', '/api/openapi.json']), init.result?.serverInfo?.version);
+```
+
 `descriptorChecks(t)` defaults to `S10_DESCRIPTORS`, the six JSON descriptors every surface here serves, and `distinctEtagChecks(t, ['llms.txt', 'llms-index.txt', 'llms-full.txt'])` asserts that depths projecting one corpus carry different ETags — every one present, which a bare Set-size check misses.
 
 ## Markdown twins
@@ -219,6 +225,45 @@ export async function GET(request: Request) {
 const agg = await prisma.page.aggregate({ _count: true, _max: { updatedAt: true } });
 corpusValidatorsFrom([depth, agg._count], [agg._max.updatedAt]);
 ```
+
+### Route errors
+
+`json`, `errors` and `handleRoute` are the answers a route handler gives when it is not answering with data, as web-standard `Response`s a Next handler returns as they are. Every error body is `{ error, ...extra }`: one origin had these helpers, one had a second convention with a third copy inside a single route, and two answered with whatever `Response.json` was nearest, so one mistake came back three ways depending on the origin.
+
+```ts
+import { errors, handleRoute, HttpError } from 'wiki-formant/http';
+
+export const GET = (req: Request) => handleRoute(async () => {
+  const q = new URL(req.url).searchParams.get('q');
+  if (!q) return errors.badRequest('q is required');
+  if (q.length > 200) throw new HttpError(400, 'q is too long', { code: 'INVALID_PARAMS' });
+  return Response.json(await search(q));
+}, 'Search failed');
+```
+
+A thrown `HttpError` answers with its own status and message. Anything else thrown is logged and answered with a 500 carrying only `errorMsg`, so an exception's text — a database error naming a table — never reaches the caller. `errors.tooManyRequests(sec)` states `Retry-After`.
+
+## Response headers
+
+`wiki-formant/headers` holds the six headers every route sends and the Content-Security-Policy they share, for `next.config.ts` to import:
+
+```ts
+import { contentSecurityPolicy, securityHeaders } from 'wiki-formant/headers';
+
+const csp = contentSecurityPolicy({ 'connect-src': ["'self'", 'https://*.radixdlt.com'] });
+
+const nextConfig = {
+  async headers() {
+    return [{ source: '/:path*', headers: securityHeaders(process.env.NODE_ENV === 'production' ? csp : null) }];
+  },
+};
+```
+
+Four configs had restated these by hand on the grounds that a config could not import an ESM-only package. It could not because no subpath had a `default` condition, and Next resolves a config's imports the way `require` does; every subpath has one now, and Node 24 loads the module there unchanged.
+
+`contentSecurityPolicy` starts from `BASE_CSP`, the policy all four origins shared line for line, and each directive passed replaces its default rather than appending, so the call site reads as the whole list. An empty list drops a directive.
+
+The default `frame-src` is `frameSources(DEFAULT_IFRAME_HOSTS)` — the same list the sanitiser's `iframeHosts` defaults to. The sanitiser's comment had asked every config to keep the two matched by hand, and one did not: its policy lacked the bare `youtube.com` and `youtube-nocookie.com` its sanitiser kept, so those embeds survived cleaning and then rendered blank. A site with its own host list passes it to both.
 
 ## Pagination and versioning
 
@@ -333,10 +378,10 @@ group. Both copies were byte-identical across three repos, and they were
 different lists.
 
 ```ts
-import { detectAiBot, aiCrawlerRules } from 'wiki-formant/crawlers';
+import { trackAiBot, crawlerRules } from 'wiki-formant/crawlers';
 
-const bot = detectAiBot(request.headers.get('user-agent'));   // label, or null
-const rules = aiCrawlerRules({ allow: '/', disallow, aiAllow });
+trackAiBot(request, event, () => import('@/lib/track'));   // in proxy.ts: label, or null
+const rules = crawlerRules({ allow: '/', disallow, aiAllow });
 ```
 
 Only one direction of that difference was deliberate: `Applebot-Extended` never
@@ -347,7 +392,11 @@ and a crawler obeys only its most-specific matching group, so an agent with no
 group of its own falls through to `*`. Three wikis were measuring five crawlers
 they had never addressed.
 
-Every group also allows `AGENT_SURFACE_PATHS` — `/api/mcp`, the three `llms` exports, `/openapi.json`, `/.well-known/` — without being told. `aiAllow` is what an origin serves beyond that.
+Every agent group also allows `AGENT_SURFACE_PATHS` — `/api/mcp`, the three `llms` exports, `/openapi.json`, `/.well-known/` — without being told. `aiAllow` is what an origin serves beyond that.
+
+`crawlerRules` returns every group robots.txt needs: the wildcard, one per AI crawler, and one each for `SEARCH_ENGINES`. Search engines get the HTML site and none of its twins — `/*.md$` always, plus `searchDisallow` — because the `*` group keeps the machine surface open to agents, and for Google a twin is a page it already has. Two origins wrote that group by hand and the third never did, so Google crawled its twins. `RSC_DISALLOW`, the `<Link>` prefetch payload, is refused in every group.
+
+`trackAiBot(request, event, load)` counts an `AI Bot Visit` inside `event.waitUntil`. `load` is a dynamic import because the tracker pulls in a database client, which a static import would load for every request the proxy sees.
 
 ## Page metadata
 
@@ -364,6 +413,14 @@ The schema.org nodes sit beside it, because they state the same facts to a diffe
 
 ```tsx
 <JsonLd data={articleLd({ headline: title, url, image, published, modified, publisher: { '@id': `${SITE_URL}/#organization` }, citation: citationsFromReferences(refs) })} />
+```
+
+`sitePageMetadata({ siteName, handle })` binds the three fields Next drops from every page that sets its own card, with `locale` defaulting to `en_US`. `siteGraphLd` is the Organization, WebSite (with its `SearchAction`) and `WebAPI` as one `@graph` for the root layout, every node carrying an `@id`, and `siteRefs(url)` hands out the same ids for a page's `publisher` and `isPartOf` — so no page writes an inline copy of the publisher that can disagree with the layout's.
+
+```ts
+export const card = sitePageMetadata({ siteName: SITE_NAME, handle: '@example' });
+export const SITE = siteRefs(SITE_URL);
+<JsonLd data={siteGraphLd({ name, url: SITE_URL, logo, sameAs, searchUrl, api })} />
 ```
 
 ## Revisions
@@ -540,7 +597,7 @@ A `codeTabs` tab's `code` is source text in every wiki here, and every view trea
 ```ts
 import { createHtmlSanitizer, sanitizeCoreLeaf } from 'wiki-formant/sanitize';
 
-const clean = createHtmlSanitizer({ iframeHosts: FRAME_HOSTS });   // pair with CSP frame-src
+const clean = createHtmlSanitizer({ iframeHosts: FRAME_HOSTS });   // and frameSources(FRAME_HOSTS) in the CSP
 const safe = mapBlockTree(blocks, b => sanitizeCoreLeaf(b, clean), BLOCK_SHAPE);
 ```
 
@@ -677,7 +734,7 @@ ranked list, and `?days=` links between windows. It ships no JavaScript.
 
 ## Base stylesheet
 
-`wiki-formant/base.css` is the layout the package's markup does not work without, and nothing else: columns that stack until there is room, stored tab panels that show one at a time, a copy button pinned to its block's corner and visible on focus and on touch, a stored table's scroll box, the `aria-sort` arrow as a mask over `currentColor`, and the stats page's grid and bars. No colour and no scale, so a design system's own rules override it at equal specificity.
+`wiki-formant/base.css` is the layout the package's markup does not work without, and nothing else: columns that stack until there is room, stored tab panels that show one at a time, a copy button pinned to its block's corner and visible on focus and on touch, a table's scroll box, the breadcrumb row, the `aria-sort` arrow as a mask over `currentColor`, and the stats page's grid and bars. It also carries the shape and motion of the primitives every site re-implemented and forked — `.spinner` (a `currentColor` ring sized by `--spinner-size`), `.skeleton`'s pulse, `.empty-state`, the wrap rule for long tokens in inline `code` — and the reduced-motion guard none of them had. No colour and no scale, so a design system's own rules override it at equal specificity.
 
 ```css
 @import "wiki-formant/base.css" layer(components);
@@ -693,6 +750,12 @@ barrel loads every module it names for the one symbol a route wanted, and had
 already re-exported one module twice. The emitted `.d.ts` files are the reference.
 There is no hand-maintained symbol list here, because the one that used to be here
 drifted from them.
+
+`wiki-formant/tsconfig.base.json` is the compiler floor: an app's `tsconfig.json` extends it and keeps only `paths`, `include`, `exclude` and any licensed extra, since tsconfig resolves those against the file that declares them.
+
+```json
+{ "extends": "wiki-formant/tsconfig.base.json", "compilerOptions": { "paths": { "@/*": ["./src/*"] } }, "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "src/app/.well-known/**/*.ts", ".next/types/**/*.ts", ".next/dev/types/**/*.ts"], "exclude": ["node_modules"] }
+```
 
 `wiki-formant/db` holds `pgPoolConfig(url)`, the options every app here hands to
 `new pg.Pool()`: ten clients on Supabase's 6543 transaction pooler, three on the
@@ -727,6 +790,29 @@ npx analytics-digest --days 7 --gap "Symptom Miss:term"   # adds an event to the
 
 ```sh
 npx passkey-invite https://caper.network/stats
+```
+
+`fts-ddl <table>` rebuilds a table's `search_tsv` generated column and its GIN index from the expression `wiki-formant/search` queries, over `DIRECT_URL` (else `DATABASE_URL` on 5432). Run it before declaring the column in `schema.prisma`; the bin's header says why.
+
+```sh
+npx fts-ddl pages
+```
+
+## A reusable workflow
+
+`.github/workflows/publish-mcp-registry.yml` republishes an origin's server to the MCP registry when the version in its `server.json` moves. Each app keeps its own trigger and calls it with its domain:
+
+```yaml
+on:
+  push: { branches: [main], paths: ['server.json'] }
+  workflow_dispatch:
+jobs:
+  publish:
+    uses: tutmoses/wiki-formant/.github/workflows/publish-mcp-registry.yml@main
+    with:
+      domain: example.com
+    secrets:
+      MCP_REGISTRY_PRIVATE_KEY: ${{ secrets.MCP_REGISTRY_PRIVATE_KEY }}
 ```
 
 ## Licence

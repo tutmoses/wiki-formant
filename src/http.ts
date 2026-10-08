@@ -1,4 +1,5 @@
-// http.ts — conditional-GET plumbing for text corpus endpoints.
+// http.ts — conditional-GET plumbing for text corpus endpoints, and the error
+// answers every route handler gives (at the foot).
 //
 // The three llms depths (llms.txt / llms-index.txt / llms-full.txt) are the
 // most-recrawled URLs a wiki serves and the most expensive to render. With a
@@ -286,4 +287,59 @@ export function corpusRoute(
     const sent = headers(etag, lastModified);
     return notModified(request, etag, lastModified, sent) ?? new Response(await build(), { headers: sent });
   };
+}
+
+// ---- route errors -----------------------------------------------------------
+
+/** JSON with a status or a full init, as a web-standard `Response`. */
+export function json(data: unknown, init?: number | ResponseInit): Response {
+  return Response.json(data, typeof init === 'number' ? { status: init } : init);
+}
+
+/**
+ * The error answers every route handler gives, as `{ error, ...extra }`.
+ *
+ * One repo had these, one had a second convention with a third copy inside a
+ * single route, and two answered with whatever `Response.json` call was nearest
+ * — so the same mistake came back as `Unauthorized`, `Not authorized.` or a
+ * bare status depending on which origin an agent asked. `extra` carries what a
+ * surface adds to the body (a machine-readable `code`, a hint) without a fourth
+ * shape.
+ */
+export const errors = {
+  badRequest: (message: string, extra?: Record<string, unknown>) => json({ error: message, ...extra }, 400),
+  unauthorized: (message = 'Unauthorized', extra?: Record<string, unknown>) => json({ error: message, ...extra }, 401),
+  forbidden: (message = 'Forbidden', extra?: Record<string, unknown>) => json({ error: message, ...extra }, 403),
+  notFound: (message = 'Not found', extra?: Record<string, unknown>) => json({ error: message, ...extra }, 404),
+  /** States its own wait: a 429 without `Retry-After` is retried immediately, extending the block. */
+  tooManyRequests: (retryAfterSec: number, message = 'Rate limit exceeded', extra?: Record<string, unknown>) =>
+    json({ error: message, ...extra }, { status: 429, headers: { 'Retry-After': String(Math.max(1, Math.ceil(retryAfterSec))) } }),
+  internal: (message = 'Internal server error', extra?: Record<string, unknown>) => json({ error: message, ...extra }, 500),
+} as const;
+
+/**
+ * A caller-fixable failure thrown from deep inside a handler, answered with
+ * its own status and message by `handleRoute`. Anything else thrown is a bug,
+ * answered with a generic 500 so its message never reaches the caller.
+ */
+export class HttpError extends Error {
+  constructor(public status: number, message: string, public extra?: Record<string, unknown>) {
+    super(message);
+  }
+}
+
+/**
+ * Run a handler; a thrown `HttpError` becomes its own answer, anything else a
+ * logged 500 that names nothing internal. One handler here echoed every
+ * exception's message to the caller, which is how a database error's text
+ * becomes public.
+ */
+export async function handleRoute(fn: () => Promise<Response>, errorMsg = 'Internal server error'): Promise<Response> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (error instanceof HttpError) return json({ error: error.message, ...error.extra }, error.status);
+    console.error(errorMsg, error);
+    return errors.internal(errorMsg);
+  }
 }

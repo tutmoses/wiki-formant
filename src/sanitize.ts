@@ -14,6 +14,7 @@
 // and no sanitiser ships to the client. `sanitize-html` is an optional peer.
 
 import sanitizeHtml from 'sanitize-html';
+import { DEFAULT_IFRAME_HOSTS } from './headers.js';
 
 // Inline SVG, presentational elements only. The infographics pipeline embeds
 // diagrams as inline SVG in two of the wikis, so a prose-only list would erase
@@ -37,18 +38,6 @@ const SVG_ATTRS = [
   'gradientTransform', 'clip-path', 'mask', 'role', 'aria-label', 'style',
 ];
 
-/**
- * The embed hosts the editor's iframe, YouTube, tweet and map nodes produce.
- * This is half of a pair: the CSP `frame-src` in each `next.config.ts` must
- * allow the same hosts, or an iframe survives sanitising and is then blocked.
- */
-export const DEFAULT_IFRAME_HOSTS: readonly string[] = [
-  'www.youtube.com', 'youtube.com',
-  'www.youtube-nocookie.com', 'youtube-nocookie.com',
-  'platform.twitter.com',
-  'www.google.com', 'maps.google.com',
-  'embed.apple.com', 'maps.apple.com',
-];
 
 // Layout and paint only. `position`, `z-index` and friends are left out so a
 // page cannot lay a fake signing prompt over the site's chrome.

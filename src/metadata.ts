@@ -260,3 +260,99 @@ export function fittingTitle(
   if (!usable.length) return '';
   return usable.find(v => v.length + suffix.length <= limit) ?? usable[usable.length - 1]!;
 }
+
+// ---- the site's own identity ----------------------------------------------------
+
+/**
+ * `pageMetadata` bound to a site's name, locale and handle, the three fields
+ * Next drops from every page that sets its own card. Two wikis wrapped it to
+ * restate them; the third passed them by hand at six call sites and forgot the
+ * locale at all of them.
+ */
+export function sitePageMetadata(site: { siteName: string; locale?: string; handle?: string }) {
+  const bound = { locale: 'en_US', ...site };
+  return (o: Omit<PageMetadataOptions, 'siteName' | 'locale' | 'handle'>) => pageMetadata({ ...o, ...bound });
+}
+
+/** The `@id` references a page's own node points at for `publisher` and `isPartOf`. */
+export function siteRefs(url: string): { organization: LdNode; website: LdNode } {
+  const base = url.replace(/\/$/, '');
+  return { organization: { '@id': `${base}/#organization` }, website: { '@id': `${base}/#website` } };
+}
+
+export interface SiteGraphOptions {
+  name: string;
+  /** The canonical origin, no trailing slash needed. */
+  url: string;
+  description?: string;
+  /** Absolute URL of the logo. */
+  logo?: string;
+  /** Public profiles. */
+  sameAs?: readonly string[];
+  /** Site search, with `{search_term_string}` where the query goes. */
+  searchUrl?: string;
+  /** The machine surface, as a `WebAPI` the Organization provides. */
+  api?: { name?: string; description: string; url: string; documentation?: string };
+  /** What only this site states about itself — `knowsAbout`, `publishingPrinciples`. */
+  organizationExtra?: LdNode;
+  websiteExtra?: LdNode;
+}
+
+/**
+ * The Organization, WebSite and (optionally) WebAPI nodes as one `@graph`,
+ * rendered once in the root layout.
+ *
+ * Each node carries an `@id`, and `siteRefs` hands out the same ids for every
+ * page's `publisher` and `isPartOf`. The three wikis built these three ways —
+ * separate nodes, a graph, inline copies — and the inline copies were where
+ * they disagreed: one site wrote its publisher four times and one of the four
+ * had a different URL.
+ */
+export function siteGraphLd(o: SiteGraphOptions): LdNode {
+  const url = o.url.replace(/\/$/, '');
+  const { organization, website } = siteRefs(url);
+  return {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Organization',
+        ...organization,
+        name: o.name,
+        url,
+        ...(o.logo ? { logo: { '@type': 'ImageObject', url: o.logo } } : {}),
+        ...(o.description ? { description: o.description } : {}),
+        ...(o.sameAs?.length ? { sameAs: [...o.sameAs] } : {}),
+        ...o.organizationExtra,
+      },
+      {
+        '@type': 'WebSite',
+        ...website,
+        name: o.name,
+        url,
+        ...(o.description ? { description: o.description } : {}),
+        publisher: organization,
+        ...(o.searchUrl
+          ? {
+              potentialAction: {
+                '@type': 'SearchAction',
+                target: { '@type': 'EntryPoint', urlTemplate: o.searchUrl },
+                'query-input': 'required name=search_term_string',
+              },
+            }
+          : {}),
+        ...o.websiteExtra,
+      },
+      ...(o.api
+        ? [{
+            '@type': 'WebAPI',
+            '@id': `${url}/#api`,
+            name: o.api.name ?? `${o.name} API`,
+            description: o.api.description,
+            url: o.api.url,
+            ...(o.api.documentation ? { documentation: o.api.documentation } : {}),
+            provider: organization,
+          }]
+        : []),
+    ],
+  };
+}

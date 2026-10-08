@@ -1,7 +1,7 @@
 {
   "name": "wiki-formant",
-  "version": "0.32.0",
-  "description": "The portable half of a wiki: derived taxonomy and facet controls, a version-negotiating MCP transport, markdown twins, block rendering, a rich-text editor engine, and conditional-GET plumbing.",
+  "version": "0.33.0",
+  "description": "The portable half of a wiki: derived taxonomy and facet controls, a version-negotiating MCP transport, markdown twins, block rendering, a rich-text editor engine, conditional-GET plumbing, and the headers and CSP every origin sends.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -24,171 +24,218 @@
   "exports": {
     "./taxonomy": {
       "types": "./dist/taxonomy.d.ts",
-      "import": "./dist/taxonomy.js"
+      "import": "./dist/taxonomy.js",
+      "default": "./dist/taxonomy.js"
     },
     "./mcp": {
       "types": "./dist/mcp.d.ts",
-      "import": "./dist/mcp.js"
+      "import": "./dist/mcp.js",
+      "default": "./dist/mcp.js"
     },
     "./headings": {
       "types": "./dist/headings.d.ts",
-      "import": "./dist/headings.js"
+      "import": "./dist/headings.js",
+      "default": "./dist/headings.js"
     },
     "./markdown": {
       "types": "./dist/markdown.d.ts",
-      "import": "./dist/markdown.js"
+      "import": "./dist/markdown.js",
+      "default": "./dist/markdown.js"
     },
     "./http": {
       "types": "./dist/http.d.ts",
-      "import": "./dist/http.js"
+      "import": "./dist/http.js",
+      "default": "./dist/http.js"
     },
     "./pagination": {
       "types": "./dist/pagination.d.ts",
-      "import": "./dist/pagination.js"
+      "import": "./dist/pagination.js",
+      "default": "./dist/pagination.js"
     },
     "./versioning": {
       "types": "./dist/versioning.d.ts",
-      "import": "./dist/versioning.js"
+      "import": "./dist/versioning.js",
+      "default": "./dist/versioning.js"
     },
     "./rate-limit": {
       "types": "./dist/rate-limit.d.ts",
-      "import": "./dist/rate-limit.js"
+      "import": "./dist/rate-limit.js",
+      "default": "./dist/rate-limit.js"
     },
     "./db": {
       "types": "./dist/db.d.ts",
-      "import": "./dist/db.js"
+      "import": "./dist/db.js",
+      "default": "./dist/db.js"
     },
     "./analytics": {
       "types": "./dist/analytics.d.ts",
-      "import": "./dist/analytics.js"
+      "import": "./dist/analytics.js",
+      "default": "./dist/analytics.js"
     },
     "./passkey": {
       "types": "./dist/passkey.d.ts",
-      "import": "./dist/passkey.js"
+      "import": "./dist/passkey.js",
+      "default": "./dist/passkey.js"
     },
     "./passkey-button": {
       "types": "./dist/passkey-button.d.ts",
-      "import": "./dist/passkey-button.js"
+      "import": "./dist/passkey-button.js",
+      "default": "./dist/passkey-button.js"
     },
     "./blocks": {
       "types": "./dist/blocks.d.ts",
-      "import": "./dist/blocks.js"
+      "import": "./dist/blocks.js",
+      "default": "./dist/blocks.js"
     },
     "./combobox": {
       "types": "./dist/combobox.d.ts",
-      "import": "./dist/combobox.js"
+      "import": "./dist/combobox.js",
+      "default": "./dist/combobox.js"
     },
     "./crawlers": {
       "types": "./dist/crawlers.d.ts",
-      "import": "./dist/crawlers.js"
+      "import": "./dist/crawlers.js",
+      "default": "./dist/crawlers.js"
     },
     "./revisions": {
       "types": "./dist/revisions.d.ts",
-      "import": "./dist/revisions.js"
+      "import": "./dist/revisions.js",
+      "default": "./dist/revisions.js"
     },
     "./history": {
       "types": "./dist/history.d.ts",
-      "import": "./dist/history.js"
+      "import": "./dist/history.js",
+      "default": "./dist/history.js"
     },
     "./search": {
       "types": "./dist/search.d.ts",
-      "import": "./dist/search.js"
+      "import": "./dist/search.js",
+      "default": "./dist/search.js"
     },
     "./feed": {
       "types": "./dist/feed.d.ts",
-      "import": "./dist/feed.js"
+      "import": "./dist/feed.js",
+      "default": "./dist/feed.js"
     },
     "./license": {
       "types": "./dist/license.d.ts",
-      "import": "./dist/license.js"
+      "import": "./dist/license.js",
+      "default": "./dist/license.js"
     },
     "./links": {
       "types": "./dist/links.d.ts",
-      "import": "./dist/links.js"
+      "import": "./dist/links.js",
+      "default": "./dist/links.js"
     },
     "./maps": {
       "types": "./dist/maps.d.ts",
-      "import": "./dist/maps.js"
+      "import": "./dist/maps.js",
+      "default": "./dist/maps.js"
     },
     "./freshness": {
       "types": "./dist/freshness.d.ts",
-      "import": "./dist/freshness.js"
+      "import": "./dist/freshness.js",
+      "default": "./dist/freshness.js"
     },
     "./text": {
       "types": "./dist/text.d.ts",
-      "import": "./dist/text.js"
+      "import": "./dist/text.js",
+      "default": "./dist/text.js"
     },
     "./validation": {
       "types": "./dist/validation.d.ts",
-      "import": "./dist/validation.js"
+      "import": "./dist/validation.js",
+      "default": "./dist/validation.js"
     },
     "./well-known": {
       "types": "./dist/well-known.d.ts",
-      "import": "./dist/well-known.js"
+      "import": "./dist/well-known.js",
+      "default": "./dist/well-known.js"
     },
     "./conformance": {
       "types": "./dist/conformance.d.ts",
-      "import": "./dist/conformance.js"
+      "import": "./dist/conformance.js",
+      "default": "./dist/conformance.js"
     },
     "./sidebar": {
       "types": "./dist/sidebar.d.ts",
-      "import": "./dist/sidebar.js"
+      "import": "./dist/sidebar.js",
+      "default": "./dist/sidebar.js"
     },
     "./react": {
       "types": "./dist/react.d.ts",
-      "import": "./dist/react.js"
+      "import": "./dist/react.js",
+      "default": "./dist/react.js"
     },
     "./react-server": {
       "types": "./dist/react-server.d.ts",
-      "import": "./dist/react-server.js"
+      "import": "./dist/react-server.js",
+      "default": "./dist/react-server.js"
     },
     "./dom": {
       "types": "./dist/dom.d.ts",
-      "import": "./dist/dom.js"
+      "import": "./dist/dom.js",
+      "default": "./dist/dom.js"
     },
     "./tiptap": {
       "types": "./dist/tiptap.d.ts",
-      "import": "./dist/tiptap.js"
+      "import": "./dist/tiptap.js",
+      "default": "./dist/tiptap.js"
     },
     "./base.css": "./dist/base.css",
     "./block-views": {
       "types": "./dist/block-views.d.ts",
-      "import": "./dist/block-views.js"
+      "import": "./dist/block-views.js",
+      "default": "./dist/block-views.js"
     },
     "./editor": {
       "types": "./dist/editor.d.ts",
-      "import": "./dist/editor.js"
+      "import": "./dist/editor.js",
+      "default": "./dist/editor.js"
     },
     "./link-check": {
       "types": "./dist/link-check.d.ts",
-      "import": "./dist/link-check.js"
+      "import": "./dist/link-check.js",
+      "default": "./dist/link-check.js"
     },
     "./seeded": {
       "types": "./dist/seeded.d.ts",
-      "import": "./dist/seeded.js"
+      "import": "./dist/seeded.js",
+      "default": "./dist/seeded.js"
     },
     "./sanitize": {
       "types": "./dist/sanitize.d.ts",
-      "import": "./dist/sanitize.js"
+      "import": "./dist/sanitize.js",
+      "default": "./dist/sanitize.js"
     },
     "./corpus": {
       "types": "./dist/corpus.d.ts",
-      "import": "./dist/corpus.js"
+      "import": "./dist/corpus.js",
+      "default": "./dist/corpus.js"
     },
     "./metadata": {
       "types": "./dist/metadata.d.ts",
-      "import": "./dist/metadata.js"
-    }
+      "import": "./dist/metadata.js",
+      "default": "./dist/metadata.js"
+    },
+    "./headers": {
+      "types": "./dist/headers.d.ts",
+      "import": "./dist/headers.js",
+      "default": "./dist/headers.js"
+    },
+    "./tsconfig.base.json": "./tsconfig.base.json"
   },
   "bin": {
     "check-classes": "bin/check-classes.mjs",
     "check-pages": "bin/check-pages.mjs",
     "analytics-digest": "bin/analytics-digest.mjs",
-    "passkey-invite": "bin/passkey-invite.mjs"
+    "passkey-invite": "bin/passkey-invite.mjs",
+    "fts-ddl": "bin/fts-ddl.mjs"
   },
   "files": [
     "dist",
-    "bin"
+    "bin",
+    "tsconfig.base.json"
   ],
   "engines": {
     "node": ">=20"

@@ -46,10 +46,63 @@
 .tab-panel:not(.active) { display: none; }
 [data-tabs]:not([data-tabs-init]) [data-tab-item] ~ [data-tab-item] { display: none; }
 
-/* ---- table scroll boxes (scrollTables) -----------------------------------
-   A stored table wider than its column scrolls inside its own box, at every
-   width, instead of painting past the column. */
+/* ---- table scroll boxes (scrollTables, React tables) -----------------------
+   A table wider than its column scrolls inside its own box, at every width,
+   instead of painting past the column. */
 .table-scroll { overflow-x: auto; }
+.data-table-wrap { overflow-x: auto; }
+
+/* ---- Breadcrumbs ------------------------------------------------------------
+   The trail is a <nav> around an <ol>; the row is the list, not the nav.
+   Three sites restated this row, each a little differently. */
+.breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+.breadcrumbs .separator { user-select: none; }
+
+/* ---- spinner, skeleton, empty state ----------------------------------------
+   The shape and the motion; colour, size and surface are the site's. The
+   spinner is a ring in currentColor sized by `--spinner-size`, the skeleton a
+   pulse over whatever background the site gives it. Four stylesheets had
+   forked the spinner three ways: 0.6s and 0.8s, currentColor and a hard-coded
+   accent, one with no keyframe in any layer. */
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 50% { opacity: 0.5; } }
+.spinner {
+  display: inline-block;
+  flex: none;
+  width: var(--spinner-size, 1em);
+  height: var(--spinner-size, 1em);
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 9999px;
+  animation: spin 0.6s linear infinite;
+}
+.skeleton { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.empty-state { padding-block: 3rem; text-align: center; }
+
+/* ---- long tokens ----------------------------------------------------------
+   An address or hash is one word, so its min-content width is the whole
+   string and it runs off a phone. A <pre> keeps scrolling: wrapping a listing
+   is not reading it. */
+:not(pre) > code { overflow-wrap: anywhere; word-break: break-word; }
+
+/* ---- reduced motion ---------------------------------------------------------
+   No site here honoured it. The spinner slows rather than stops, because a
+   still ring no longer says anything is happening; the pulse and smooth
+   scrolling stop. `!important` because a site's own later rule in the same
+   layer would otherwise put the motion back. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto !important; }
+  .spinner { animation-duration: 2.4s !important; }
+  .skeleton { animation: none !important; }
+}
 
 /* ---- code copy buttons (addCopyButtons) -----------------------------------
    The script positions the <pre>; this pins the button in its corner. Shown

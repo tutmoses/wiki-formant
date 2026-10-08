@@ -487,9 +487,9 @@ export interface Tracker {
  * The tracker holds `sql`, so the module that builds it imports the app's
  * database client. A proxy must keep reaching it through a dynamic import
  * inside `waitUntil`, never a static one, or every request the proxy sees
- * loads Prisma:
+ * loads Prisma — `trackAiBot` (`wiki-formant/crawlers`) is that call:
  *
- *   event.waitUntil(import('@/lib/track').then(m => m.trackEvent('AI Bot Visit', url, { bot }, request.headers)));
+ *   trackAiBot(request, event, () => import('@/lib/track'));
  */
 export function createTracker({
   sql,

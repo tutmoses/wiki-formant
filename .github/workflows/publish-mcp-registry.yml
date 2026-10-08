@@ -1,0 +1,101 @@
+# Republish an origin's MCP server to the official registry when the version in
+# its server.json changes. A reusable workflow: each app calls it from its own
+# `.github/workflows/publish-mcp-registry.yml` with its domain, and keeps the
+# trigger, so the steps below exist once instead of once per repo.
+#
+#   jobs:
+#     publish:
+#       uses: tutmoses/wiki-formant/.github/workflows/publish-mcp-registry.yml@main
+#       with:
+#         domain: example.com
+#       secrets:
+#         MCP_REGISTRY_PRIVATE_KEY: ${{ secrets.MCP_REGISTRY_PRIVATE_KEY }}
+#
+# The registry entry is pinned to whatever version was last published, so a
+# version bump in server.json is otherwise invisible to clients. This closes
+# that gap without making every deploy a publish.
+#
+# Auth note: each server lives in its DOMAIN namespace (`wiki.radix/*`,
+# `network.caper/*`, `com.acuiq/*`), which GitHub OIDC cannot grant — OIDC only
+# covers `io.github.<owner>/*`. So this needs the signing key, and `login http`
+# verifies it against https://<domain>/.well-known/mcp-registry-auth, which
+# serves the public half from the MCP_REGISTRY_PUBLIC_KEY env var on Vercel.
+# Rotating the key means updating BOTH the Vercel var and the caller's
+# MCP_REGISTRY_PRIVATE_KEY secret, or this job fails with a signature error.
+#
+# A caller's trigger must be push-to-main only. Never add a pull_request or
+# pull_request_target trigger: that is the path by which a fork could run
+# workflow code with the publishing credential in scope. A private repository
+# narrows the exposure but is not the reason for the rule — the rule has to
+# survive the repository being made public. Calling this file at `@main` means
+# a push here changes code that runs with every caller's key; this repository
+# and its callers share one owner, which is what makes that acceptable.
+
+name: Publish to MCP Registry
+
+on:
+  workflow_call:
+    inputs:
+      domain:
+        description: The origin whose /.well-known/mcp-registry-auth holds the public key.
+        required: true
+        type: string
+    secrets:
+      MCP_REGISTRY_PRIVATE_KEY:
+        required: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      # The caller's repository: a reusable workflow runs in the caller's context.
+      - uses: actions/checkout@v5
+
+      - name: Check whether the version actually changed
+        id: check
+        run: |
+          LOCAL="$(jq -r .version server.json)"
+          NAME="$(jq -r .name server.json)"
+          PUBLISHED="$(curl -sf --max-time 20 \
+            "https://registry.modelcontextprotocol.io/v0/servers?search=${NAME##*/}" \
+            | jq -r --arg n "$NAME" \
+              '[.servers[].server | select(.name == $n)] | max_by(.version) | .version // "none"')"
+          echo "local=$LOCAL published=$PUBLISHED"
+          if [ "$LOCAL" = "$PUBLISHED" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::server.json changed but version $LOCAL is already published — skipping."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Pinned rather than `latest`: this step executes a downloaded binary in a
+      # job that holds a publishing credential, so the version should change
+      # only when someone chooses to change it.
+      - name: Install mcp-publisher
+        if: steps.check.outputs.changed == 'true'
+        env:
+          PUBLISHER_VERSION: v1.8.0
+        run: |
+          curl -fsSL -o publisher.tar.gz \
+            "https://github.com/modelcontextprotocol/registry/releases/download/${PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          curl -fsSL -o checksums.txt \
+            "https://github.com/modelcontextprotocol/registry/releases/download/${PUBLISHER_VERSION}/registry_${PUBLISHER_VERSION#v}_checksums.txt"
+          grep " mcp-publisher_linux_amd64.tar.gz\$" checksums.txt | sed 's/ .*/  publisher.tar.gz/' | sha256sum -c -
+          tar xzf publisher.tar.gz mcp-publisher
+          chmod +x mcp-publisher
+
+      - name: Authenticate and publish
+        if: steps.check.outputs.changed == 'true'
+        env:
+          PRIVATE_KEY: ${{ secrets.MCP_REGISTRY_PRIVATE_KEY }}
+          DOMAIN: ${{ inputs.domain }}
+        run: |
+          if [ -z "$PRIVATE_KEY" ]; then
+            echo "::error::MCP_REGISTRY_PRIVATE_KEY is not set — cannot publish."
+            exit 1
+          fi
+          ./mcp-publisher login http --domain="$DOMAIN" --private-key="$PRIVATE_KEY"
+          ./mcp-publisher publish

@@ -1,0 +1,25 @@
+// The compiler floor every app here shares (STRUCTURE.md S1).
+// An app extends it and keeps only what is its own: paths, include, exclude, and a licensed extra such as allowImportingTsExtensions.
+// paths and include stay local because tsconfig resolves them against the file that declares them.
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "allowJs": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "incremental": true,
+    "plugins": [{ "name": "next" }]
+  }
+}
