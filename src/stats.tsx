@@ -1,28 +1,32 @@
 // stats.tsx — a site's own analytics as one page, from `digest` in `wiki-formant/analytics`.
 //
 // A server component, like `react-server`, but on its own subpath: the daily
-// chart is `lightweight-charts`, an optional peer, and a consumer that only
-// wants a facet bar should not have to install it.
+// chart is `TimeChart` from `wiki-formant/chart`, which needs the optional
+// peer `lightweight-charts`, and a consumer that only wants a facet bar should
+// not have to install it.
 
 import type { CSSProperties } from 'react';
 import type { Digest } from './analytics.js';
-import { StatsChart } from './stats-chart.js';
+import { TimeChart, type ChartPoint } from './chart.js';
 
 export interface StatsProps {
   /** One window's figures, from `digest` in `wiki-formant/analytics`. */
   digest: Digest;
-  /** The window the digest covers, in days. */
+  /** The window the digest covers, in days; `Infinity` for all time. */
   days: number;
   /** The windows offered as `?days=` links on the same page. */
   ranges?: readonly number[];
 }
 
-/** The windows the stats page offers, in days. */
-export const STATS_RANGES = [1, 7, 30, 90, 365] as const;
+/** The windows the stats page offers, in days; `Infinity` is all time. */
+export const STATS_RANGES = [1, 7, 30, 90, 365, Infinity] as const;
+
+/** A window as its `?days=` value. */
+const daysParam = (n: number) => (Number.isFinite(n) ? String(n) : 'all');
 
 /** A `?days=` value as one of `ranges`, else `fallback`: the page's only input. */
 export const statsDays = (param: unknown, ranges: readonly number[] = STATS_RANGES, fallback = 30) =>
-  ranges.find(n => String(n) === param) ?? fallback;
+  ranges.find(n => daysParam(n) === param) ?? fallback;
 
 const count = (n: number) => n.toLocaleString('en');
 const regions = new Intl.DisplayNames(['en'], { type: 'region' });
@@ -67,11 +71,13 @@ function StatsList({ title, rows, label = v => v }: { title: string; rows: [stri
  */
 export function Stats({ digest: d, days, ranges = STATS_RANGES }: StatsProps) {
   const byDay = new Map(d.by_day.map(r => [r.date, r.visitors]));
-  // A rolling window of n days touches n + 1 UTC dates, the first of them in part.
-  const now = Date.now();
-  const series = Array.from({ length: days + 1 }, (_, i) => {
-    const date = new Date(now - (days - i) * 86_400_000).toISOString().slice(0, 10);
-    return [date, byDay.get(date) ?? 0] as const;
+  // A rolling window of n days touches n + 1 UTC dates, the first of them in
+  // part. All time starts at the first day anything was counted.
+  const today = Math.floor(Date.now() / 86_400_000);
+  const first = Number.isFinite(days) ? today - days : Math.min(today, ...d.by_day.map(r => Date.parse(r.date) / 86_400_000));
+  const series: ChartPoint[] = Array.from({ length: today - first + 1 }, (_, i) => {
+    const time = (first + i) * 86_400;
+    return { time, value: byDay.get(new Date(time * 1000).toISOString().slice(0, 10)) ?? 0 };
   });
   const figures: [string, string, string | null][] = [
     ['Visitors', count(d.visitors), change(d.visitors, d.previous_visitors)],
@@ -88,8 +94,8 @@ export function Stats({ digest: d, days, ranges = STATS_RANGES }: StatsProps) {
     <div className="stats">
       <nav className="stats-ranges" aria-label="Window">
         {ranges.map(n => (
-          <a key={n} href={`?days=${n}`} aria-current={n === days ? 'page' : undefined}>
-            {n === 1 ? '24 hours' : `${n} days`}
+          <a key={n} href={`?days=${daysParam(n)}`} aria-current={n === days ? 'page' : undefined}>
+            {n === 1 ? '24 hours' : Number.isFinite(n) ? `${n} days` : 'All time'}
           </a>
         ))}
       </nav>
@@ -104,7 +110,7 @@ export function Stats({ digest: d, days, ranges = STATS_RANGES }: StatsProps) {
           </div>
         ))}
       </dl>
-      <StatsChart series={series} />
+      <TimeChart series={series} label="Visitors per day" ranges={['all']} aggregate="mean" fromZero className="stats-chart" />
       <div className="stats-lists">
         <StatsList title="Pages" rows={rows(d.top_pages, 'page', 'visitors')} />
         <StatsList title="Entry pages" rows={rows(d.entry_pages, 'page', 'visitors')} />

@@ -170,6 +170,29 @@ pre:hover > .code-copy-btn,
 }
 .revision-diff { margin: 0.25em 0 0; }
 
+/* ---- Chart ----------------------------------------------------------------
+   `TimeChart`: the canvas, a loading or empty state over it, and the range and
+   step buttons pinned to its top-left corner. A site gives the buttons and the
+   box their look; pressed is all this marks. */
+.chart { position: relative; margin: 0; }
+/* Its own stacking context: the library's canvases stack themselves, and the buttons go over them. */
+.chart-canvas { position: relative; z-index: 0; height: var(--chart-height, 15rem); }
+/* The chart lays itself out in a <table>; a site's table styles are not for it. */
+.chart-canvas :is(table, tr, td) { background: none; border: 0; border-radius: 0; }
+.chart-status { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; }
+.chart-controls {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.chart-controls > div { display: flex; gap: 2px; }
+.chart-controls button { font: inherit; color: inherit; background: none; cursor: pointer; opacity: 0.6; }
+.chart-controls button[aria-pressed='true'] { opacity: 1; }
+
 /* ---- Stats ----------------------------------------------------------------
    `--share` is a row's value over the largest in its list, 0 to 1. Bars take
    `currentColor` so they show before a stylesheet colours them. */
@@ -183,9 +206,6 @@ pre:hover > .code-copy-btn,
   margin: 0;
 }
 .stats-figures dd { margin: 0; font-variant-numeric: tabular-nums; }
-.stats-chart { height: 15rem; }
-/* The chart lays itself out in a <table>; a site's table styles are not for it. */
-.stats-chart :is(table, tr, td) { background: none; border: 0; border-radius: 0; }
 .stats-lists {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));

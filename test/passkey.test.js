@@ -112,7 +112,8 @@ test('the stats page leaves out empty lists and marks the window shown', () => {
   assert.match(out, /United Kingdom/);
   assert.match(out, /--share:0\.3333/);
   assert.doesNotMatch(out, /Entry pages|Clicks to X/);
-  assert.match(out, /<div class="stats-chart" role="img" aria-label="Visitors per day"><\/div>/);
+  assert.match(out, /<figure class="chart stats-chart"><div class="chart-canvas" role="img" aria-label="Visitors per day"><\/div>/);
+  assert.match(out, /<a href="\?days=all">All time<\/a>/);
 });
 
 test('no change from the window before is unsigned', () => {

@@ -724,7 +724,7 @@ export const POST = gate.route;
 // src/app/stats/page.tsx
 if (!(await gate.signedIn((await cookies()).get(gate.cookie)?.value)))
   return <PasskeyButton endpoint="/api/passkey" invite={invite} create={await gate.open()} />;
-const days = statsDays((await searchParams).days); // 1, 7, 30, 90 or 365, else 30
+const days = statsDays((await searchParams).days); // 1, 7, 30, 90, 365 or Infinity (?days=all), else 30
 return <Stats digest={await digest(sql, { days })} days={days} />;
 ```
 
@@ -732,14 +732,40 @@ return <Stats digest={await digest(sql, { days })} days={days} />;
 own subpath, because it imports the optional peer `@simplewebauthn/browser`.
 `Stats` (`wiki-formant/stats`) renders a `digest` as one page: the
 headline figures against the window before, visitors per day, every non-empty
-ranked list, and `?days=` links between windows. Everything but the daily chart
-is server-rendered. The chart is a `lightweight-charts` area series with a date
-axis and a count axis from zero, drawn in the box's own `color`, so
-`lightweight-charts` is an optional peer that a stats page needs installed.
+ranked list, and `?days=` links between windows, all time among them. Everything
+but the daily chart is server-rendered. The chart is `TimeChart` with a count
+axis from zero, so `lightweight-charts` is an optional peer that a stats page
+needs installed.
+
+## Charts
+
+`TimeChart` (`wiki-formant/chart`) is every time-series chart on the four sites:
+token prices, ledger activity, a caper's price, visitors per day. One area
+series in the box's own `color`, its axis in `--chart-axis` if set, with range
+buttons — 24H, 7D, 30D, 90D, 1Y, All — and, on a range long enough, a day, week
+or month step. A step is offered once it makes four points, and the default is
+the finest that makes 200 or fewer, so a year opens weekly and five years
+monthly.
+
+```tsx
+// Daily points: the chart slices and steps them itself; 30D up.
+<TimeChart series={days} label="Transactions" aggregate="mean" fromZero />
+
+// A loader: asked for 'hour' (24H), '4h' (7D) or 'day' from 0 (every longer
+// range), once each.
+<TimeChart series={load} label="Price" format={formatPrice} range="30d" />
+```
+
+`aggregate` is how a week or month is made from its days: `last` for a price,
+`mean` for a count, so the week in progress keeps its level instead of reading
+as a collapse. A single range draws no range buttons and shows every point.
+`bucketChart` and `chartSteps` are exported for a chart drawn elsewhere.
+`base.css` pins the buttons (`.chart-controls button[aria-pressed]`) to the
+canvas's top-left corner; the site's stylesheet gives them and the box a look.
 
 ## Base stylesheet
 
-`wiki-formant/base.css` is the layout the package's markup does not work without, and nothing else: columns that stack until there is room, stored tab panels that show one at a time, a copy button pinned to its block's corner and visible on focus and on touch, a table's scroll box, the breadcrumb row, the `aria-sort` arrow as a mask over `currentColor`, and the stats page's grid, bars and chart height. It also carries the shape and motion of the primitives every site re-implemented and forked — `.spinner` (a `currentColor` ring sized by `--spinner-size`), `.skeleton`'s pulse, `.empty-state`, the wrap rule for long tokens in inline `code` — and the reduced-motion guard none of them had. No colour and no scale, so a design system's own rules override it at equal specificity.
+`wiki-formant/base.css` is the layout the package's markup does not work without, and nothing else: columns that stack until there is room, stored tab panels that show one at a time, a copy button pinned to its block's corner and visible on focus and on touch, a table's scroll box, the breadcrumb row, the `aria-sort` arrow as a mask over `currentColor`, the stats page's grid and bars, and the chart's height and pinned buttons. It also carries the shape and motion of the primitives every site re-implemented and forked — `.spinner` (a `currentColor` ring sized by `--spinner-size`), `.skeleton`'s pulse, `.empty-state`, the wrap rule for long tokens in inline `code` — and the reduced-motion guard none of them had. No colour and no scale, so a design system's own rules override it at equal specificity.
 
 ```css
 @import "wiki-formant/base.css" layer(components);

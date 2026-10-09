@@ -1,6 +1,6 @@
 {
   "name": "wiki-formant",
-  "version": "0.35.0",
+  "version": "0.36.0",
   "description": "The portable half of a wiki: derived taxonomy and facet controls, a version-negotiating MCP transport, markdown twins, block rendering, a rich-text editor engine, conditional-GET plumbing, and the headers and CSP every origin sends.",
   "type": "module",
   "license": "MIT",
@@ -176,6 +176,11 @@
       "types": "./dist/stats.d.ts",
       "import": "./dist/stats.js",
       "default": "./dist/stats.js"
+    },
+    "./chart": {
+      "types": "./dist/chart.d.ts",
+      "import": "./dist/chart.js",
+      "default": "./dist/chart.js"
     },
     "./dom": {
       "types": "./dist/dom.d.ts",

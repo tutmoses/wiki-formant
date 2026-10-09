@@ -283,7 +283,7 @@ export const SEARCH_GAPS: Gap = { event: 'Search Query', prop: 'q', where: { res
 
 export interface DigestOptions {
   site?: string;
-  /** How far back, in whole days from now. */
+  /** How far back, in whole days from now; `Infinity` for all time. */
   days: number;
   /** The site's own X handle: `follow_clicks` counts clicks on links to it. */
   handle?: string;
@@ -335,7 +335,8 @@ export async function digest(
   { site = '', days, handle, siblings = [], gaps = [SEARCH_GAPS], ownAgents = ['-mcp-test', 'radix-studio'] }: DigestOptions,
 ): Promise<Digest> {
   // The window is the database's clock, which stamped the rows; the app's can run behind it.
-  const values: unknown[] = [site, Math.max(1, Math.round(days))];
+  // All time is a century: further back than any row, and still an int to Postgres.
+  const values: unknown[] = [site, Number.isFinite(days) ? Math.max(1, Math.round(days)) : 36_500];
   const $ = (v: unknown) => `$${values.push(v)}`;
   const list = (select: string, limit?: number, order = '2 DESC, 1') =>
     `(SELECT coalesce(json_agg(t), '[]') FROM (${select} ORDER BY ${order}${limit ? ` LIMIT ${limit}` : ''}) t)`;
