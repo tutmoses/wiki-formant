@@ -753,8 +753,15 @@ monthly.
 
 // A loader: asked for 'hour' (24H), '4h' (7D) or 'day' from 0 (every longer
 // range), once each.
-<TimeChart series={load} label="Price" format={formatPrice} range="30d" />
+<TimeChart series={load} label="Price" format={formatPrice} range="30d" candles />
 ```
+
+A price point may carry `open`, `high` and `low` (its `value` is the close)
+and `volume`. Points that carry the candle get a Line/Candles toggle, opening on
+candles with `candles`; points that carry volume get a volume pane under the
+price, a fifth of the height. Candles take `--chart-up` and `--chart-down` from
+the canvas box, else its `color`. A week of candles opens on its first, closes
+on its last, spans the highest high and lowest low, and sums its volume.
 
 `aggregate` is how a week or month is made from its days: `last` for a price,
 `mean` for a count, so the week in progress keeps its level instead of reading

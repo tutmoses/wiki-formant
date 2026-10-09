@@ -20,6 +20,18 @@ test('a week starts on a Monday and a month on its first, in UTC', () => {
   ]);
 });
 
+test('a week of candles opens on its first, closes on its last and sums its volume', () => {
+  const points = [
+    { time: at('2026-09-28'), open: 1, high: 3, low: 1, value: 2, volume: 10 },
+    { time: at('2026-09-29'), open: 2, high: 5, low: 0.5, value: 4, volume: 5 },
+    { time: at('2026-10-05'), open: 4, high: 4, low: 4, value: 4, volume: 0 },
+  ];
+  assert.deepEqual(bucketChart(points, 'week', 'last'), [
+    { time: at('2026-09-28'), open: 1, high: 5, low: 0.5, value: 4, volume: 15 },
+    { time: at('2026-10-05'), open: 4, high: 4, low: 4, value: 4, volume: 0 },
+  ]);
+});
+
 test('counts take the mean of their days, so a week in progress keeps its level', () => {
   const points = days('2026-09-28', [10, 20, 30, 40, 50, 60, 70, 8]);
   assert.deepEqual(bucketChart(points, 'week', 'mean').map(p => p.value), [40, 8]);
