@@ -299,6 +299,21 @@ export interface DigestOptions {
 
 type Ranked<K extends string, M extends string> = Array<Record<K, string> & Record<M, number>>;
 
+/** One UTC day of the figures a digest totals; a visit falls on the day it began. */
+export interface DigestDay {
+  date: string;
+  visitors: number;
+  pageviews: number;
+  visits: number;
+  /** Visits that saw one page. */
+  bounces: number;
+  /** Seconds from each visit's first view to its last, summed. */
+  seconds: number;
+  visitors_incl_agents: number;
+  /** Clicks on links to the site's X handle; zero without a handle. */
+  follow_clicks: number;
+}
+
 export interface Digest {
   visitors: number;
   pageviews: number;
@@ -318,7 +333,8 @@ export interface Digest {
   sibling_referrals: Ranked<'source', 'visitors'>;
   countries: Ranked<'country', 'visitors'>;
   devices: Ranked<'device', 'visitors'>;
-  by_day: Ranked<'date', 'visitors'>;
+  /** Every day in the window with anything in it, oldest first. */
+  by_day: DigestDay[];
   follow_clicks: { events: number; visitors: number } | null;
   agent_tool_calls: Ranked<'tool', 'events'>;
   gaps: Ranked<'query', 'events'>;
@@ -328,7 +344,8 @@ export interface Digest {
  * Everything a report needs about one site's last `days` days, in one query.
  * Visitor figures count distinct visitors, so a person who comes back on
  * another day counts once for each day. Days in `ViewDay` add to the visitor,
- * page, source, country, device and per-day figures; events have no history.
+ * page, visit, source, country, device and per-day figures; events have no
+ * history, so an archived day's visitors are its visitors with agents too.
  */
 export async function digest(
   sql: Sql,
@@ -343,6 +360,10 @@ export async function digest(
   /** A ranked list from the views, plus the same breakdown from `ViewDay`. */
   const merged = (label: string, column: string, live: string) =>
     `SELECT k AS ${label}, sum(n) AS visitors FROM (${live} UNION ALL SELECT key, value::int FROM a, jsonb_each_text(a."${column}")) t(k, n) GROUP BY 1`;
+
+  /** Clicks on links to the site's own X account, among `e`. */
+  const follows = handle && `name = 'Outbound Link: Click' AND props->>'url' ILIKE ANY(${$([`%x.com/${handle}%`, `%twitter.com/${handle}%`])}::text[])`;
+  const day = (at: string) => `to_char(${at} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`;
 
   const gapSelects = gaps.map(g => {
     const prop = $(g.prop);
@@ -360,11 +381,11 @@ export async function digest(
     ), numbered AS (
       SELECT *, sum(starts) OVER (PARTITION BY visitor ORDER BY at, id) AS visit FROM marked
     ), visits AS (
-      SELECT visitor, count(*) AS views, extract(epoch FROM max(at) - min(at)) AS seconds,
+      SELECT visitor, min(at) AS at, count(*) AS views, extract(epoch FROM max(at) - min(at)) AS seconds,
         (array_agg(path ORDER BY at, id))[1] AS entry, (array_agg(source ORDER BY at, id))[1] AS source
       FROM numbered GROUP BY visitor, visit
     ), e AS (
-      SELECT name, props, visitor FROM "Event" WHERE "siteId" = $1 AND "createdAt" >= now() - make_interval(days => $2::int)
+      SELECT name, props, visitor, "createdAt" AS at FROM "Event" WHERE "siteId" = $1 AND "createdAt" >= now() - make_interval(days => $2::int)
     ), a AS (
       SELECT * FROM "ViewDay" WHERE "siteId" = $1 AND day >= (now() AT TIME ZONE 'UTC' - make_interval(days => $2::int))::date
     ), sessions AS (
@@ -397,18 +418,19 @@ export async function digest(
       'countries', ${list(merged('country', 'countries', 'SELECT country, count(DISTINCT visitor) FROM v WHERE country IS NOT NULL GROUP BY 1'), 10)},
       'devices', ${list(merged('device', 'devices', 'SELECT device, count(DISTINCT visitor) FROM v GROUP BY 1'))},
       'by_day', ${list(
-        `SELECT date, sum(n) AS visitors FROM (
-          SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD'), count(DISTINCT visitor) FROM v GROUP BY 1
-          UNION ALL SELECT to_char(day, 'YYYY-MM-DD'), visitors FROM a
-        ) t(date, n) GROUP BY 1`,
+        `SELECT date, sum(visitors) AS visitors, sum(pageviews) AS pageviews, sum(visits) AS visits, sum(bounces) AS bounces,
+          sum(seconds) AS seconds, sum(agents) AS visitors_incl_agents, sum(follows) AS follow_clicks FROM (
+          SELECT ${day('at')}, count(DISTINCT visitor), count(*), 0, 0, 0, 0, 0 FROM v GROUP BY 1
+          UNION ALL SELECT ${day('at')}, 0, 0, count(*), count(*) FILTER (WHERE views = 1), coalesce(sum(seconds), 0), 0, 0 FROM visits GROUP BY 1
+          UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, count(DISTINCT visitor), 0 FROM (SELECT at, visitor FROM v UNION ALL SELECT at, visitor FROM e) u GROUP BY 1
+          ${follows ? `UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, 0, count(*) FROM e WHERE ${follows} GROUP BY 1` : ''}
+          UNION ALL SELECT to_char(day, 'YYYY-MM-DD'), visitors, pageviews, visits, bounces, seconds, visitors, 0 FROM a
+        ) t(date, visitors, pageviews, visits, bounces, seconds, agents, follows) GROUP BY 1`,
         undefined,
         '1',
       )},
       'follow_clicks', ${
-        handle
-          ? `(SELECT json_build_object('events', count(*), 'visitors', count(DISTINCT visitor)) FROM e
-              WHERE name = 'Outbound Link: Click' AND props->>'url' ILIKE ANY(${$([`%x.com/${handle}%`, `%twitter.com/${handle}%`])}::text[]))`
-          : 'NULL'
+        follows ? `(SELECT json_build_object('events', count(*), 'visitors', count(DISTINCT visitor)) FROM e WHERE ${follows})` : 'NULL'
       },
       'agent_tool_calls', ${list(
         `SELECT coalesce(props->>'tool', '(none)') AS tool, count(*) AS events FROM e

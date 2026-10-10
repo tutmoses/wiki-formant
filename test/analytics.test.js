@@ -206,6 +206,14 @@ test('every placeholder in the digest has a value', async () => {
   assert.equal(highest, values.length);
 });
 
+test('without a handle the digest counts no clicks to X, per day or in all', async () => {
+  const { sql, calls } = fakeSql();
+  await digest(sql, { days: 7 });
+  const { query } = calls.at(-1);
+  assert.doesNotMatch(query, /Outbound Link/);
+  assert.match(query, /'follow_clicks', NULL/);
+});
+
 // ---- the app binding --------------------------------------------------------
 
 import { createTracker } from 'wiki-formant/analytics';

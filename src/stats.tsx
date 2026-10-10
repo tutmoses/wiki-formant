@@ -3,11 +3,12 @@
 // A server component, like `react-server`, but on its own subpath: the daily
 // chart is `TimeChart` from `wiki-formant/chart`, which needs the optional
 // peer `lightweight-charts`, and a consumer that only wants a facet bar should
-// not have to install it.
+// not have to install it. The figures and the chart are `StatsFigures`, the
+// one part that holds state.
 
 import type { CSSProperties } from 'react';
 import type { Digest } from './analytics.js';
-import { TimeChart, type ChartPoint } from './chart.js';
+import { StatsFigures } from './stats-figures.js';
 
 export interface StatsProps {
   /** One window's figures, from `digest` in `wiki-formant/analytics`. */
@@ -37,13 +38,6 @@ const country = (code: string) => {
     return code;
   }
 };
-const duration = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`);
-/** Unsigned at zero, so no change never reads as growth. */
-const change = (now: number, before: number) => {
-  if (!before) return null;
-  const pct = Math.round((100 * (now - before)) / before);
-  return pct > 0 ? `+${pct}%` : `${pct}%`;
-};
 
 function StatsList({ title, rows, label = v => v }: { title: string; rows: [string, number][]; label?: (v: string) => string }) {
   if (!rows.length) return null;
@@ -65,28 +59,15 @@ function StatsList({ title, rows, label = v => v }: { title: string; rows: [stri
 
 /**
  * A site's own analytics on one page: the headline figures against the window
- * before, visitors per day, and every ranked list the digest carries. Lists
- * with nothing in them are left out. The chart and the bars are
- * `currentColor` until the importing stylesheet gives them a colour.
+ * before, whichever of them is chosen per day, and every ranked list the
+ * digest carries. Lists with nothing in them are left out. The chart and the
+ * bars are `currentColor` until the importing stylesheet gives them a colour.
  */
 export function Stats({ digest: d, days, ranges = STATS_RANGES }: StatsProps) {
-  const byDay = new Map(d.by_day.map(r => [r.date, r.visitors]));
   // A rolling window of n days touches n + 1 UTC dates, the first of them in
   // part. All time starts at the first day anything was counted.
   const today = Math.floor(Date.now() / 86_400_000);
   const first = Number.isFinite(days) ? today - days : Math.min(today, ...d.by_day.map(r => Date.parse(r.date) / 86_400_000));
-  const series: ChartPoint[] = Array.from({ length: today - first + 1 }, (_, i) => {
-    const time = (first + i) * 86_400;
-    return { time, value: byDay.get(new Date(time * 1000).toISOString().slice(0, 10)) ?? 0 };
-  });
-  const figures: [string, string, string | null][] = [
-    ['Visitors', count(d.visitors), change(d.visitors, d.previous_visitors)],
-    ['Page views', count(d.pageviews), null],
-    ['Bounce rate', d.bounce_rate == null ? '–' : `${d.bounce_rate}%`, null],
-    ['Visit length', d.visit_duration == null ? '–' : duration(d.visit_duration), null],
-    ['With agents', count(d.visitors_incl_agents), null],
-  ];
-  if (d.follow_clicks) figures.push(['Clicks to X', count(d.follow_clicks.events), null]);
   const rows = <K extends string, M extends string>(list: Array<Record<K, string> & Record<M, number>>, k: K, m: M) =>
     list.map(r => [r[k], r[m]] as [string, number]);
 
@@ -99,18 +80,7 @@ export function Stats({ digest: d, days, ranges = STATS_RANGES }: StatsProps) {
           </a>
         ))}
       </nav>
-      <dl className="stats-figures">
-        {figures.map(([label, value, delta]) => (
-          <div key={label}>
-            <dt>{label}</dt>
-            <dd>
-              {value}
-              {delta && <small>{` ${delta}`}</small>}
-            </dd>
-          </div>
-        ))}
-      </dl>
-      <TimeChart series={series} label="Visitors per day" ranges={['all']} aggregate="mean" fromZero className="stats-chart" />
+      <StatsFigures digest={d} first={first} />
       <div className="stats-lists">
         <StatsList title="Pages" rows={rows(d.top_pages, 'page', 'visitors')} />
         <StatsList title="Entry pages" rows={rows(d.entry_pages, 'page', 'visitors')} />

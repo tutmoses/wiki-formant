@@ -107,7 +107,8 @@ const DIGEST = {
 test('the stats page leaves out empty lists and marks the window shown', () => {
   const out = renderToStaticMarkup(createElement(Stats, { digest: DIGEST, days: 7 }));
   assert.match(out, /<a href="\?days=7" aria-current="page">7 days<\/a>/);
-  assert.match(out, /<dd>12<small> \+20%<\/small><\/dd>/);
+  assert.match(out, /<button type="button" aria-pressed="true"><span>Visitors<\/span><strong>12<small> \+20%<\/small><\/strong><\/button>/);
+  assert.match(out, /aria-pressed="false"><span>Bounce rate<\/span>/);
   assert.match(out, /1m 15s/);
   assert.match(out, /United Kingdom/);
   assert.match(out, /--share:0\.3333/);

@@ -731,9 +731,14 @@ return <Stats digest={await digest(sql, { days })} days={days} />;
 `PasskeyButton` (`wiki-formant/passkey-button`) is the browser half and has its
 own subpath, because it imports the optional peer `@simplewebauthn/browser`.
 `Stats` (`wiki-formant/stats`) renders a `digest` as one page: the
-headline figures against the window before, visitors per day, every non-empty
-ranked list, and `?days=` links between windows, all time among them. Everything
-but the daily chart is server-rendered. The chart is `TimeChart` with a count
+headline figures against the window before, one of them per day, every non-empty
+ranked list, and `?days=` links between windows, all time among them. Each
+figure is a button that charts it: visitors, page views, bounce rate, visit
+length, visitors with agents and clicks to X. `digest`'s `by_day` carries every
+one of those per UTC day, a visit on the day it began, so the days add up to the
+totals. A day with no visits has no bounce rate or visit length and is left out
+of those charts rather than drawn as zero. Everything but the figures and the
+chart is server-rendered. The chart is `TimeChart` with a count
 axis from zero, so `lightweight-charts` is an optional peer that a stats page
 needs installed.
 

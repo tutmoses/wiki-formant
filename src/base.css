@@ -199,13 +199,26 @@ pre:hover > .code-copy-btn,
 .stats { display: grid; gap: 2rem; }
 .stats-ranges { display: flex; flex-wrap: wrap; gap: 1rem; }
 .stats-ranges a[aria-current] { text-decoration: underline; text-underline-offset: 0.3em; }
+/* Each figure is a button that charts it; pressed is the one drawn. */
 .stats-figures {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
   gap: 1rem;
-  margin: 0;
 }
-.stats-figures dd { margin: 0; font-variant-numeric: tabular-nums; }
+.stats-figures button {
+  display: grid;
+  gap: 0.25em;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  opacity: 0.6;
+}
+.stats-figures button[aria-pressed='true'] { opacity: 1; }
+.stats-figures strong { font-variant-numeric: tabular-nums; }
 .stats-lists {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
