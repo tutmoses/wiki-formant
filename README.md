@@ -732,7 +732,8 @@ return <Stats digest={await digest(sql, q)} {...q} />;
 own subpath, because it imports the optional peer `@simplewebauthn/browser`.
 `Stats` (`wiki-formant/stats`) renders a `digest` as one page: the
 headline figures against the window before, one of them per day, every non-empty
-ranked list, and `?days=` links between windows, all time among them. Each
+ranked list, and `?days=` links between windows, all time among them, pinned in
+the chart's frame as its own buttons are (`TimeChart`'s `controls`). Each
 figure is a button that charts it: visitors, page views, bounce rate, visit
 length, visitors with agents and clicks to X. `digest`'s `by_day` carries every
 one of those per UTC day, a visit on the day it began, so the days add up to the

@@ -107,7 +107,7 @@ const DIGEST = {
 
 test('the stats page leaves out empty lists and marks the window shown', () => {
   const out = renderToStaticMarkup(createElement(Stats, { digest: DIGEST, days: 7 }));
-  assert.match(out, /<a href="\?days=7" aria-current="page">7 days<\/a>/);
+  assert.match(out, /<div class="chart-controls"><div role="group" aria-label="Window"><a href="\?days=1">24H<\/a><a href="\?days=7" aria-current="page">7D<\/a>/);
   assert.match(out, /<button type="button" aria-pressed="true"><span>Visitors<\/span><strong>12<small> \+20%<\/small><\/strong><\/button>/);
   assert.match(out, /aria-pressed="false"><span>Bounce rate<\/span>/);
   assert.match(out, /1m 15s/);
@@ -115,7 +115,7 @@ test('the stats page leaves out empty lists and marks the window shown', () => {
   assert.match(out, /--share:0\.3333/);
   assert.doesNotMatch(out, /Entry pages|Clicks to X/);
   assert.match(out, /<figure class="chart stats-chart"><div class="chart-canvas" role="img" aria-label="Visitors per day"><\/div>/);
-  assert.match(out, /<a href="\?days=all">All time<\/a>/);
+  assert.match(out, /<a href="\?days=365">1Y<\/a><a href="\?days=all">All<\/a><\/div><\/div><\/figure>/);
 });
 
 test('no change from the window before is unsigned', () => {
@@ -127,7 +127,7 @@ test('every row narrows the page to itself, and keeps the window and what is alr
   const out = renderToStaticMarkup(createElement(Stats, { digest: DIGEST, days: 7, filter: { device: 'phone' } }));
   assert.match(out, /<a href="\?days=7&amp;page=%2Fa&amp;device=phone">\/a<\/a>/);
   assert.match(out, /<a href="\?days=7&amp;country=GB&amp;device=phone">United Kingdom<\/a>/);
-  assert.match(out, /<a href="\?days=90&amp;device=phone">90 days<\/a>/);
+  assert.match(out, /<a href="\?days=90&amp;device=phone">90D<\/a>/);
   assert.match(out, /<a href="\?days=7" title="Remove">Device: phone ×<\/a>/);
   assert.doesNotMatch(out, /Narrowed figures start/);
   const month = renderToStaticMarkup(createElement(Stats, { digest: { ...DIGEST, counted_from: new Date().toISOString().slice(0, 10) }, days: 30, filter: { device: 'phone' } }));

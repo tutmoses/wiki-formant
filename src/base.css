@@ -190,15 +190,14 @@ pre:hover > .code-copy-btn,
   gap: 0.5rem;
 }
 .chart-controls > div { display: flex; gap: 2px; }
-.chart-controls button { font: inherit; color: inherit; background: none; cursor: pointer; opacity: 0.6; }
-.chart-controls button[aria-pressed='true'] { opacity: 1; }
+.chart-controls :is(button, a) { font: inherit; color: inherit; text-decoration: none; background: none; cursor: pointer; opacity: 0.6; }
+/* A button is pressed; a link (a stats page's window) is the page shown. */
+.chart-controls :is([aria-pressed='true'], [aria-current]) { opacity: 1; }
 
 /* ---- Stats ----------------------------------------------------------------
    `--share` is a row's value over the largest in its list, 0 to 1. Bars take
    `currentColor` so they show before a stylesheet colours them. */
 .stats { display: grid; gap: 2rem; }
-.stats-ranges { display: flex; flex-wrap: wrap; gap: 1rem; }
-.stats-ranges a[aria-current] { text-decoration: underline; text-underline-offset: 0.3em; }
 /* Each figure is a button that charts it; pressed is the one drawn. */
 .stats-figures {
   display: grid;

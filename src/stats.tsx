@@ -30,6 +30,8 @@ export const STATS_RANGES = [1, 7, 30, 90, 365, Infinity] as const;
 
 /** A window as its `?days=` value. */
 const daysParam = (n: number) => (Number.isFinite(n) ? String(n) : 'all');
+/** A window as `TimeChart` names its ranges, since its buttons are where the windows sit. */
+const windowLabel = (n: number) => (n === 1 ? '24H' : n === 365 ? '1Y' : Number.isFinite(n) ? `${n}D` : 'All');
 
 /** A `?days=` value as one of `ranges`, else `fallback`. */
 export const statsDays = (param: unknown, ranges: readonly number[] = STATS_RANGES, fallback = 30) =>
@@ -119,15 +121,20 @@ export function Stats({ digest: d, days, filter = {}, ranges = STATS_RANGES }: S
     list.map(r => [r[k], r[m]] as [string, number]);
   const to = (k: keyof StatsFilter) => (v: string) => href(days, { ...filter, [k]: v });
 
+  // Each window is another digest, so a link rather than a button, pinned
+  // with the chart's own controls.
+  const windows = (
+    <div role="group" aria-label="Window">
+      {ranges.map(n => (
+        <a key={n} href={href(n, filter)} aria-current={n === days ? 'page' : undefined}>
+          {windowLabel(n)}
+        </a>
+      ))}
+    </div>
+  );
+
   return (
     <div className="stats">
-      <nav className="stats-ranges" aria-label="Window">
-        {ranges.map(n => (
-          <a key={n} href={href(n, filter)} aria-current={n === days ? 'page' : undefined}>
-            {n === 1 ? '24 hours' : Number.isFinite(n) ? `${n} days` : 'All time'}
-          </a>
-        ))}
-      </nav>
       {narrowed.length > 0 && (
         <div className="stats-filters">
           <ul aria-label="Narrowed to">
@@ -144,7 +151,7 @@ export function Stats({ digest: d, days, filter = {}, ranges = STATS_RANGES }: S
           )}
         </div>
       )}
-      <StatsFigures digest={d} first={first} />
+      <StatsFigures digest={d} first={first} windows={windows} />
       <div className="stats-lists">
         <StatsList title="Pages" rows={rows(d.top_pages, 'page', 'visitors')} to={to('page')} />
         <StatsList title="Entry pages" rows={rows(d.entry_pages, 'page', 'visitors')} to={to('entry')} />

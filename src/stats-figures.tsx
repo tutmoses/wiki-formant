@@ -5,7 +5,7 @@
 // is not only visitors. Its own module because it holds state; `Stats` stays a
 // server component and hands it the digest, which is plain JSON.
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import type { Digest, DigestDay } from './analytics.js';
 import { TimeChart, type ChartPoint } from './chart.js';
 
@@ -55,7 +55,7 @@ const EMPTY: DigestDay = { date: '', visitors: 0, pageviews: 0, visits: 0, bounc
  * day from `first` (a UTC day number) to today. A count's empty day is a zero;
  * a rate's is left out, since no visits is not a bounce rate of nothing.
  */
-export function StatsFigures({ digest, first }: { digest: Digest; first: number }) {
+export function StatsFigures({ digest, first, windows }: { digest: Digest; first: number; windows: ReactNode }) {
   const figures = useMemo(() => figuresOf(digest), [digest]);
   const [chosen, choose] = useState(0);
   const figure = figures[chosen] ?? figures[0]!;
@@ -89,6 +89,7 @@ export function StatsFigures({ digest, first }: { digest: Digest; first: number 
         aggregate="mean"
         fromZero
         format={figure.format}
+        controls={windows}
         className="stats-chart"
       />
     </>

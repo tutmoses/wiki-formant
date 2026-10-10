@@ -10,7 +10,7 @@
 // `--chart-down`, each if set. A count's line is curved; a price's is straight,
 // since a curve between two closes draws prices nobody paid.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AutoscaleInfo, IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
 
 /**
@@ -131,6 +131,11 @@ export interface TimeChartProps {
   candles?: boolean;
   /** In pixels. Otherwise the stylesheet's `--chart-height`, else 15rem. */
   height?: number;
+  /**
+   * Groups pinned before the chart's own, styled as its buttons: a stats page's
+   * window links, which load another digest rather than slice this one.
+   */
+  controls?: ReactNode;
   className?: string;
 }
 
@@ -161,6 +166,7 @@ export function TimeChart({
   format = formatChartValue,
   candles: initialCandles = false,
   height,
+  controls,
   className,
 }: TimeChartProps) {
   const box = useRef<HTMLDivElement>(null);
@@ -335,8 +341,9 @@ export function TimeChart({
       <div ref={box} className="chart-canvas" role="img" aria-label={label} style={height ? { height } : undefined} />
       {(!ready || (!points && !status)) && <div className="chart-status skeleton" aria-hidden />}
       {status && <p className="chart-status">{status}</p>}
-      {(ranges.length > 1 || (view && (view.steps.length > 1 || view.ohlc))) && (
+      {(controls || ranges.length > 1 || (view && (view.steps.length > 1 || view.ohlc))) && (
         <div className="chart-controls">
+          {controls}
           {ranges.length > 1 && (
             <div role="group" aria-label="Range">
               {ranges.map(r => (
