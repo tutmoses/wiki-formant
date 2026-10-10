@@ -13,7 +13,7 @@ const count = (n: number) => n.toLocaleString('en');
 const duration = (s: number) => (s < 60 ? `${Math.round(s)}s` : `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`);
 const percent = (n: number) => `${Math.round(n)}%`;
 /** Unsigned at zero, so no change never reads as growth. */
-const change = (now: number, before: number) => {
+const change = (now: number, before: number | null) => {
   if (!before) return null;
   const pct = Math.round((100 * (now - before)) / before);
   return pct > 0 ? `+${pct}%` : `${pct}%`;

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createPasskeyGate } from 'wiki-formant/passkey';
-import { Stats, statsDays } from 'wiki-formant/stats';
+import { Stats, statsDays, statsQuery } from 'wiki-formant/stats';
 
 // Just enough of PasskeyToken to follow a token through its life. Expiry is
 // the row's own `ttl` against a clock the test can move. `saved` is how many
@@ -102,6 +102,7 @@ const DIGEST = {
   top_sources: [{ source: 'x', visitors: 4 }], top_pages: [{ page: '/', visitors: 9 }, { page: '/a', visitors: 3 }],
   entry_pages: [], from_posts: [], sibling_referrals: [], countries: [{ country: 'GB', visitors: 5 }],
   devices: [{ device: 'phone', visitors: 7 }], by_day: [], follow_clicks: null, agent_tool_calls: [], gaps: [],
+  counted_from: '2026-10-01',
 };
 
 test('the stats page leaves out empty lists and marks the window shown', () => {
@@ -120,6 +121,26 @@ test('the stats page leaves out empty lists and marks the window shown', () => {
 test('no change from the window before is unsigned', () => {
   const out = renderToStaticMarkup(createElement(Stats, { digest: { ...DIGEST, previous_visitors: 12 }, days: 1 }));
   assert.match(out, /<small> 0%<\/small>/);
+});
+
+test('every row narrows the page to itself, and keeps the window and what is already narrowed', () => {
+  const out = renderToStaticMarkup(createElement(Stats, { digest: DIGEST, days: 7, filter: { device: 'phone' } }));
+  assert.match(out, /<a href="\?days=7&amp;page=%2Fa&amp;device=phone">\/a<\/a>/);
+  assert.match(out, /<a href="\?days=7&amp;country=GB&amp;device=phone">United Kingdom<\/a>/);
+  assert.match(out, /<a href="\?days=90&amp;device=phone">90 days<\/a>/);
+  assert.match(out, /<a href="\?days=7" title="Remove">Device: phone ×<\/a>/);
+  assert.doesNotMatch(out, /Narrowed figures start/);
+  const month = renderToStaticMarkup(createElement(Stats, { digest: { ...DIGEST, counted_from: new Date().toISOString().slice(0, 10) }, days: 30, filter: { device: 'phone' } }));
+  assert.match(month, /Narrowed figures start on \d{4}-\d\d-\d\d, the first day/);
+});
+
+test('a narrowed page has no comparison with the window before', () => {
+  const out = renderToStaticMarkup(createElement(Stats, { digest: { ...DIGEST, previous_visitors: null }, days: 7, filter: { page: '/' } }));
+  assert.match(out, /<strong>12<\/strong>/);
+});
+
+test('the query reads the window and one value per filter', () => {
+  assert.deepEqual(statsQuery({ days: '90', page: '/a', country: ['GB', 'FR'], device: '', other: 'x' }), { days: 90, filter: { page: '/a' } });
 });
 
 test('a ?days= value outside the offered windows falls back', () => {

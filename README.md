@@ -724,8 +724,8 @@ export const POST = gate.route;
 // src/app/stats/page.tsx
 if (!(await gate.signedIn((await cookies()).get(gate.cookie)?.value)))
   return <PasskeyButton endpoint="/api/passkey" invite={invite} create={await gate.open()} />;
-const days = statsDays((await searchParams).days); // 1, 7, 30, 90, 365 or Infinity (?days=all), else 30
-return <Stats digest={await digest(sql, { days })} days={days} />;
+const q = statsQuery(await searchParams); // ?days= (1, 7, 30, 90, 365 or all, else 30) and the filters
+return <Stats digest={await digest(sql, q)} {...q} />;
 ```
 
 `PasskeyButton` (`wiki-formant/passkey-button`) is the browser half and has its
@@ -738,7 +738,17 @@ length, visitors with agents and clicks to X. `digest`'s `by_day` carries every
 one of those per UTC day, a visit on the day it began, so the days add up to the
 totals. A day with no visits has no bounce rate or visit length and is left out
 of those charts rather than drawn as zero. Everything but the figures and the
-chart is server-rendered. The chart is `TimeChart` with a count
+chart is server-rendered.
+
+Every row in a list is a link that narrows the page to it, and the narrowings
+stack: `?page=`, `?entry=`, `?source=`, `?country=` and `?device=`, each shown as
+a chip that drops it. A narrowing keeps the visits that pass – that saw the
+page, began on it, came from the source, or were made from the country or
+device – and recounts every figure, list and day from those visits alone, with
+events only from their visitors. Agent tool calls and missed searches are
+events no visit reaches, so their rows are not links. `ViewDay` keeps totals,
+not visits, so a narrowed page starts at `counted_from`, the first day the site
+counted itself, says so, and drops the comparison with the window before. The chart is `TimeChart` with a count
 axis from zero, so `lightweight-charts` is an optional peer that a stats page
 needs installed.
 

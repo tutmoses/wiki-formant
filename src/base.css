@@ -242,4 +242,12 @@ pre:hover > .code-copy-btn,
   pointer-events: none;
 }
 .stats-list li > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+/* A row narrows the page to itself; the whole row is the link. */
+.stats-list a { color: inherit; text-decoration: none; }
+.stats-list a::after { content: ''; position: absolute; inset: 0; }
+.stats-list a:is(:hover, :focus-visible) { text-decoration: underline; text-underline-offset: 0.2em; }
+.stats-filters { display: grid; gap: 0.5rem; }
+.stats-filters ul { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+.stats-filters a { display: inline-block; padding: 0.25em 0.75em; border: 1px solid; border-radius: 9999px; text-decoration: none; }
+.stats-filters p { margin: 0; opacity: 0.7; }
 .stats-count { font-variant-numeric: tabular-nums; }

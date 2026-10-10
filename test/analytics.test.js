@@ -214,6 +214,26 @@ test('without a handle the digest counts no clicks to X, per day or in all', asy
   assert.match(query, /'follow_clicks', NULL/);
 });
 
+test('a filter narrows the visits, leaves out the archive and the comparison', async () => {
+  const { sql, calls } = fakeSql();
+  await digest(sql, { days: 30, handle: 'h', filter: { page: '/a', source: '(none)', country: 'GB' } });
+  const { query, values } = calls.at(-1);
+  const highest = Math.max(...[...query.matchAll(/\$(\d+)/g)].map(m => Number(m[1])));
+  assert.equal(highest, values.length);
+  assert.match(query, /HAVING bool_or\(path = \$\d+\) AND coalesce\(\(array_agg\(source ORDER BY at, id\)\)\[1\], '\(none\)'\) = \$\d+ AND bool_or\(country = \$\d+\)/);
+  assert.match(query, /JOIN visits USING \(visitor, visit\)/);
+  assert.match(query, /::date AND false/);
+  assert.match(query, /'previous_visitors', NULL/);
+  assert.ok(values.includes('/a') && values.includes('(none)') && values.includes('GB'));
+});
+
+test('without a filter every view counts and the archive adds in', async () => {
+  const { sql, calls } = fakeSql();
+  await digest(sql, { days: 30 });
+  const { query } = calls.at(-1);
+  assert.doesNotMatch(query, /HAVING|JOIN visits|AND false/);
+});
+
 // ---- the app binding --------------------------------------------------------
 
 import { createTracker } from 'wiki-formant/analytics';

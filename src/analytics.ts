@@ -281,6 +281,22 @@ export interface Gap {
 /** Searches in a wiki's own search box that found nothing (`searchQueryProps` events). */
 export const SEARCH_GAPS: Gap = { event: 'Search Query', prop: 'q', where: { results: '0', surface: 'wiki' } };
 
+/** What a stats page can be narrowed to: one value each, every one applied. */
+export const STATS_FILTERS = ['page', 'entry', 'source', 'country', 'device'] as const;
+export type StatsFilter = Partial<Record<(typeof STATS_FILTERS)[number], string>>;
+
+/**
+ * Each filter as a test on one visit. A page, country or device is any of the
+ * visit's views; an entry page or a source is its first. `(none)` is no source.
+ */
+const VISIT_TEST: Record<keyof StatsFilter, (value: string) => string> = {
+  page: v => `bool_or(path = ${v})`,
+  entry: v => `(array_agg(path ORDER BY at, id))[1] = ${v}`,
+  source: v => `coalesce((array_agg(source ORDER BY at, id))[1], '(none)') = ${v}`,
+  country: v => `bool_or(country = ${v})`,
+  device: v => `bool_or(device = ${v})`,
+};
+
 export interface DigestOptions {
   site?: string;
   /** How far back, in whole days from now; `Infinity` for all time. */
@@ -295,6 +311,12 @@ export interface DigestOptions {
    * The default is the conformance suites (`<repo>-mcp-test`) and the studio's own tools.
    */
   ownAgents?: string[];
+  /**
+   * Narrows every figure to the visits that pass, and the events to their
+   * visitors. `ViewDay` keeps no visits, so a narrowed digest leaves it out
+   * and starts at `counted_from`, and has no `previous_visitors`.
+   */
+  filter?: StatsFilter;
 }
 
 type Ranked<K extends string, M extends string> = Array<Record<K, string> & Record<M, number>>;
@@ -323,8 +345,10 @@ export interface Digest {
   visit_duration: number | null;
   /** Visitors plus every agent that sent an event, such as an MCP call. */
   visitors_incl_agents: number;
-  /** Visitors in the same number of days before. */
-  previous_visitors: number;
+  /** Visitors in the same number of days before; null when filtered. */
+  previous_visitors: number | null;
+  /** The first UTC day this site counted itself, before which only `ViewDay` speaks; null with no views. */
+  counted_from: string | null;
   top_sources: Ranked<'source', 'visitors'>;
   top_pages: Ranked<'page', 'visitors'>;
   entry_pages: Ranked<'page', 'visitors'>;
@@ -349,7 +373,7 @@ export interface Digest {
  */
 export async function digest(
   sql: Sql,
-  { site = '', days, handle, siblings = [], gaps = [SEARCH_GAPS], ownAgents = ['-mcp-test', 'radix-studio'] }: DigestOptions,
+  { site = '', days, handle, siblings = [], gaps = [SEARCH_GAPS], ownAgents = ['-mcp-test', 'radix-studio'], filter = {} }: DigestOptions,
 ): Promise<Digest> {
   // The window is the database's clock, which stamped the rows; the app's can run behind it.
   // All time is a century: further back than any row, and still an int to Postgres.
@@ -363,6 +387,7 @@ export async function digest(
 
   /** Clicks on links to the site's own X account, among `e`. */
   const follows = handle && `name = 'Outbound Link: Click' AND props->>'url' ILIKE ANY(${$([`%x.com/${handle}%`, `%twitter.com/${handle}%`])}::text[])`;
+  const tests = STATS_FILTERS.flatMap(k => (filter[k] ? [VISIT_TEST[k]($(filter[k]))] : []));
   const day = (at: string) => `to_char(${at} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`;
 
   const gapSelects = gaps.map(g => {
@@ -373,21 +398,24 @@ export async function digest(
   });
 
   const [row] = (await sql(
-    `WITH v AS (
+    `WITH viewed AS (
       SELECT id, path, source, country, device, visitor, "createdAt" AS at FROM "View"
       WHERE "siteId" = $1 AND "createdAt" >= now() - make_interval(days => $2::int)
     ), marked AS (
-      SELECT *, CASE WHEN at - lag(at) OVER (PARTITION BY visitor ORDER BY at, id) <= interval '30 minutes' THEN 0 ELSE 1 END AS starts FROM v
+      SELECT *, CASE WHEN at - lag(at) OVER (PARTITION BY visitor ORDER BY at, id) <= interval '30 minutes' THEN 0 ELSE 1 END AS starts FROM viewed
     ), numbered AS (
       SELECT *, sum(starts) OVER (PARTITION BY visitor ORDER BY at, id) AS visit FROM marked
     ), visits AS (
-      SELECT visitor, min(at) AS at, count(*) AS views, extract(epoch FROM max(at) - min(at)) AS seconds,
+      SELECT visitor, visit, min(at) AS at, count(*) AS views, extract(epoch FROM max(at) - min(at)) AS seconds,
         (array_agg(path ORDER BY at, id))[1] AS entry, (array_agg(source ORDER BY at, id))[1] AS source
-      FROM numbered GROUP BY visitor, visit
+      FROM numbered GROUP BY visitor, visit${tests.length ? ` HAVING ${tests.join(' AND ')}` : ''}
+    ), v AS (
+      ${tests.length ? 'SELECT n.id, n.path, n.source, n.country, n.device, n.visitor, n.at FROM numbered n JOIN visits USING (visitor, visit)' : 'SELECT * FROM viewed'}
     ), e AS (
       SELECT name, props, visitor, "createdAt" AS at FROM "Event" WHERE "siteId" = $1 AND "createdAt" >= now() - make_interval(days => $2::int)
+      ${tests.length ? 'AND visitor IN (SELECT visitor FROM v)' : ''}
     ), a AS (
-      SELECT * FROM "ViewDay" WHERE "siteId" = $1 AND day >= (now() AT TIME ZONE 'UTC' - make_interval(days => $2::int))::date
+      SELECT * FROM "ViewDay" WHERE "siteId" = $1 AND day >= (now() AT TIME ZONE 'UTC' - make_interval(days => $2::int))::date${tests.length ? ' AND false' : ''}
     ), sessions AS (
       SELECT sum(bounces) AS bounces, sum(visits) AS visits, sum(seconds) AS seconds FROM (
         SELECT count(*) FILTER (WHERE views = 1), count(*), coalesce(sum(seconds), 0) FROM visits
@@ -405,11 +433,16 @@ export async function digest(
       'bounce_rate', (SELECT round(100.0 * bounces / nullif(visits, 0)) FROM sessions),
       'visit_duration', (SELECT round(seconds / nullif(visits, 0)) FROM sessions),
       'visitors_incl_agents', (SELECT count(DISTINCT visitor) FROM (SELECT visitor FROM v UNION SELECT visitor FROM e) u) + (SELECT visitors FROM archived),
-      'previous_visitors', (SELECT count(DISTINCT visitor) FROM "View"
+      'previous_visitors', ${
+        tests.length
+          ? 'NULL'
+          : `(SELECT count(DISTINCT visitor) FROM "View"
         WHERE "siteId" = $1 AND "createdAt" >= now() - make_interval(days => 2 * $2::int) AND "createdAt" < now() - make_interval(days => $2::int))
         + (SELECT coalesce(sum(visitors), 0) FROM "ViewDay" WHERE "siteId" = $1
           AND day >= (now() AT TIME ZONE 'UTC' - make_interval(days => 2 * $2::int))::date
-          AND day < (now() AT TIME ZONE 'UTC' - make_interval(days => $2::int))::date),
+          AND day < (now() AT TIME ZONE 'UTC' - make_interval(days => $2::int))::date)`
+      },
+      'counted_from', (SELECT ${day('min("createdAt")')} FROM "View" WHERE "siteId" = $1),
       'top_sources', ${list('SELECT source, sum(visitors) AS visitors FROM src GROUP BY 1', 6)},
       'top_pages', ${list(merged('page', 'pages', 'SELECT path, count(DISTINCT visitor) FROM v GROUP BY 1'), 6)},
       'entry_pages', ${list(merged('page', 'entryPages', 'SELECT entry, count(DISTINCT visitor) FROM visits GROUP BY 1'), 6)},
