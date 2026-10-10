@@ -775,8 +775,8 @@ monthly.
 ```
 
 A price point may carry `open`, `high` and `low` (its `value` is the close)
-and `volume`. Points that carry the candle get a Line/Candles toggle, opening on
-candles with `candles`; points that carry volume get a volume pane under the
+and `volume`. Points that carry the candle get a candles switch, a candlestick icon
+pressed while they show, opening on candles with `candles`; points that carry volume get a volume pane under the
 price, a fifth of the height. Candles take `--chart-up` and `--chart-down` from
 the canvas box, else its `color`. A week of candles opens on its first, closes
 on its last, spans the highest high and lowest low, and sums its volume. A point

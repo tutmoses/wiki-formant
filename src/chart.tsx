@@ -127,7 +127,7 @@ export interface TimeChartProps {
   fromZero?: boolean;
   /** The value axis and crosshair label. Read on every draw, so it need not be stable. */
   format?: (n: number) => string;
-  /** Open on candles, where the points carry them. A Line/Candles toggle shows either way. */
+  /** Open on candles, where the points carry them. A candles toggle shows either way. */
   candles?: boolean;
   /** In pixels. Otherwise the stylesheet's `--chart-height`, else 15rem. */
   height?: number;
@@ -363,12 +363,14 @@ export function TimeChart({
             </div>
           )}
           {view?.ohlc && (
-            <div role="group" aria-label="Style">
-              <button type="button" aria-pressed={!candles} onClick={() => setCandles(false)}>
-                Line
-              </button>
-              <button type="button" aria-pressed={candles} onClick={() => setCandles(true)}>
-                Candles
+            <div>
+              {/* One switch, pressed while the candles show: two candlesticks in currentColor. */}
+              <button type="button" aria-pressed={candles} aria-label="Candles" title="Candles" onClick={() => setCandles(c => !c)}>
+                <svg className="chart-icon" viewBox="0 0 12 12" aria-hidden>
+                  <path d="M3.5 1v2M3.5 9v2M8.5 2v3M8.5 9v1" stroke="currentColor" />
+                  <rect x="2" y="3" width="3" height="6" rx="0.5" fill="currentColor" />
+                  <rect x="7" y="5" width="3" height="4" rx="0.5" fill="currentColor" />
+                </svg>
               </button>
             </div>
           )}
