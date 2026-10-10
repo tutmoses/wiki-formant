@@ -731,7 +731,9 @@ return <Stats digest={await digest(sql, q)} {...q} />;
 `PasskeyButton` (`wiki-formant/passkey-button`) is the browser half and has its
 own subpath, because it imports the optional peer `@simplewebauthn/browser`.
 `Stats` (`wiki-formant/stats`) renders a `digest` as one page: the
-headline figures against the window before, one of them per day, every non-empty
+headline figures, each with its change from the window before
+(`.stats-delta[data-better]`, a share or for the bounce rate points, for the
+site's stylesheet to colour), one of them per day, every non-empty
 ranked list, and `?days=` links between windows, all time among them, pinned in
 the chart's frame as its own buttons are (`TimeChart`'s `controls`). Each
 figure is a button that charts it: visitors, page views, bounce rate, visit

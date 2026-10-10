@@ -98,7 +98,8 @@ test('a site with no passkey asks the browser to save one without an invite', as
 });
 
 const DIGEST = {
-  visitors: 12, pageviews: 30, bounce_rate: 50, visit_duration: 75, visitors_incl_agents: 15, previous_visitors: 10,
+  visitors: 12, pageviews: 30, bounce_rate: 50, visit_duration: 75, visitors_incl_agents: 15,
+  previous: { visitors: 10, pageviews: 30, bounce_rate: 46, visit_duration: 100, visitors_incl_agents: null, follow_clicks: null },
   top_sources: [{ source: 'x', visitors: 4 }], top_pages: [{ page: '/', visitors: 9 }, { page: '/a', visitors: 3 }],
   entry_pages: [], from_posts: [], sibling_referrals: [], countries: [{ country: 'GB', visitors: 5 }],
   devices: [{ device: 'phone', visitors: 7 }], by_day: [], follow_clicks: null, agent_tool_calls: [], gaps: [],
@@ -108,7 +109,11 @@ const DIGEST = {
 test('the stats page leaves out empty lists and marks the window shown', () => {
   const out = renderToStaticMarkup(createElement(Stats, { digest: DIGEST, days: 7 }));
   assert.match(out, /<div class="chart-controls"><div role="group" aria-label="Window"><a href="\?days=1">24H<\/a><a href="\?days=7" aria-current="page">7D<\/a>/);
-  assert.match(out, /<button type="button" aria-pressed="true"><span>Visitors<\/span><strong>12<small> \+20%<\/small><\/strong><\/button>/);
+  assert.match(out, /<button type="button" aria-pressed="true"><span>Visitors<\/span><strong>12<small class="stats-delta" data-better="true">\+20%<\/small><\/strong><\/button>/);
+  assert.match(out, /<span>Page views<\/span><strong>30<small class="stats-delta">0%<\/small><\/strong>/);
+  assert.match(out, /<span>Bounce rate<\/span><strong>50%<small class="stats-delta" data-better="false">\+4 pp<\/small><\/strong>/);
+  assert.match(out, /<span>Visit length<\/span><strong>1m 15s<small class="stats-delta" data-better="false">-25%<\/small><\/strong>/);
+  assert.match(out, /<span>With agents<\/span><strong>15<\/strong>/);
   assert.match(out, /aria-pressed="false"><span>Bounce rate<\/span>/);
   assert.match(out, /1m 15s/);
   assert.match(out, /United Kingdom/);
@@ -119,8 +124,8 @@ test('the stats page leaves out empty lists and marks the window shown', () => {
 });
 
 test('no change from the window before is unsigned', () => {
-  const out = renderToStaticMarkup(createElement(Stats, { digest: { ...DIGEST, previous_visitors: 12 }, days: 1 }));
-  assert.match(out, /<small> 0%<\/small>/);
+  const out = renderToStaticMarkup(createElement(Stats, { digest: { ...DIGEST, previous: { ...DIGEST.previous, visitors: 12 } }, days: 1 }));
+  assert.match(out, /<strong>12<small class="stats-delta">0%<\/small>/);
 });
 
 test('every row narrows the page to itself, and keeps the window and what is already narrowed', () => {
@@ -135,7 +140,7 @@ test('every row narrows the page to itself, and keeps the window and what is alr
 });
 
 test('a narrowed page has no comparison with the window before', () => {
-  const out = renderToStaticMarkup(createElement(Stats, { digest: { ...DIGEST, previous_visitors: null }, days: 7, filter: { page: '/' } }));
+  const out = renderToStaticMarkup(createElement(Stats, { digest: { ...DIGEST, previous: { ...DIGEST.previous, visitors: null } }, days: 7, filter: { page: '/' } }));
   assert.match(out, /<strong>12<\/strong>/);
 });
 

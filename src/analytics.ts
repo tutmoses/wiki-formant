@@ -345,8 +345,13 @@ export interface Digest {
   visit_duration: number | null;
   /** Visitors plus every agent that sent an event, such as an MCP call. */
   visitors_incl_agents: number;
-  /** Visitors in the same number of days before; null when filtered. */
-  previous_visitors: number | null;
+  /**
+   * The headline figures over the same number of days before, narrowed alike.
+   * A figure is null where that window reaches back past `counted_from` and
+   * the archive cannot stand in for it: event figures always, all of them
+   * when filtered.
+   */
+  previous: Record<'visitors' | 'pageviews' | 'bounce_rate' | 'visit_duration' | 'visitors_incl_agents' | 'follow_clicks', number | null>;
   /** The first UTC day this site counted itself, before which only `ViewDay` speaks; null with no views. */
   counted_from: string | null;
   top_sources: Ranked<'source', 'visitors'>;
@@ -370,6 +375,8 @@ export interface Digest {
  * another day counts once for each day. Days in `ViewDay` add to the visitor,
  * page, visit, source, country, device and per-day figures; events have no
  * history, so an archived day's visitors are its visitors with agents too.
+ * The window before is the same chain of views, visits and events a second
+ * time, `_p` on every name, so its figures are the headline's to the letter.
  */
 export async function digest(
   sql: Sql,
@@ -397,51 +404,55 @@ export async function digest(
       GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 15)`;
   });
 
-  const [row] = (await sql(
-    `WITH viewed AS (
-      SELECT id, path, source, country, device, visitor, "createdAt" AS at FROM "View"
-      WHERE "siteId" = $1 AND "createdAt" >= now() - make_interval(days => $2::int)
-    ), marked AS (
-      SELECT *, CASE WHEN at - lag(at) OVER (PARTITION BY visitor ORDER BY at, id) <= interval '30 minutes' THEN 0 ELSE 1 END AS starts FROM viewed
-    ), numbered AS (
-      SELECT *, sum(starts) OVER (PARTITION BY visitor ORDER BY at, id) AS visit FROM marked
-    ), visits AS (
+  /**
+   * One window's views, visits, events and archived days as CTEs whose names
+   * end in `s`: this window with `back` 0, the one before it with 1.
+   */
+  const chain = (s: string, back: 0 | 1) => {
+    const ago = (k: number) => `now() - make_interval(days => ${k} * $2::int)`;
+    const dayAgo = (k: number) => `(now() AT TIME ZONE 'UTC' - make_interval(days => ${k} * $2::int))::date`;
+    const at = `"createdAt" >= ${ago(back + 1)}${back ? ` AND "createdAt" < ${ago(back)}` : ''}`;
+    return `viewed${s} AS (
+      SELECT id, path, source, country, device, visitor, "createdAt" AS at FROM "View" WHERE "siteId" = $1 AND ${at}
+    ), marked${s} AS (
+      SELECT *, CASE WHEN at - lag(at) OVER (PARTITION BY visitor ORDER BY at, id) <= interval '30 minutes' THEN 0 ELSE 1 END AS starts FROM viewed${s}
+    ), numbered${s} AS (
+      SELECT *, sum(starts) OVER (PARTITION BY visitor ORDER BY at, id) AS visit FROM marked${s}
+    ), visits${s} AS (
       SELECT visitor, visit, min(at) AS at, count(*) AS views, extract(epoch FROM max(at) - min(at)) AS seconds,
         (array_agg(path ORDER BY at, id))[1] AS entry, (array_agg(source ORDER BY at, id))[1] AS source
-      FROM numbered GROUP BY visitor, visit${tests.length ? ` HAVING ${tests.join(' AND ')}` : ''}
-    ), v AS (
-      ${tests.length ? 'SELECT n.id, n.path, n.source, n.country, n.device, n.visitor, n.at FROM numbered n JOIN visits USING (visitor, visit)' : 'SELECT * FROM viewed'}
-    ), e AS (
-      SELECT name, props, visitor, "createdAt" AS at FROM "Event" WHERE "siteId" = $1 AND "createdAt" >= now() - make_interval(days => $2::int)
-      ${tests.length ? 'AND visitor IN (SELECT visitor FROM v)' : ''}
-    ), a AS (
-      SELECT * FROM "ViewDay" WHERE "siteId" = $1 AND day >= (now() AT TIME ZONE 'UTC' - make_interval(days => $2::int))::date${tests.length ? ' AND false' : ''}
-    ), sessions AS (
+      FROM numbered${s} GROUP BY visitor, visit${tests.length ? ` HAVING ${tests.join(' AND ')}` : ''}
+    ), v${s} AS (
+      ${tests.length ? `SELECT n.id, n.path, n.source, n.country, n.device, n.visitor, n.at FROM numbered${s} n JOIN visits${s} USING (visitor, visit)` : `SELECT * FROM viewed${s}`}
+    ), e${s} AS (
+      SELECT name, props, visitor, "createdAt" AS at FROM "Event" WHERE "siteId" = $1 AND ${at}
+      ${tests.length ? `AND visitor IN (SELECT visitor FROM v${s})` : ''}
+    ), a${s} AS (
+      SELECT * FROM "ViewDay" WHERE "siteId" = $1 AND day >= ${dayAgo(back + 1)}${back ? ` AND day < ${dayAgo(back)}` : ''}${tests.length ? ' AND false' : ''}
+    ), sessions${s} AS (
       SELECT sum(bounces) AS bounces, sum(visits) AS visits, sum(seconds) AS seconds FROM (
-        SELECT count(*) FILTER (WHERE views = 1), count(*), coalesce(sum(seconds), 0) FROM visits
-        UNION ALL SELECT coalesce(sum(bounces), 0), coalesce(sum(visits), 0), coalesce(sum(seconds), 0) FROM a
-      ) s(bounces, visits, seconds)
-    ), src AS (
+        SELECT count(*) FILTER (WHERE views = 1), count(*), coalesce(sum(seconds), 0) FROM visits${s}
+        UNION ALL SELECT coalesce(sum(bounces), 0), coalesce(sum(visits), 0), coalesce(sum(seconds), 0) FROM a${s}
+      ) t(bounces, visits, seconds)
+    ), archived${s} AS (
+      SELECT coalesce(sum(visitors), 0) AS visitors, coalesce(sum(pageviews), 0) AS pageviews FROM a${s}
+    )`;
+  };
+  /** One window's headline figures, as `json_build_object` arguments. */
+  const headline = (s: string) => `'visitors', (SELECT count(DISTINCT visitor) FROM v${s}) + (SELECT visitors FROM archived${s}),
+      'pageviews', (SELECT count(*) FROM v${s}) + (SELECT pageviews FROM archived${s}),
+      'bounce_rate', (SELECT round(100.0 * bounces / nullif(visits, 0)) FROM sessions${s}),
+      'visit_duration', (SELECT round(seconds / nullif(visits, 0)) FROM sessions${s}),
+      'visitors_incl_agents', (SELECT count(DISTINCT visitor) FROM (SELECT visitor FROM v${s} UNION SELECT visitor FROM e${s}) u) + (SELECT visitors FROM archived${s})`;
+
+  const [row] = (await sql(
+    `WITH ${chain('', 0)}, ${chain('_p', 1)}, src AS (
       SELECT coalesce(source, '(none)') AS source, count(DISTINCT visitor) AS visitors FROM visits GROUP BY 1
       UNION ALL SELECT key, value::int FROM a, jsonb_each_text(a.sources)
-    ), archived AS (
-      SELECT coalesce(sum(visitors), 0) AS visitors, coalesce(sum(pageviews), 0) AS pageviews FROM a
     )
     SELECT json_build_object(
-      'visitors', (SELECT count(DISTINCT visitor) FROM v) + (SELECT visitors FROM archived),
-      'pageviews', (SELECT count(*) FROM v) + (SELECT pageviews FROM archived),
-      'bounce_rate', (SELECT round(100.0 * bounces / nullif(visits, 0)) FROM sessions),
-      'visit_duration', (SELECT round(seconds / nullif(visits, 0)) FROM sessions),
-      'visitors_incl_agents', (SELECT count(DISTINCT visitor) FROM (SELECT visitor FROM v UNION SELECT visitor FROM e) u) + (SELECT visitors FROM archived),
-      'previous_visitors', ${
-        tests.length
-          ? 'NULL'
-          : `(SELECT count(DISTINCT visitor) FROM "View"
-        WHERE "siteId" = $1 AND "createdAt" >= now() - make_interval(days => 2 * $2::int) AND "createdAt" < now() - make_interval(days => $2::int))
-        + (SELECT coalesce(sum(visitors), 0) FROM "ViewDay" WHERE "siteId" = $1
-          AND day >= (now() AT TIME ZONE 'UTC' - make_interval(days => 2 * $2::int))::date
-          AND day < (now() AT TIME ZONE 'UTC' - make_interval(days => $2::int))::date)`
-      },
+      ${headline('')},
+      'previous', json_build_object(${headline('_p')}, 'follow_clicks', ${follows ? `(SELECT count(*) FROM e_p WHERE ${follows})` : 'NULL'}),
       'counted_from', (SELECT ${day('min("createdAt")')} FROM "View" WHERE "siteId" = $1),
       'top_sources', ${list('SELECT source, sum(visitors) AS visitors FROM src GROUP BY 1', 6)},
       'top_pages', ${list(merged('page', 'pages', 'SELECT path, count(DISTINCT visitor) FROM v GROUP BY 1'), 6)},
@@ -476,7 +487,16 @@ export async function digest(
     ) AS digest`,
     ...values,
   )) as { digest: Digest }[];
-  return row!.digest;
+  const d = row!.digest;
+  // Before the site counted itself only ViewDay speaks, and it holds no
+  // events and no visits a filter could pick out.
+  const before = new Date(Date.now() - 2 * (values[1] as number) * 86_400_000).toISOString().slice(0, 10);
+  if (d.counted_from && before < d.counted_from) {
+    const p = d.previous;
+    if (tests.length) for (const k of Object.keys(p) as (keyof typeof p)[]) p[k] = null;
+    else p.visitors_incl_agents = p.follow_clicks = null;
+  }
+  return d;
 }
 
 /**

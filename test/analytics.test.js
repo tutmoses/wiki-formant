@@ -206,6 +206,28 @@ test('every placeholder in the digest has a value', async () => {
   assert.equal(highest, values.length);
 });
 
+test('the window before is the same chain, bounded on both sides', async () => {
+  const { sql, calls } = fakeSql();
+  await digest(sql, { days: 7, handle: 'h' });
+  const { query } = calls.at(-1);
+  assert.match(query, /viewed_p AS \(\s*SELECT .* "createdAt" >= now\(\) - make_interval\(days => 2 \* \$2::int\) AND "createdAt" < now\(\) - make_interval\(days => 1 \* \$2::int\)/);
+  assert.match(query, /'previous', json_build_object\('visitors', \(SELECT count\(DISTINCT visitor\) FROM v_p\)/);
+  assert.match(query, /'follow_clicks', \(SELECT count\(\*\) FROM e_p WHERE name = 'Outbound Link: Click'/);
+});
+
+const PREVIOUS = { visitors: 5, pageviews: 9, bounce_rate: 50, visit_duration: 30, visitors_incl_agents: 6, follow_clicks: 1 };
+const digestOf = digest => async query => (query.includes('json_build_object') ? [{ digest: { ...digest, previous: { ...PREVIOUS } } }] : []);
+
+test('a window before the site counted itself compares no events, and nothing when filtered', async () => {
+  const since = { counted_from: new Date().toISOString().slice(0, 10) };
+  const plain = await digest(digestOf(since), { days: 30 });
+  assert.deepEqual(plain.previous, { ...PREVIOUS, visitors_incl_agents: null, follow_clicks: null });
+  const narrowed = await digest(digestOf(since), { days: 30, filter: { device: 'phone' } });
+  assert.ok(Object.values(narrowed.previous).every(v => v === null));
+  const settled = await digest(digestOf({ counted_from: '2000-01-01' }), { days: 30, filter: { device: 'phone' } });
+  assert.deepEqual(settled.previous, PREVIOUS);
+});
+
 test('without a handle the digest counts no clicks to X, per day or in all', async () => {
   const { sql, calls } = fakeSql();
   await digest(sql, { days: 7 });
@@ -223,7 +245,8 @@ test('a filter narrows the visits, leaves out the archive and the comparison', a
   assert.match(query, /HAVING bool_or\(path = \$\d+\) AND coalesce\(\(array_agg\(source ORDER BY at, id\)\)\[1\], '\(none\)'\) = \$\d+ AND bool_or\(country = \$\d+\)/);
   assert.match(query, /JOIN visits USING \(visitor, visit\)/);
   assert.match(query, /::date AND false/);
-  assert.match(query, /'previous_visitors', NULL/);
+  assert.match(query, /visits_p AS \(.*HAVING bool_or\(path = \$\d+\)/s);
+  assert.match(query, /a_p AS \(.*AND false/s);
   assert.ok(values.includes('/a') && values.includes('(none)') && values.includes('GB'));
 });
 

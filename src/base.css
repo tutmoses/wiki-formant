@@ -218,6 +218,7 @@ pre:hover > .code-copy-btn,
 }
 .stats-figures button[aria-pressed='true'] { opacity: 1; }
 .stats-figures strong { font-variant-numeric: tabular-nums; }
+.stats-delta { margin-inline-start: 0.4em; }
 .stats-lists {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
