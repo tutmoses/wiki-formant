@@ -761,7 +761,10 @@ and `volume`. Points that carry the candle get a Line/Candles toggle, opening on
 candles with `candles`; points that carry volume get a volume pane under the
 price, a fifth of the height. Candles take `--chart-up` and `--chart-down` from
 the canvas box, else its `color`. A week of candles opens on its first, closes
-on its last, spans the highest high and lowest low, and sums its volume.
+on its last, spans the highest high and lowest low, and sums its volume. A point
+with a volume of zero is a stretch nothing traded in: its candle and bar leave
+the slot empty, except the last, which is the price now. A price's line is
+straight between closes and a count's is curved.
 
 `aggregate` is how a week or month is made from its days: `last` for a price,
 `mean` for a count, so the week in progress keeps its level instead of reading

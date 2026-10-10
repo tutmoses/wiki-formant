@@ -7,7 +7,8 @@
 // that carries volume gets a volume pane under it. `lightweight-charts` is
 // loaded on mount, so the page paints without it. Every colour is the canvas
 // box's own `color`, its axis `--chart-axis`, and a candle `--chart-up` or
-// `--chart-down`, each if set.
+// `--chart-down`, each if set. A count's line is curved; a price's is straight,
+// since a curve between two closes draws prices nobody paid.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AutoscaleInfo, IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
@@ -186,6 +187,7 @@ export function TimeChart({
       const down = rgba(style.getPropertyValue('--chart-down').trim() || style.color, style.getPropertyValue('--chart-down').trim() ? 1 : 0.45);
       const priceFormat = { type: 'custom', formatter: (n: number) => formatRef.current(n), minMove: 1e-12 } as const;
       const guide = { color: rgba(style.color, 0.4), width: 1, style: LineStyle.Dotted, labelBackgroundColor: ink } as const;
+      const grid = rgba(axis || style.color, 0.1);
       const api = createChart(el, {
         autoSize: true,
         layout: {
@@ -193,8 +195,10 @@ export function TimeChart({
           textColor: axis ? rgba(axis) : rgba(style.color, 0.7),
           fontFamily: style.fontFamily,
           fontSize: parseFloat(style.fontSize) || 11,
+          // The volume pane's border is a grid line, not the library's light-theme rule.
+          panes: { separatorColor: grid, separatorHoverColor: 'transparent', enableResize: false },
         },
-        grid: { vertLines: { color: rgba(axis || style.color, 0.1) }, horzLines: { color: rgba(axis || style.color, 0.1) } },
+        grid: { vertLines: { color: grid }, horzLines: { color: grid } },
         crosshair: { mode: CrosshairMode.Magnet, vertLine: guide, horzLine: guide },
         rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.15, bottom: 0.1 } },
         timeScale: { borderVisible: false, secondsVisible: false },
@@ -206,7 +210,7 @@ export function TimeChart({
         topColor: rgba(style.color, 0.4),
         bottomColor: rgba(style.color, 0.02),
         lineWidth: 2,
-        lineType: LineType.Curved,
+        lineType: aggregate === 'mean' ? LineType.Curved : LineType.Simple,
         crosshairMarkerBackgroundColor: ink,
         crosshairMarkerBorderColor: ink,
         priceFormat,
@@ -241,7 +245,7 @@ export function TimeChart({
       chart.current = null;
       setReady(false);
     };
-  }, [fromZero]);
+  }, [fromZero, aggregate]);
 
   // One request per resolution for the life of the loader: every range from 30D up reads the same days.
   const cache = useRef(new Map<ChartResolution, Promise<readonly ChartPoint[]>>());
@@ -298,11 +302,16 @@ export function TimeChart({
     const shown = view?.shown ?? [];
     const asCandles = candles && !!view?.ohlc;
     const time = (p: ChartPoint) => p.time as UTCTimestamp;
+    // A point with no volume is a stretch nothing traded in: its candle and its bar leave the slot
+    // empty rather than draw a flat dash. The last one always draws, as the price now.
+    const idle = (p: ChartPoint, i: number) => p.volume === 0 && i < shown.length - 1;
     c.api.applyOptions({ timeScale: { timeVisible: source.resolution !== 'day' } });
     c.area.applyOptions({ visible: !asCandles });
     c.candle.applyOptions({ visible: asCandles });
     c.area.setData(asCandles ? [] : shown.map(p => ({ time: time(p), value: p.value })));
-    c.candle.setData(asCandles ? shown.map(p => ({ time: time(p), open: p.open!, high: p.high!, low: p.low!, close: p.value })) : []);
+    c.candle.setData(
+      asCandles ? shown.map((p, i) => (idle(p, i) ? { time: time(p) } : { time: time(p), open: p.open!, high: p.high!, low: p.low!, close: p.value })) : [],
+    );
     if (view?.volume && !c.volume) c.volume = c.addVolume();
     else if (!view?.volume && c.volume) {
       c.api.removeSeries(c.volume);
@@ -311,6 +320,7 @@ export function TimeChart({
     }
     c.volume?.setData(
       shown.map((p, i) => {
+        if (!p.volume) return { time: time(p) };
         const rising = p.value >= (p.open ?? shown[i - 1]?.value ?? p.value);
         return { time: time(p), value: p.volume ?? 0, color: (rising ? c.up : c.down).replace(/[\d.]+\)$/, '0.5)') };
       }),
