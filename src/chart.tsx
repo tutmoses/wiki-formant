@@ -41,13 +41,15 @@ const STEP: Record<ChartStep, { label: string; span: number }> = {
   month: { label: 'M', span: 30.44 * DAY },
 };
 
+const STEPS: readonly ChartStep[] = ['day', 'week', 'month'];
+
 /** Every range, shortest first. A chart fed daily points offers the ones from 30D up. */
 export const CHART_RANGES: readonly ChartRange[] = ['24h', '7d', '30d', '90d', '1y', 'all'];
 const DAILY_RANGES: readonly ChartRange[] = ['30d', '90d', '1y', 'all'];
 
 /** A step is offered once it makes four points, and the default is the finest that makes 200 or fewer. */
 export function chartSteps(span: number): { steps: ChartStep[]; fallback: ChartStep } {
-  const steps = (['day', 'week', 'month'] as const).filter(s => s === 'day' || span / STEP[s].span >= 4);
+  const steps = STEPS.filter(s => s === 'day' || span / STEP[s].span >= 4);
   return { steps, fallback: steps.find(s => span / STEP[s].span <= 200) ?? steps.at(-1)! };
 }
 
@@ -334,6 +336,9 @@ export function TimeChart({
     c.api.timeScale().fitContent();
   }, [ready, source, view, candles]);
 
+  // The steps always show where a range is drawn by day, so the buttons do not jump about; one
+  // the range cannot make (any, under 24H and 7D) is disabled.
+  const daily = ranges.some(r => RANGE[r].resolution === 'day');
   const status = source && 'error' in source ? source.error : points && !view?.shown.length ? 'No data in this range' : null;
 
   return (
@@ -341,7 +346,7 @@ export function TimeChart({
       <div ref={box} className="chart-canvas" role="img" aria-label={label} style={height ? { height } : undefined} />
       {(!ready || (!points && !status)) && <div className="chart-status skeleton" aria-hidden />}
       {status && <p className="chart-status">{status}</p>}
-      {(controls || ranges.length > 1 || (view && (view.steps.length > 1 || view.ohlc))) && (
+      {(controls || ranges.length > 1 || daily || view?.ohlc) && (
         <div className="chart-controls">
           {controls}
           {ranges.length > 1 && (
@@ -353,10 +358,17 @@ export function TimeChart({
               ))}
             </div>
           )}
-          {view && view.steps.length > 1 && (
+          {daily && (
             <div role="group" aria-label="Step">
-              {view.steps.map(s => (
-                <button key={s} type="button" aria-pressed={s === view.step} onClick={() => setStep(s)} title={`One point per ${s}`}>
+              {STEPS.map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  aria-pressed={s === view?.step}
+                  disabled={!view?.steps.includes(s)}
+                  onClick={() => setStep(s)}
+                  title={`One point per ${s}`}
+                >
                   {STEP[s].label}
                 </button>
               ))}

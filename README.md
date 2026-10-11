@@ -770,10 +770,11 @@ needs installed.
 `TimeChart` (`wiki-formant/chart`) is every time-series chart on the four sites:
 token prices, ledger activity, a caper's price, visitors per day. One area
 series in the box's own `color`, its axis in `--chart-axis` if set, with range
-buttons — 24H, 7D, 30D, 90D, 1Y, All — and, on a range long enough, a day, week
-or month step. A step is offered once it makes four points, and the default is
-the finest that makes 200 or fewer, so a year opens weekly and five years
-monthly.
+buttons — 24H, 7D, 30D, 90D, 1Y, All — then, after a rule, the day, week and
+month steps. The steps show wherever a range is drawn by day, so the buttons
+never shift; one is enabled once it makes four points (none under 24H and 7D,
+which are drawn by the hour and the four hours), and the default is the finest
+that makes 200 or fewer, so a year opens weekly and five years monthly.
 
 ```tsx
 // Daily points: the chart slices and steps them itself; 30D up.
@@ -799,7 +800,8 @@ straight between closes and a count's is curved.
 as a collapse. A single range draws no range buttons and shows every point.
 `bucketChart` and `chartSteps` are exported for a chart drawn elsewhere.
 `base.css` pins the buttons (`.chart-controls button[aria-pressed]`) to the
-canvas's top-left corner; the site's stylesheet gives them and the box a look.
+canvas's top-left corner, rules a line between groups and dims a disabled step;
+the site's stylesheet gives them and the box a look.
 
 ## Base stylesheet
 
