@@ -312,6 +312,8 @@ const { ref, onScroll, at, step, go } = useSnapRow();
 
 `useClickOutside` is fifteen lines and was in all three. Only one had the `offsetParent` check, and without it a container hidden at the current breakpoint still answers outside-clicks — so on a phone, a tap anywhere dismisses the popover the reader is looking at, because the hidden desktop copy got there first.
 
+`useUnsavedChanges(dirty)` asks before an edit with unsaved changes is left: the browser's own prompt on a reload or a closed tab, and the `confirmLeave()` it returns for a Back link or Cancel, which a client-side navigation never sends through `beforeunload`. If a save leaves by a full page load, pass false once it has landed, or the save's own exit asks. `useSaveShortcut(save)` binds ⌘S and Ctrl+S, reading `save` when the key is pressed.
+
 ### The listbox contract
 
 `useTypeahead` shared the state machine across five surfaces and left the ARIA
@@ -624,6 +626,14 @@ The ones that take config take it because that is exactly where the two copies d
 `createHeadingIds({ slug })` decorates each heading in the editor with the id its published copy will carry, through `uniqueHeadingId` — the dedupe `injectHeadingIds` uses — so a rail listing headings mid-edit links to the anchors readers will get. `uploadImageTo('/api/upload')` is the `uploadImage` two editors had written identically.
 
 `TOOLBAR_ACTIONS` are the formatting commands with the labels a screen reader announces — two toolbars titled buttons with the internal key, so one said "codeBlock". Pick yours in order with `toolbarActions([...])`, render each through `ToolbarButton` (named, and `aria-pressed`, since these are toggles), and run a table command with `runTableAction`. Upload and embed stay with the caller; they are the parts that differ.
+
+`useUrlPrompt(editor, { resolveMapUrl })` is the link and embed address field under a toolbar, in place of a `window.prompt` that blocks the page and cannot show the link the cursor is in. Three editors had written it and one still used the prompt; only one copy both opened a link field on the current address and unlinked on an emptied one. The hook carries both, closes the field when the editor it serves changes (a toolbar shared between blocks would otherwise apply it to the wrong one), and leaves the markup to you. `applyUrlPrompt` is what it runs, exported for a toolbar that keeps its own state.
+
+```tsx
+const url = useUrlPrompt(editor, { resolveMapUrl });
+<ToolbarButton label="Link" pressed={url.kind === 'link'} onPress={() => url.toggle('link')}>…</ToolbarButton>
+{url.kind && <input autoFocus value={url.value} onChange={e => url.setValue(e.target.value)} onKeyDown={url.onKeyDown} />}
+```
 
 A link is stored as its `href` and the `link` class, nothing else (`wikiLink`). Stock Tiptap writes `target="_blank" rel="noopener noreferrer nofollow"` onto every link, internal ones included, which on a site throws away its own link equity and opens in-site navigation in new tabs. Whether a link is external depends on the host serving the page, so `normaliseLinks` decides it at render time. A legacy link loses both attributes the next time its page is saved.
 

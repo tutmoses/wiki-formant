@@ -29,7 +29,7 @@ import TiptapTableHeader from '@tiptap/extension-table-header';
 import Placeholder from '@tiptap/extension-placeholder';
 import { useEditor } from '@tiptap/react';
 import type { AnyExtension, Editor } from '@tiptap/core';
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { toMapEmbedUrl } from './maps.js';
 
 /**
@@ -313,6 +313,96 @@ export function ToolbarButton({
       {children}
     </button>
   );
+}
+
+// ---- the address field ------------------------------------------------------
+
+export type UrlPromptKind = 'link' | 'embed';
+
+/**
+ * What a link or embed field does with its address. A link sets or replaces
+ * the link the cursor is in, across the whole link rather than the collapsed
+ * selection, and an emptied address takes it off while keeping the text. An
+ * embed with no address does nothing.
+ */
+export function applyUrlPrompt(
+  editor: Editor,
+  kind: UrlPromptKind,
+  url: string,
+  { resolveMapUrl }: { resolveMapUrl: (url: string) => Promise<string | null> },
+): void {
+  const href = url.trim();
+  if (kind === 'embed') {
+    if (href) insertEmbed(editor, href, { resolveMapUrl });
+    return;
+  }
+  const chain = editor.chain().focus().extendMarkRange('link');
+  (href ? chain.setLink({ href }) : chain.unsetLink()).run();
+}
+
+export interface UrlPromptState {
+  /** The open field, or null. */
+  kind: UrlPromptKind | null;
+  value: string;
+  setValue: (value: string) => void;
+  /** Open the field, or close it when it is already open on this kind. */
+  toggle: (kind: UrlPromptKind) => void;
+  close: () => void;
+  /** `applyUrlPrompt` with the field's address, then close. */
+  apply: () => void;
+  /** Enter applies and Escape closes: the field's `onKeyDown`. */
+  onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
+}
+
+/**
+ * The state of a link or embed address field under a toolbar, in place of a
+ * `window.prompt`, which blocks the page and cannot show the link the cursor is
+ * already in. Three editors had written this, and only one had both of what it
+ * needs: a link field that opens on the current address, and an emptied one
+ * that unlinks. The field closes when the editor it serves changes, since a
+ * toolbar shared between blocks would otherwise apply it to the wrong one.
+ *
+ * The markup stays with the caller: an input bound to `value`, `setValue` and
+ * `onKeyDown`, and buttons calling `apply` and `close`.
+ */
+export function useUrlPrompt(
+  editor: Editor | null,
+  options: { resolveMapUrl: (url: string) => Promise<string | null> },
+): UrlPromptState {
+  const [state, setState] = useState<{ kind: UrlPromptKind; value: string } | null>(null);
+  const latest = useRef({ editor, state, options });
+  useEffect(() => {
+    latest.current = { editor, state, options };
+  });
+  useEffect(() => setState(null), [editor]);
+
+  const toggle = useCallback((kind: UrlPromptKind) => {
+    const { editor, state } = latest.current;
+    if (state?.kind === kind) return setState(null);
+    const href = kind === 'link' ? (editor?.getAttributes('link').href as string | undefined) : undefined;
+    setState({ kind, value: href ?? '' });
+  }, []);
+  const close = useCallback(() => setState(null), []);
+  const setValue = useCallback((value: string) => setState(s => (s ? { ...s, value } : s)), []);
+  const apply = useCallback(() => {
+    const { editor, state, options } = latest.current;
+    if (editor && state) applyUrlPrompt(editor, state.kind, state.value, options);
+    setState(null);
+  }, []);
+  const onKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        apply();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        close();
+      }
+    },
+    [apply, close],
+  );
+
+  return { kind: state?.kind ?? null, value: state?.value ?? '', setValue, toggle, close, apply, onKeyDown };
 }
 
 // ---- the editor -------------------------------------------------------------

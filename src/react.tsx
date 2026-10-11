@@ -1035,6 +1035,48 @@ export function BlockActions({ index, total, ops, icons, className, buttonClassN
   );
 }
 
+// ---- leaving an edit ---------------------------------------------------------
+
+/**
+ * Asks before an edit with unsaved changes is left. While `dirty`, a reload or
+ * a closed tab gets the browser's own prompt; an in-app exit (a Back link,
+ * Cancel) never passes through `beforeunload`, so it asks `confirmLeave()`,
+ * the function this returns, and goes only on a true.
+ *
+ * Pass false once a save has landed if the page then leaves by a full load
+ * (`location.href = …`), or the save's own exit asks the question.
+ */
+export function useUnsavedChanges(dirty: boolean, message = 'Leave without saving your changes?'): () => boolean {
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+  return useCallback(() => !dirty || window.confirm(message), [dirty, message]);
+}
+
+/**
+ * ⌘S, or Ctrl+S, runs `save` in place of the browser saving the page as a
+ * file. `save` is read when the key is pressed, so it may close over state.
+ */
+export function useSaveShortcut(save: () => void): void {
+  const latest = useRef(save);
+  useEffect(() => {
+    latest.current = save;
+  });
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        latest.current();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+}
+
 // ---- revision restore ---------------------------------------------------------
 
 /** Resolves to an error message to show, or null on success. */
