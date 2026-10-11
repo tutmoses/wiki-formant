@@ -19,7 +19,7 @@ const { Editor } = await import('@tiptap/core');
 const { default: StarterKit } = await import('@tiptap/starter-kit');
 const { createElement, act } = await import('react');
 const { createRoot } = await import('react-dom/client');
-const { applyUrlPrompt, useUrlPrompt, wikiLink } = await import('wiki-formant/editor');
+const { applyUrlPrompt, useUrlPrompt, useWikiEditor, wikiLink } = await import('wiki-formant/editor');
 const { useUnsavedChanges, useSaveShortcut } = await import('wiki-formant/react');
 
 const noMaps = { resolveMapUrl: async () => null };
@@ -101,6 +101,28 @@ test('Enter in the address field applies it and closes the field', () => {
   assert.match(editor.getHTML(), /href="\/new"/);
   unmount();
   editor.destroy();
+});
+
+test('a blur reports an edit still pending, and nothing when there was none', async () => {
+  const changes = [];
+  const { out, rerender, unmount } = mount(({ value }) =>
+    useWikiEditor({ value, onChange: html => changes.push(html), proseClass: 'prose', uploadImage: async () => null, debounceMs: 60_000 }),
+  );
+  // Stored as <b>: the editor rewrites it to <strong> when it loads, which is
+  // not an edit, and clicking through the block must not report it as one.
+  rerender({ value: '<p>Stored <b>bold</b></p>' });
+  await act(() => new Promise(r => setTimeout(r, 20)));
+  const blur = () => act(() => out.editor.view.dom.dispatchEvent(new window.FocusEvent('blur')));
+
+  blur();
+  assert.deepEqual(changes, []);
+  act(() => out.editor.commands.insertContentAt(out.editor.state.doc.content.size - 1, '!'));
+  blur();
+  assert.equal(changes.length, 1);
+  assert.match(changes[0], /<strong>bold!<\/strong>/);
+  blur();
+  assert.equal(changes.length, 1);
+  unmount();
 });
 
 test('unsaved changes hold a reload and ask before an in-app exit', () => {

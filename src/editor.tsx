@@ -15,6 +15,9 @@
 //   2. Blur flushes the pending debounce. The change is debounced 150ms, and
 //      clicking Save blurs the editor before the click lands, so without the
 //      flush the final keystroke of an edit that ends in a click is dropped.
+//      It flushes only an edit still pending: Tiptap rewrites stored HTML into
+//      its own form, so reporting every blur told a page that had only been
+//      clicked through it had unsaved changes.
 //
 // Every @tiptap package here is an OPTIONAL PEER. A consumer that only wants
 // the taxonomy or the MCP transport installs none of them.
@@ -475,6 +478,9 @@ export function useWikiEditor({
   const initialValueRef = useRef(value);
   const onChangeRef = useRef(onChange);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // An edit made and not yet reported. `onUpdate` fires for edits only, never
+  // for the `setContent` that loads the stored value.
+  const pendingRef = useRef(false);
 
   // Written AFTER render, not during: a ref mutated mid-render can tear under
   // concurrent rendering. Only read from events and timeouts, which run later.
@@ -497,12 +503,19 @@ export function useWikiEditor({
     },
     onUpdate: ({ editor }) => {
       clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => onChangeRef.current(editor.getHTML()), debounceMs);
+      pendingRef.current = true;
+      debounceRef.current = setTimeout(() => {
+        pendingRef.current = false;
+        onChangeRef.current(editor.getHTML());
+      }, debounceMs);
     },
-    // Flush the pending debounce on blur, so a quick Save — which blurs the
-    // editor before the click fires — never drops the final keystroke.
+    // Flush a pending edit on blur, so a quick Save — which blurs the editor
+    // before the click fires — never drops the final keystroke. A blur with no
+    // edit reports nothing.
     onBlur: ({ editor }) => {
       clearTimeout(debounceRef.current);
+      if (!pendingRef.current) return;
+      pendingRef.current = false;
       onChangeRef.current(editor.getHTML());
     },
     immediatelyRender: false,
