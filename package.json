@@ -1,6 +1,6 @@
 {
   "name": "wiki-formant",
-  "version": "0.45.0",
+  "version": "0.46.0",
   "description": "The portable half of a wiki: derived taxonomy and facet controls, a version-negotiating MCP transport, markdown twins, block rendering, a rich-text editor engine, conditional-GET plumbing, and the headers and CSP every origin sends.",
   "type": "module",
   "license": "MIT",
@@ -91,6 +91,11 @@
       "types": "./dist/combobox.d.ts",
       "import": "./dist/combobox.js",
       "default": "./dist/combobox.js"
+    },
+    "./indexnow": {
+      "types": "./dist/indexnow.d.ts",
+      "import": "./dist/indexnow.js",
+      "default": "./dist/indexnow.js"
     },
     "./crawlers": {
       "types": "./dist/crawlers.d.ts",
@@ -240,7 +245,8 @@
     "check-pages": "bin/check-pages.mjs",
     "analytics-digest": "bin/analytics-digest.mjs",
     "passkey-invite": "bin/passkey-invite.mjs",
-    "fts-ddl": "bin/fts-ddl.mjs"
+    "fts-ddl": "bin/fts-ddl.mjs",
+    "indexnow": "bin/indexnow.mjs"
   },
   "files": [
     "dist",

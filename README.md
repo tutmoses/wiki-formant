@@ -400,6 +400,20 @@ Every agent group also allows `AGENT_SURFACE_PATHS` — `/api/mcp`, the three `l
 
 `trackAiBot(request, event, load)` counts an `AI Bot Visit` inside `event.waitUntil`. `load` is a dynamic import because the tracker pulls in a database client, which a static import would load for every request the proxy sees.
 
+## IndexNow
+
+Bing, Yandex, Seznam, Naver and Yep take a POST of changed URLs instead of waiting to recrawl. The `indexnow` bin reads an origin's live sitemap and posts the rows whose `lastModified` falls inside the window, so the editor, the MCP write tools and the sweep scripts that write straight to the database are all covered with no hook in any of them. It runs where the sweeps run, never as a cron on the host: a submission costs the origin one cached sitemap fetch and no function time.
+
+The key is public by design, since an engine checks it by fetching `/<key>.txt`. The file in the app's `public/` is the only copy, and the bin finds it there, so run it from the app's root. It checks that the live origin serves the key before posting anything.
+
+```sh
+npx indexnow https://radix.wiki              # rows modified in the last 24 hours
+npx indexnow https://radix.wiki --hours 6
+npx indexnow https://radix.wiki --all        # every row: a new origin or a new key
+```
+
+Rows with no `lastModified` go only in a full submission. A 403 or 422 from the engine exits 1.
+
 ## Page metadata
 
 `wiki-formant/metadata`'s `pageMetadata` builds a page's canonical, markdown-twin alternate, Open Graph and Twitter card from one input. Next replaces those objects per route segment rather than merging them, and fills a missing twitter card from `openGraph` only when no `twitter` object was inherited — so under a layout that sets its own card, a page that sets one and forgets the other shows the layout's. Two wikis wrote a helper around that, covering different halves.
