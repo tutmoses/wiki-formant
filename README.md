@@ -431,6 +431,13 @@ The schema.org nodes sit beside it, because they state the same facts to a diffe
 <JsonLd data={articleLd({ headline: title, url, image, published, modified, publisher: { '@id': `${SITE_URL}/#organization` }, citation: citationsFromReferences(refs) })} />
 ```
 
+`questionPairs(html)` reads a page's FAQ out of its own headings: every `h2`/`h3` ending in `?`, answered by the text beneath it. It never rewrites a statement heading as a question, so a page earns `FAQPage` by being written as one. `faqPageLd(pairs, url)` is that node, or null under two pairs, and takes an authored list just as well.
+
+```tsx
+const faq = faqPageLd(questionPairs(html), url);
+{faq && <JsonLd data={faq} />}
+```
+
 `sitePageMetadata({ siteName, handle })` binds the three fields Next drops from every page that sets its own card, with `locale` defaulting to `en_US`. `siteGraphLd` is the Organization, WebSite (with its `SearchAction`) and `WebAPI` as one `@graph` for the root layout, every node carrying an `@id`, and `siteRefs(url)` hands out the same ids for a page's `publisher` and `isPartOf` — so no page writes an inline copy of the publisher that can disagree with the layout's.
 
 ```ts

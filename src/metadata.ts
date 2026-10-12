@@ -20,6 +20,7 @@
 // collection page had no ItemList at all.
 
 import { decodeEntities } from './markdown.js';
+import { stripHtml } from './text.js';
 import type { ReferenceItem } from './blocks.js';
 
 export interface ArticleMeta {
@@ -193,6 +194,53 @@ export function citationsFromReferences(items: readonly ReferenceItem[], max = 5
       return name ? [{ '@type': 'CreativeWork', name: name.slice(0, 250), ...(ref.url ? { url: ref.url } : {}) }] : [];
     })
     .slice(0, max);
+}
+
+export interface QaPair {
+  q: string;
+  a: string;
+}
+
+/**
+ * The question/answer pairs in a page's HTML: every `h2`/`h3` that ends in a
+ * question mark, with the text up to the next such heading as its answer.
+ *
+ * It never turns a statement heading into a question. Markup that rewrites
+ * "Protocol fees" as "What is Protocol fees?" claims a question the page never
+ * asked, so a page earns an FAQ by being written as one. An answer under 40
+ * characters is a heading with no section, and is skipped.
+ */
+export function questionPairs(html: string): QaPair[] {
+  const pairs: QaPair[] = [];
+  const sections = html.split(/<h[23][^>]*>/i);
+  for (const section of sections.slice(1)) {
+    const [heading = '', ...rest] = section.split(/<\/h[23]>/i);
+    const q = stripHtml(heading).replace(/\s+/g, ' ');
+    if (!q.endsWith('?')) continue;
+    const a = stripHtml(rest.join('')).replace(/\s+/g, ' ');
+    if (a.length >= 40) pairs.push({ q, a: a.slice(0, 1000) });
+  }
+  return pairs;
+}
+
+/**
+ * `FAQPage` over question/answer pairs, or null under two. One question is an
+ * article with a question for a heading, not an FAQ. Pairs come from
+ * `questionPairs` on stored HTML, or from a list the caller authors directly
+ * as plain text, so a home-page FAQ and a wiki article render the same node.
+ */
+export function faqPageLd(pairs: readonly QaPair[], url: string): LdNode | null {
+  if (pairs.length < 2) return null;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    url,
+    mainEntity: pairs.map(p => ({
+      '@type': 'Question',
+      name: p.q,
+      acceptedAnswer: { '@type': 'Answer', text: p.a },
+    })),
+  };
 }
 
 /**
