@@ -20,7 +20,6 @@
 // collection page had no ItemList at all.
 
 import { decodeEntities } from './markdown.js';
-import { stripHtml } from './text.js';
 import type { ReferenceItem } from './blocks.js';
 
 export interface ArticleMeta {
@@ -211,13 +210,20 @@ export interface QaPair {
  * characters is a heading with no section, and is skipped.
  */
 export function questionPairs(html: string): QaPair[] {
+  // Plain text, not `stripHtml`, which keeps an href in parentheses for a model
+  // following citations: a heading's permalink anchor would end it in "(#id)"
+  // rather than "?". The anchor itself goes, glyph and all.
+  const plain = (s: string) =>
+    decodeEntities(s.replace(/<a\b[^>]*href="#[^"]*"[^>]*>[\s\S]*?<\/a>/gi, '').replace(/<[^>]+>/g, ' '))
+      .replace(/\s+/g, ' ')
+      .trim();
   const pairs: QaPair[] = [];
   const sections = html.split(/<h[23][^>]*>/i);
   for (const section of sections.slice(1)) {
     const [heading = '', ...rest] = section.split(/<\/h[23]>/i);
-    const q = stripHtml(heading).replace(/\s+/g, ' ');
+    const q = plain(heading).replace(/\s+([?.,;:!])/g, '$1');
     if (!q.endsWith('?')) continue;
-    const a = stripHtml(rest.join('')).replace(/\s+/g, ' ');
+    const a = plain(rest.join('')).replace(/\s+([?.,;:!])/g, '$1');
     if (a.length >= 40) pairs.push({ q, a: a.slice(0, 1000) });
   }
   return pairs;
