@@ -820,6 +820,17 @@ straight between closes and a count's is curved.
 `mean` for a count, so the week in progress keeps its level instead of reading
 as a collapse. A single range draws no range buttons and shows every point.
 `bucketChart` and `chartSteps` are exported for a chart drawn elsewhere.
+
+`markers` are events, `{ time, label }`, each drawn as an arrow on the last
+point at or before it, so one mid-week lands on its week and two on one point
+share it (`placeMarkers` does the placing). `step` opens on a step where the
+range can make it, and `onView` hears the range and step on mount and on every
+change, for a page that keeps them in its URL:
+
+```tsx
+<TimeChart series={days} label="Transactions" aggregate="mean" fromZero
+  markers={[{ time: haltAt, label: 'Halt' }]} step="month" onView={v => keep(v)} />
+```
 `base.css` pins the buttons (`.chart-controls button[aria-pressed]`) to the
 canvas's top-left corner, rules a line between groups and dims a disabled step;
 the site's stylesheet gives them and the box a look.

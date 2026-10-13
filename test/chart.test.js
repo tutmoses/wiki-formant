@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bucketChart, chartSteps, formatChartValue } from 'wiki-formant/chart';
+import { bucketChart, chartSteps, formatChartValue, placeMarkers } from 'wiki-formant/chart';
 import { statsDays } from 'wiki-formant/stats';
 
 const DAY = 86_400;
@@ -55,4 +55,26 @@ test('the stats page takes all time as ?days=all', () => {
   assert.equal(statsDays('all'), Infinity);
   assert.equal(statsDays('365'), 365);
   assert.equal(statsDays('Infinity'), 30);
+});
+
+test('a marker sits on the point that holds it; two on one point share it', () => {
+  const daily = days('2026-09-28', [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.deepEqual(placeMarkers([{ time: at('2026-09-30T12:00:00Z'), label: 'Halt' }], daily, 'day'), [
+    { time: at('2026-09-30'), label: 'Halt' },
+  ]);
+  const weekly = bucketChart(daily, 'week', 'mean');
+  assert.deepEqual(placeMarkers([
+    { time: at('2026-10-01'), label: 'A' },
+    { time: at('2026-09-29'), label: 'B' },
+    { time: at('2026-10-05'), label: 'C' },
+  ], weekly, 'week'), [
+    { time: at('2026-09-28'), label: 'B · A' },
+    { time: at('2026-10-05'), label: 'C' },
+  ]);
+});
+
+test('a marker outside the points drawn is left off', () => {
+  const daily = days('2026-09-28', [1, 2, 3]);
+  assert.deepEqual(placeMarkers([{ time: at('2026-09-01'), label: 'Before' }, { time: at('2026-10-01'), label: 'After' }], daily, 'day'), []);
+  assert.deepEqual(placeMarkers([{ time: at('2026-09-28'), label: 'X' }], [], 'day'), []);
 });

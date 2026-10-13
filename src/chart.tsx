@@ -8,10 +8,11 @@
 // loaded on mount, so the page paints without it. Every colour is the canvas
 // box's own `color`, its axis `--chart-axis`, and a candle `--chart-up` or
 // `--chart-down`, each if set. A count's line is curved; a price's is straight,
-// since a curve between two closes draws prices nobody paid.
+// since a curve between two closes draws prices nobody paid. Events are markers
+// on the point they fall in, so a spike carries the reason for it.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { AutoscaleInfo, IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
+import type { AutoscaleInfo, IChartApi, ISeriesApi, ISeriesMarkersPluginApi, SeriesMarker, Time, UTCTimestamp } from 'lightweight-charts';
 
 /**
  * One value at a time in Unix seconds, UTC. A price may carry the rest of its
@@ -25,6 +26,10 @@ export type ChartResolution = 'hour' | '4h' | 'day';
 export type ChartStep = 'day' | 'week' | 'month';
 /** Points by resolution, from `from` (Unix seconds, 0 for all time), oldest first. */
 export type ChartLoader = (resolution: ChartResolution, from: number) => Promise<readonly ChartPoint[]>;
+/** Something that happened at a time, in Unix seconds, drawn on the point that holds it. */
+export type ChartMarker = { time: number; label: string };
+/** The range and step a reader has picked, for a page that keeps them in its URL. */
+export type ChartView = { range: ChartRange; step: ChartStep | null };
 
 const DAY = 86_400;
 const RANGE: Record<ChartRange, { label: string; span: number; resolution: ChartResolution }> = {
@@ -89,6 +94,27 @@ export function bucketChart(points: readonly ChartPoint[], step: ChartStep, aggr
   return out;
 }
 
+/**
+ * Markers on the points drawn: each on the last point at or before it, so one
+ * mid-week sits on its week. Markers on one point share it, labels joined; one
+ * before the first point or after the last point's step is left off.
+ */
+export function placeMarkers(markers: readonly ChartMarker[], shown: readonly ChartPoint[], step: ChartStep | null): ChartMarker[] {
+  const first = shown[0];
+  const last = shown.at(-1);
+  if (!first || !last) return [];
+  const end = last.time + (step ? STEP[step].span : DAY);
+  const placed = new Map<number, string[]>();
+  for (const m of [...markers].sort((a, b) => a.time - b.time)) {
+    if (m.time < first.time || m.time >= end) continue;
+    let i = shown.length - 1;
+    while (i > 0 && shown[i]!.time > m.time) i--;
+    const time = shown[i]!.time;
+    placed.set(time, [...(placed.get(time) ?? []), m.label]);
+  }
+  return [...placed].map(([time, labels]) => ({ time, label: labels.join(' · ') }));
+}
+
 const isCandle = (p: ChartPoint) => p.open !== undefined && p.high !== undefined && p.low !== undefined;
 
 const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 2 });
@@ -138,6 +164,12 @@ export interface TimeChartProps {
    * window links, which load another digest rather than slice this one.
    */
   controls?: ReactNode;
+  /** Events drawn on the points that hold them. */
+  markers?: readonly ChartMarker[];
+  /** The step shown first, where the range can make it. */
+  step?: ChartStep;
+  /** Called with the range and step on mount and on every change. */
+  onView?: (view: ChartView) => void;
   className?: string;
 }
 
@@ -149,6 +181,9 @@ type Series = {
   candle: ISeriesApi<'Candlestick'>;
   volume: ISeriesApi<'Histogram'> | null;
   addVolume: () => ISeriesApi<'Histogram'>;
+  areaMarkers: ISeriesMarkersPluginApi<Time>;
+  candleMarkers: ISeriesMarkersPluginApi<Time>;
+  ink: string;
   up: string;
   down: string;
 };
@@ -169,15 +204,20 @@ export function TimeChart({
   candles: initialCandles = false,
   height,
   controls,
+  markers,
+  step: initialStep,
+  onView,
   className,
 }: TimeChartProps) {
   const box = useRef<HTMLDivElement>(null);
   const chart = useRef<Series | null>(null);
   const formatRef = useRef(format);
   formatRef.current = format;
+  const onViewRef = useRef(onView);
+  onViewRef.current = onView;
   const [ready, setReady] = useState(false);
   const [range, setRange] = useState(initial);
-  const [step, setStep] = useState<ChartStep | null>(null);
+  const [step, setStep] = useState<ChartStep | null>(initialStep ?? null);
   const [candles, setCandles] = useState(initialCandles);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const resolution = RANGE[range].resolution;
@@ -186,7 +226,7 @@ export function TimeChart({
     const el = box.current;
     if (!el) return;
     let disposed = false;
-    import('lightweight-charts').then(({ createChart, AreaSeries, CandlestickSeries, HistogramSeries, ColorType, CrosshairMode, LineStyle, LineType }) => {
+    import('lightweight-charts').then(({ createChart, createSeriesMarkers, AreaSeries, CandlestickSeries, HistogramSeries, ColorType, CrosshairMode, LineStyle, LineType }) => {
       if (disposed) return;
       const style = getComputedStyle(el);
       const axis = style.getPropertyValue('--chart-axis').trim();
@@ -244,7 +284,11 @@ export function TimeChart({
         api.panes()[1]?.setStretchFactor(1);
         return volume;
       };
-      chart.current = { api, area, candle, volume: null, addVolume, up, down };
+      chart.current = {
+        api, area, candle, volume: null, addVolume, up, down, ink,
+        areaMarkers: createSeriesMarkers(area, []),
+        candleMarkers: createSeriesMarkers(candle, []),
+      };
       setReady(true);
     });
     return () => {
@@ -309,7 +353,7 @@ export function TimeChart({
     if (!ready || !c || !source) return;
     const shown = view?.shown ?? [];
     const asCandles = candles && !!view?.ohlc;
-    const time = (p: ChartPoint) => p.time as UTCTimestamp;
+    const time = (p: { time: number }) => p.time as UTCTimestamp;
     // A point with no volume is a stretch nothing traded in: its candle and its bar leave the slot
     // empty rather than draw a flat dash. The last one always draws, as the price now.
     const idle = (p: ChartPoint, i: number) => p.volume === 0 && i < shown.length - 1;
@@ -333,8 +377,22 @@ export function TimeChart({
         return { time: time(p), value: p.volume ?? 0, color: (rising ? c.up : c.down).replace(/[\d.]+\)$/, '0.5)') };
       }),
     );
+    const drawn: SeriesMarker<Time>[] = placeMarkers(markers ?? [], shown, view?.step ?? null).map(m => ({
+      time: time(m),
+      position: 'aboveBar',
+      shape: 'arrowDown',
+      color: c.ink,
+      text: m.label,
+    }));
+    c.areaMarkers.setMarkers(asCandles ? [] : drawn);
+    c.candleMarkers.setMarkers(asCandles ? drawn : []);
     c.api.timeScale().fitContent();
-  }, [ready, source, view, candles]);
+  }, [ready, source, view, candles, markers]);
+
+  const shownStep = view?.step ?? null;
+  useEffect(() => {
+    onViewRef.current?.({ range, step: shownStep });
+  }, [range, shownStep]);
 
   // The steps always show where a range is drawn by day, so the buttons do not jump about; one
   // the range cannot make (any, under 24H and 7D) is disabled.
