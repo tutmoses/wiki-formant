@@ -47,7 +47,7 @@ const DAY_MS = 86_400_000;
 /** A script that runs a page's JavaScript and says what it is. */
 const BOT = /bot|crawl|spider|slurp|headless|lighthouse|prerender|preview/i;
 
-/** iPadOS reports itself as a Mac, so its views count as a computer's. */
+/** iPadOS reports itself as a Mac, so its views count as a computer's. @internal */
 export const deviceOf = (ua: string): 'phone' | 'tablet' | 'computer' =>
   /iPad|Tablet|Android(?!.*Mobile)/i.test(ua) ? 'tablet' : /Mobi|iPhone|Android/i.test(ua) ? 'phone' : 'computer';
 
@@ -56,6 +56,8 @@ const bareHost = (host: string) => host.toLowerCase().replace(/:\d+$/, '').repla
 /**
  * Where a visit came from: its `utm_source` when the link carried one, else the
  * referring host, and null for a referrer that is this site or none.
+ *
+ * @internal
  */
 export function sourceOf(referrer: unknown, utm: unknown, host: string): string | null {
   if (typeof utm === 'string' && utm.trim()) return utm.trim().toLowerCase().slice(0, 100);
@@ -68,7 +70,7 @@ export function sourceOf(referrer: unknown, utm: unknown, host: string): string 
   }
 }
 
-/** A browser path as stored: decoded, one leading slash, no trailing one. Null when it will not decode. */
+/** A browser path as stored: decoded, one leading slash, no trailing one. Null when it will not decode. @internal */
 export function normalisePath(path: string): string | null {
   try {
     const p = decodeURIComponent(path.split(/[?#]/)[0]!.slice(0, 500));
@@ -127,7 +129,7 @@ export interface ViewInput {
   site?: string;
 }
 
-/** Count one page view, unless a bot sent it. Never rejects. */
+/** Count one page view, unless a bot sent it. Never rejects. @internal */
 export function recordView(sql: Sql, { headers, path, referrer, utm, site = '' }: ViewInput): Promise<void> {
   const ua = headers.get('user-agent') ?? '';
   const page = normalisePath(path);
@@ -500,6 +502,8 @@ export interface SearchQueryInput {
  * event. The text is untrusted, so it is collapsed, lowercased for aggregation
  * and truncated – the same 64-character bound search itself applies, which
  * keeps the prop and the query that produced it the same string.
+ *
+ * @internal
  */
 export function searchQueryProps({
   query,

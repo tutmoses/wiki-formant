@@ -702,7 +702,7 @@ async function handleRpc(
   }
 }
 
-/** Dispatch a parsed body. `null` means notification-only — answer 202, not 200. */
+/** Dispatch a parsed body. `null` means notification-only — answer 202, not 200. @internal */
 export async function handleMcp(
   body: RpcRequest | RpcRequest[],
   config: McpServerConfig,

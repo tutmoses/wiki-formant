@@ -29,6 +29,8 @@ const clip = (t: string) => (t.length > KEPT_MAX ? `${t.slice(0, 30)}…${t.slic
  * Two HTML bodies as the words struck and added between them, or `undefined`
  * when their text is the same. Semantic cleanup is on: without it a rewritten
  * sentence comes out as fragments of the letters the two versions share.
+ *
+ * @internal
  */
 export function textDiff(from: string, to: string): DiffPart[] | undefined {
   const a = stripHtml(from);

@@ -263,9 +263,9 @@ const nextConfig = {
 
 Four configs had restated these by hand on the grounds that a config could not import an ESM-only package. It could not because no subpath had a `default` condition, and Next resolves a config's imports the way `require` does; every subpath has one now, and Node 24 loads the module there unchanged.
 
-`contentSecurityPolicy` starts from `BASE_CSP`, the policy all four origins shared line for line, and each directive passed replaces its default rather than appending, so the call site reads as the whole list. An empty list drops a directive.
+`contentSecurityPolicy` starts from the policy all four origins shared line for line, and each directive passed replaces its default rather than appending, so the call site reads as the whole list. An empty list drops a directive.
 
-The default `frame-src` is `frameSources(DEFAULT_IFRAME_HOSTS)` — the same list the sanitiser's `iframeHosts` defaults to. The sanitiser's comment had asked every config to keep the two matched by hand, and one did not: its policy lacked the bare `youtube.com` and `youtube-nocookie.com` its sanitiser kept, so those embeds survived cleaning and then rendered blank. A site with its own host list passes it to both.
+The default `frame-src` is `DEFAULT_IFRAME_HOSTS`, the same list the sanitiser's `iframeHosts` defaults to. The sanitiser's comment had asked every config to keep the two matched by hand, and one did not: its policy lacked the bare `youtube.com` and `youtube-nocookie.com` its sanitiser kept, so those embeds survived cleaning and then rendered blank. A site with its own host list passes it to the sanitiser and states the same hosts in its `frame-src`.
 
 ## Pagination and versioning
 
@@ -396,9 +396,9 @@ and a crawler obeys only its most-specific matching group, so an agent with no
 group of its own falls through to `*`. Three wikis were measuring five crawlers
 they had never addressed.
 
-Every agent group also allows `AGENT_SURFACE_PATHS` — `/api/mcp`, the three `llms` exports, `/openapi.json`, `/.well-known/` — without being told. `aiAllow` is what an origin serves beyond that.
+Every agent group also allows the agent surface — `/api/mcp`, the three `llms` exports, `/openapi.json`, `/.well-known/` — without being told. `aiAllow` is what an origin serves beyond that.
 
-`crawlerRules` returns every group robots.txt needs: the wildcard, one per AI crawler, and one each for `SEARCH_ENGINES`. Search engines get the HTML site and none of its twins — `/*.md$` always, plus `searchDisallow` — because the `*` group keeps the machine surface open to agents, and for Google a twin is a page it already has. Two origins wrote that group by hand and the third never did, so Google crawled its twins. `RSC_DISALLOW`, the `<Link>` prefetch payload, is refused in every group.
+`crawlerRules` returns every group robots.txt needs: the wildcard, one per AI crawler, and one for each search engine. Search engines get the HTML site and none of its twins — `/*.md$` always, plus `searchDisallow` — because the `*` group keeps the machine surface open to agents, and for Google a twin is a page it already has. Two origins wrote that group by hand and the third never did, so Google crawled its twins. The `<Link>` prefetch payload (`?_rsc=`) is refused in every group.
 
 `trackAiBot(request, event, load)` counts an `AI Bot Visit` inside `event.waitUntil`. `load` is a dynamic import because the tracker pulls in a database client, which a static import would load for every request the proxy sees.
 
@@ -514,7 +514,7 @@ each change on `data-action`; `base.css` only resets the list.
 
 Three repos, four feeds, 47 of 64 significant lines identical — including,
 verbatim in two of them, the comment explaining why the apostrophe escapes
-numerically. `renderFeed` is the union.
+numerically. `feedResponse` is the union.
 
 ```ts
 export const GET = async (request: Request) => feedResponse(request, channel, await items());
@@ -562,11 +562,11 @@ In React, `useArticlePasses(ref, [blocks])` runs the three passes and `useTweetE
 
 `scrollTables(html)` is the one table pass that runs on the string, before render: it wraps each stored table in a `.table-scroll` box, and `base.css` lets that box scroll sideways. A table box ignores `overflow`, so a table with an address or a URL in a cell is as wide as that token whatever its column, and a scroll box added by an effect would arrive after the table had already been laid out too wide. Call it on the render path beside `injectHeadingIds`. A table already in a box keeps it, so it is safe on HTML that has been through it once.
 
-`TWITTER_ORIGIN` is written down once. It is both the embed host and the allow-list `onTweetResize` checks before believing a posted height, and it had been spelled out at four call sites across two repos. Any page can `postMessage`; only the embed host may size the embed.
+The embed's origin is written down once. It is both the embed host and the allow-list `onTweetResize` checks before believing a posted height, and it had been spelled out at four call sites across two repos. Any page can `postMessage`; only the embed host may size the embed.
 
 ## Search
 
-`proseSql`, `searchTsvSql`, `HEADLINE_OPTIONS` and `FTS_RANK_NORMALIZATION` are what a literal tier and a full-text tier must agree on. `searchTsvDdl(table)` is the statements that build the generated `search_tsv` column and its index — dropped and re-added in one transaction every run, because a skip-if-present script is blind to a changed expression.
+`proseSql`, `HEADLINE_OPTIONS` and `FTS_RANK_NORMALIZATION` are what a literal tier and a full-text tier must agree on. `searchTsvDdl(table)` is the statements that build the generated `search_tsv` column and its index — dropped and re-added in one transaction every run, because a skip-if-present script is blind to a changed expression.
 
 ## Block trees
 
@@ -582,7 +582,7 @@ leafBlocks(blocks, BLOCK_SHAPE.containers);
 
 `computeRevisionDiff` defaults to the same shape, path-addressed, so a repo whose containers are the core two passes none.
 
-The dispatch over a repo's own block union stays in that repo; the bodies come from here. `wiki-formant/text` has a prose body for every core leaf — `statsToText`, `linkGridToText` and `pageListToText` joined the originals when two of the three wikis turned out to extract nothing from them, so their MCP `get_page` answered a hub page as nearly empty.
+The dispatch over a repo's own block union stays in that repo; the bodies come from here. `coreAtomicText` has a prose body for every core leaf — the stats, link-grid and page-list bodies joined the originals when two of the three wikis turned out to extract nothing from them, so their MCP `get_page` answered a hub page as nearly empty.
 
 The core leaves — `content`, `codeTabs`, `banner`, `references`, `stats`, `linkGrid`, `recentPages`, `pageList` — had the same case bodies in every wiki's text export, markdown twin, validator and new-block record. A repo's switch hands those cases over and keeps its own, so it stays exhaustive over its union:
 
@@ -628,7 +628,7 @@ A `codeTabs` tab's `code` is source text in every wiki here, and every view trea
 ```ts
 import { createHtmlSanitizer, sanitizeCoreLeaf } from 'wiki-formant/sanitize';
 
-const clean = createHtmlSanitizer({ iframeHosts: FRAME_HOSTS });   // and frameSources(FRAME_HOSTS) in the CSP
+const clean = createHtmlSanitizer({ iframeHosts: FRAME_HOSTS });   // and the same hosts in the CSP's frame-src
 const safe = mapBlockTree(blocks, b => sanitizeCoreLeaf(b, clean), BLOCK_SHAPE);
 ```
 
@@ -668,9 +668,9 @@ The language list defaults to `CODE_LANGS` and `DEFAULT_LANG` from `wiki-formant
 
 `createHeadingIds({ slug })` decorates each heading in the editor with the id its published copy will carry, through `uniqueHeadingId` — the dedupe `injectHeadingIds` uses — so a rail listing headings mid-edit links to the anchors readers will get. `uploadImageTo('/api/upload')` is the `uploadImage` two editors had written identically.
 
-`TOOLBAR_ACTIONS` are the formatting commands with the labels a screen reader announces — two toolbars titled buttons with the internal key, so one said "codeBlock". Pick yours in order with `toolbarActions([...])`, render each through `ToolbarButton` (named, and `aria-pressed`, since these are toggles), and run a table command with `runTableAction`. Upload and embed stay with the caller; they are the parts that differ.
+`toolbarActions([...])` picks the formatting commands, in order, with the labels a screen reader announces — two toolbars titled buttons with the internal key, so one said "codeBlock". Render each through `ToolbarButton` (named, and `aria-pressed`, since these are toggles), and run a table command with `runTableAction`. Upload and embed stay with the caller; they are the parts that differ.
 
-`useUrlPrompt(editor, { resolveMapUrl })` is the link and embed address field under a toolbar, in place of a `window.prompt` that blocks the page and cannot show the link the cursor is in. Three editors had written it and one still used the prompt; only one copy both opened a link field on the current address and unlinked on an emptied one. The hook carries both, closes the field when the editor it serves changes (a toolbar shared between blocks would otherwise apply it to the wrong one), and leaves the markup to you. `applyUrlPrompt` is what it runs, exported for a toolbar that keeps its own state.
+`useUrlPrompt(editor, { resolveMapUrl })` is the link and embed address field under a toolbar, in place of a `window.prompt` that blocks the page and cannot show the link the cursor is in. Three editors had written it and one still used the prompt; only one copy both opened a link field on the current address and unlinked on an emptied one. The hook carries both, closes the field when the editor it serves changes (a toolbar shared between blocks would otherwise apply it to the wrong one), and leaves the markup to you.
 
 ```tsx
 const url = useUrlPrompt(editor, { resolveMapUrl });
@@ -678,7 +678,7 @@ const url = useUrlPrompt(editor, { resolveMapUrl });
 {url.kind && <input autoFocus value={url.value} onChange={e => url.setValue(e.target.value)} onKeyDown={url.onKeyDown} />}
 ```
 
-A link is stored as its `href` and the `link` class, nothing else (`wikiLink`). Stock Tiptap writes `target="_blank" rel="noopener noreferrer nofollow"` onto every link, internal ones included, which on a site throws away its own link equity and opens in-site navigation in new tabs. Whether a link is external depends on the host serving the page, so `normaliseLinks` decides it at render time. A legacy link loses both attributes the next time its page is saved.
+A link is stored as its `href` and the `link` class, nothing else. Stock Tiptap writes `target="_blank" rel="noopener noreferrer nofollow"` onto every link, internal ones included, which on a site throws away its own link equity and opens in-site navigation in new tabs. Whether a link is external depends on the host serving the page, so `normaliseLinks` decides it at render time. A legacy link loses both attributes the next time its page is saved.
 
 The redirect resolves through the wiki's own route, because the editor cannot read it cross-origin. `resolveMapUrl` is the client half and `resolveMapHandler` the whole route: exact shortener hosts, one hop, an allowlisted landing host, a timeout, and your sign-in check as `authorize`. One of the two copies it replaced matched `goo.gl` as a substring and followed every redirect for anyone who asked.
 
@@ -729,14 +729,12 @@ any other browser event. Underneath the tracker, server code calls
 its zero-dependency guarantee:
 
 ```ts
-const props = searchQueryProps({ query, results: rows.length, surface: 'wiki' });
-// null for an empty field, so a blank search cannot fire an event
-if (props) after(() => recordEvent(sql, { name: 'Search Query', props, url, headers }));
+after(() => recordEvent(sql, { name: 'Signup', props: { plan }, url, headers }));
 ```
 
 `mcpCallProps` reads a tool name out of a JSON-RPC envelope that is untrusted
-and may be a batch; `searchQueryProps` normalises a search box's free text so
-the same question aggregates as one row. Pass the request's headers and the
+and may be a batch; `trackSearch` normalises a search box's free text so
+the same question aggregates as one row, and drops an empty one. Pass the request's headers and the
 event joins whoever sent it, person or agent.
 
 `digest(sql, { days })` reads a site back as one JSON object: visitors, page
@@ -857,11 +855,11 @@ straight between closes and a count's is curved.
 `aggregate` is how a week or month is made from its days: `last` for a price,
 `mean` for a count, so the week in progress keeps its level instead of reading
 as a collapse. A single range draws no range buttons and shows every point.
-`bucketChart` and `chartSteps` are exported for a chart drawn elsewhere.
+`chartSteps` is exported for a chart drawn elsewhere.
 
 `markers` are events, `{ time, label }`, each drawn as an arrow on the last
 point at or before it, so one mid-week lands on its week and two on one point
-share it (`placeMarkers` does the placing). `step` opens on a step where the
+share it. `step` opens on a step where the
 range can make it, and `onView` hears the range and step on mount and on every
 change, for a page that keeps them in its URL:
 
@@ -890,7 +888,8 @@ and there is no root export: `import … from 'wiki-formant'` does not resolve. 
 barrel loads every module it names for the one symbol a route wanted, and had
 already re-exported one module twice. The emitted `.d.ts` files are the reference.
 There is no hand-maintained symbol list here, because the one that used to be here
-drifted from them.
+drifted from them. A function a module uses only itself is marked `@internal`: the
+package's tests still reach it, and the `.d.ts` leaves it out.
 
 `wiki-formant/tsconfig.base.json` is the compiler floor: an app's `tsconfig.json` extends it and keeps only `paths`, `include`, `exclude` and any licensed extra, since tsconfig resolves those against the file that declares them.
 

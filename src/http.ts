@@ -170,6 +170,8 @@ export const VARY_ACCEPT = { Vary: 'Accept' } as const;
  * revalidate, so a corrected card takes an unbounded time to reach anyone.
  * Every one is public and read by browser agents too, so each allows any
  * origin; six of the nine routes passed that by hand and three did not.
+ *
+ * @internal
  */
 export function descriptorHeaders(
   etag: string,

@@ -20,6 +20,8 @@ function mapsEmbedUrl(lat: number, lon: number, zoom = 15): string {
  * Dig a coordinate pair out of a maps URL. Four shapes in descending
  * specificity: the `@lat,lon,zoom` path segment, a `/search/lat,lon`, the
  * `!3d…!4d…` data blob, and finally an `ll`/`sll` query parameter.
+ *
+ * @internal
  */
 export function extractCoordsFromUrl(url: string): MapCoords | null {
   const coords = url.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*),?(\d+\.?\d*)?z?/);

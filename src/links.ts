@@ -21,6 +21,8 @@ import { getAttr, removeAttr, stripTags } from './html.js';
 /**
  * A readable label for an anchor whose text is empty, derived from its href.
  * Without one, crawlers and screen readers meet a link with nothing in it.
+ *
+ * @internal
  */
 export function fallbackAnchorText(href: string): string {
   if (href.startsWith('#')) return href.slice(1).replace(/-/g, ' ') || 'section';

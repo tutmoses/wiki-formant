@@ -261,6 +261,8 @@ export function RelatedPages({ pages, heading, href, link: Link = Anchor, id = '
  * `<` as its JSON escape closes that; every JSON parser decodes it back, so the
  * data a crawler reads is unchanged. One of the three wikis did this; the
  * other two, and this package's own breadcrumb trail, did not.
+ *
+ * @internal
  */
 export function jsonLdScript(data: unknown): string {
   return JSON.stringify(data).replace(/</g, '\\u003c');

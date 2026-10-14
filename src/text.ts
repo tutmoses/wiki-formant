@@ -100,17 +100,17 @@ export function bannerVariant(variant: string): BannerVariant {
   return Object.hasOwn(BANNER_LABELS, variant) ? (variant as BannerVariant) : 'cleanup';
 }
 
-/** A maintenance notice, inline: `[Notice: Needs citations] …`. */
+/** A maintenance notice, inline: `[Notice: Needs citations] …`. @internal */
 export function bannerToText(label: string, text?: string | null): string {
   return `[Notice: ${label}]${text ? ' ' + stripHtml(text) : ''}`;
 }
 
-/** Each tab under its label, tags stripped — highlighted markup is noise here. */
+/** Each tab under its label, tags stripped — highlighted markup is noise here. @internal */
 export function codeTabsToText(tabs: readonly CodeTab[]): string {
   return tabs.map(t => `[${t.label}]\n${t.code}`).join('\n');
 }
 
-/** Metric cards, one per line: `99% Uptime`. */
+/** Metric cards, one per line: `99% Uptime`. @internal */
 export function statsToText(items: readonly StatItem[]): string {
   return items.map(s => `${s.value}${s.suffix ?? ''} ${s.label}`).join('\n');
 }
@@ -122,6 +122,8 @@ export function statsToText(items: readonly StatItem[]): string {
  * Two of the three wikis extracted nothing from a link grid, or from stats or
  * page lists, so a hub page read to an agent as far emptier than it is. The
  * third had its own three bodies. These are those bodies.
+ *
+ * @internal
  */
 export function linkGridToText(groups: readonly LinkGridGroup[], intro?: string | null): string {
   return [
@@ -136,12 +138,12 @@ export function linkGridToText(groups: readonly LinkGridGroup[], intro?: string 
   ].join('\n\n');
 }
 
-/** A resolved page list: one title per line. */
+/** A resolved page list: one title per line. @internal */
 export function pageListToText(pages: readonly { title: string }[]): string {
   return pages.map(p => p.title).join('\n');
 }
 
-/** A numbered reference list, or `''` when there are none. */
+/** A numbered reference list, or `''` when there are none. @internal */
 export function referencesToText(items: readonly ReferenceItem[]): string {
   if (!items.length) return '';
   const lines = items.map((it, i) => `${i + 1}. ${stripHtml(it.text)}${it.url ? ` (${it.url})` : ''}`);

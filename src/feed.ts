@@ -32,6 +32,8 @@ export const escXml = (s: string): string => s.replace(/[&<>"']/g, c => XML_ESCA
  * `content:encoded` carries raw HTML, so it travels inside CDATA. A literal
  * `]]>` in the body would close the section early and corrupt every item after
  * it — not just the one that contained it.
+ *
+ * @internal
  */
 export const cdata = (html: string): string => `<![CDATA[${html.replace(/]]>/g, ']]&gt;')}]]>`;
 
@@ -109,6 +111,8 @@ export interface FeedChannel {
  * A feed whose build date moves on every request tells every poller it changed
  * when it did not, which is exactly the recrawl the conditional-GET helpers
  * exist to prevent. An empty feed has no build date rather than a fictional one.
+ *
+ * @internal
  */
 export function renderFeed(channel: FeedChannel, items: readonly FeedItem[]): string {
   const newest = lastBuild(channel, items);

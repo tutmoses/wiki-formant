@@ -18,6 +18,7 @@ export interface FreshnessInput {
   updatedAt?: Date | string | null;
 }
 
+/** @internal */
 export const DEFAULT_MAX_AGE_DAYS = 180;
 
 const DAY_MS = 86_400_000;
@@ -44,6 +45,8 @@ export function isStale(page: FreshnessInput, now: number, maxAgeDays = DEFAULT_
  * The sentence the notice carries. Both wikis shipped this string identically,
  * down to the ISO date and the closing request, so it lives here rather than
  * being re-typed either side of the extraction.
+ *
+ * @internal
  */
 export function freshnessNotice(page: FreshnessInput): string {
   const when = page.lastVerifiedAt

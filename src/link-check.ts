@@ -59,6 +59,8 @@ const TLS_CODES = new Set([
  * Codes that flap. A sweep found 16 status-0 rows and 15 were one host, every
  * one answering 200 when probed alone. Carry the code through so a caller can
  * treat these as retryable rather than banking a death.
+ *
+ * @internal
  */
 export const TRANSIENT_CODES = new Set([
   'UND_ERR_CONNECT_TIMEOUT',
@@ -74,7 +76,7 @@ export const TRANSIENT_CODES = new Set([
 
 type CausedError = Error & { cause?: { code?: string }; code?: string };
 
-/** A failure as a report row: the message, the code, and the TLS caveat. */
+/** A failure as a report row: the message, the code, and the TLS caveat. @internal */
 export function describeFailure(err: unknown): Pick<Probe, 'error' | 'code' | 'tls' | 'note'> {
   const e = err as CausedError;
   if (e?.name === 'AbortError') return { error: 'timeout' };
@@ -97,6 +99,8 @@ export function describeFailure(err: unknown): Pick<Probe, 'error' | 'code' | 't
  * npmjs.com serves 403 to scripted requests whether or not the package exists,
  * which made every package citation a permanent false positive. The registry
  * answers honestly.
+ *
+ * @internal
  */
 export function probeUrlFor(url: string): string {
   const npm = url.match(/^https:\/\/(?:www\.)?npmjs\.com\/package\/(.+?)\/?$/);
@@ -268,7 +272,7 @@ export function extractLinks(html: string): Array<{ href: string; text: string }
   return out;
 }
 
-/** Every `<iframe>` and `<img>` source in a fragment. */
+/** Every `<iframe>` and `<img>` source in a fragment. @internal */
 export function extractEmbeds(html: string): Array<{ kind: string; url: string }> {
   const out: Array<{ kind: string; url: string }> = [];
   for (const m of html.matchAll(EMBED_RE)) {

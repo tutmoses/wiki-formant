@@ -127,6 +127,8 @@ export function headingsFrom(html: string): Heading[] {
  * question: which headings a rail can link to, which is why it drops the ones
  * with no id. An audit must not, because a chrome heading with no id still
  * takes a level in the outline, and the levels are the thing under test.
+ *
+ * @internal
  */
 export function headingOutline(html: string): Heading[] {
   const out: Heading[] = [];

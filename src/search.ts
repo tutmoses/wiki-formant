@@ -51,6 +51,8 @@ export function proseSql(content = 'content'): string {
  * The `regexp_replace` pattern inside {@link proseSql}, as it must appear in
  * SQL. Written for a single-quoted SQL string literal, so a backslash that
  * Postgres' regex engine should see as an escape is doubled here.
+ *
+ * @internal
  */
 export const PROSE_PATTERN = '<[^>]*>|&nbsp;|\\\\[nrt"\\\\/]|", "|\\["|"\\]';
 
@@ -58,6 +60,8 @@ export const PROSE_PATTERN = '<[^>]*>|&nbsp;|\\\\[nrt"\\\\/]|", "|\\["|"\\]';
  * The generated column behind the full-text tier: title at weight A, prose at
  * weight B, so a title hit outranks a body hit inside tier 3 as well as across
  * tiers.
+ *
+ * @internal
  */
 export function searchTsvSql(content = 'content', title = 'title'): string {
   return `setweight(to_tsvector('english', coalesce(${title},'')), 'A') || ` +

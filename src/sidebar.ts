@@ -51,6 +51,8 @@ export const SIDEBAR_ATTRIBUTE = 'data-sidebar';
  *
  * All three wikis matched by hand and all three happened to be right; nothing
  * said so. Declaring this property is what opts a stylesheet into the check.
+ *
+ * @internal
  */
 export const RAIL_FLOATING_PROPERTY = '--rail-floating';
 

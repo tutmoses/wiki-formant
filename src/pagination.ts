@@ -85,11 +85,6 @@ export function listEnvelope<T>(
   };
 }
 
-/** The `skip`/`take` an ORM wants, from the same clamped pair. */
-export function toOffset({ page, pageSize }: Pagination): { skip: number; take: number } {
-  return { skip: (page - 1) * pageSize, take: pageSize };
-}
-
 /**
  * The entries either side of the current one in an already-ordered list.
  *

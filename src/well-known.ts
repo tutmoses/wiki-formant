@@ -40,6 +40,8 @@ export interface RegistryAuthRecord {
  *
  *   openssl genpkey -algorithm Ed25519 -out key.pem
  *   openssl pkey -in key.pem -pubout -outform DER | tail -c 32 | base64
+ *
+ * @internal
  */
 export function registryAuthRecord(publicKey?: string, keyType?: string): RegistryAuthRecord | null {
   if (!publicKey) return null;
@@ -172,6 +174,7 @@ export interface ServerManifest {
   remotes?: ReadonlyArray<Record<string, unknown>>;
 }
 
+/** @internal */
 export const SERVER_CARD_SCHEMA =
   'https://static.modelcontextprotocol.io/schemas/draft/server-card.schema.json';
 

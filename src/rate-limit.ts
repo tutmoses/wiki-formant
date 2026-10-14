@@ -219,7 +219,7 @@ export function withRateLimit<T extends Response>(
   return res;
 }
 
-/** Test seam: the bucket map is module state and outlives a single test. */
+/** Test seam: the bucket map is module state and outlives a single test. @internal */
 export function resetRateLimits(): void {
   buckets.clear();
   blocks.clear();
@@ -239,6 +239,8 @@ export function resetRateLimits(): void {
  *
  * A surface with a genuine reason to differ passes its own `RateLimitOptions`.
  * What it must not do is restate this one.
+ *
+ * @internal
  */
 export const MCP_RATE_LIMIT_PER_MIN = 60;
 

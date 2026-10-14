@@ -34,7 +34,7 @@ export function safeLinkHref(raw: string | null | undefined): string | null {
   return href;
 }
 
-/** An author-supplied URL is fine iff it is empty (unset) or resolves safely. */
+/** An author-supplied URL is fine iff it is empty (unset) or resolves safely. @internal */
 export const okUrl = (u: unknown): boolean =>
   typeof u === 'string' && (u === '' || safeLinkHref(u) !== null);
 
@@ -70,7 +70,7 @@ export function validateLinkGroups(groups: unknown): boolean {
   );
 }
 
-/** `[{ label, language?, code }]` — a code-tabs block's tabs. `code` renders as HTML. */
+/** `[{ label, language?, code }]` — a code-tabs block's tabs. `code` renders as HTML. @internal */
 export function validateCodeTabs(tabs: unknown): boolean {
   return (
     Array.isArray(tabs) &&
@@ -84,7 +84,7 @@ export function validateCodeTabs(tabs: unknown): boolean {
   );
 }
 
-/** `[{ value, label, suffix? }]` — a stats block's cards. */
+/** `[{ value, label, suffix? }]` — a stats block's cards. @internal */
 export function validateStatItems(items: unknown): boolean {
   return (
     Array.isArray(items) &&

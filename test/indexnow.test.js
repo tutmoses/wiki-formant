@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sitemapEntries, changedUrls, submitIndexNow, INDEXNOW_BATCH, INDEXNOW_ENDPOINT } from 'wiki-formant/indexnow';
+import { sitemapEntries, changedUrls, submitIndexNow, INDEXNOW_BATCH, INDEXNOW_ENDPOINT } from '../dist/indexnow.js';
 
 const recorder = (status = 200) => {
   const calls = [];

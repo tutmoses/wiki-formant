@@ -73,6 +73,8 @@ function bucketStart(time: number, step: ChartStep): number {
  * step, as a candle does its close: the first open, the highest high, the
  * lowest low. A count takes the mean of its days, so the week in progress does
  * not read as a collapse. Volume is summed.
+ *
+ * @internal
  */
 export function bucketChart(points: readonly ChartPoint[], step: ChartStep, aggregate: 'last' | 'mean'): ChartPoint[] {
   const out: ChartPoint[] = [];
@@ -98,6 +100,8 @@ export function bucketChart(points: readonly ChartPoint[], step: ChartStep, aggr
  * Markers on the points drawn: each on the last point at or before it, so one
  * mid-week sits on its week. Markers on one point share it, labels joined; one
  * before the first point or after the last point's step is left off.
+ *
+ * @internal
  */
 export function placeMarkers(markers: readonly ChartMarker[], shown: readonly ChartPoint[], step: ChartStep | null): ChartMarker[] {
   const first = shown[0];

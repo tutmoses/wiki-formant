@@ -73,7 +73,7 @@ export function inlineToMarkdown(html: string): string {
     .trim();
 }
 
-/** One `<table>` → a GFM table. Falls back to nothing when there are no rows. */
+/** One `<table>` → a GFM table. Falls back to nothing when there are no rows. @internal */
 export function tableToMarkdown(html: string): string {
   const rows = [...html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)].map(m =>
     [...m[1]!.matchAll(/<(t[hd])\b[^>]*>([\s\S]*?)<\/\1>/gi)].map(c =>

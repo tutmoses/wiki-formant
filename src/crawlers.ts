@@ -31,6 +31,8 @@ export interface AiCrawler {
 /**
  * Order is significant: `detectAiBot` returns the first token the user agent
  * contains, so a token that is a substring of another must come after it.
+ *
+ * @internal
  */
 export const AI_CRAWLERS: readonly AiCrawler[] = [
   { token: 'GPTBot', label: 'GPTBot', fetches: true },
@@ -57,7 +59,7 @@ export const AI_CRAWLERS: readonly AiCrawler[] = [
   { token: 'Applebot-Extended', label: 'AppleExtended', fetches: false },
 ];
 
-/** The event label for a user agent, or null when it is not a known crawler. */
+/** The event label for a user agent, or null when it is not a known crawler. @internal */
 export function detectAiBot(userAgent: string | null | undefined): string | null {
   if (!userAgent) return null;
   for (const crawler of AI_CRAWLERS) {
@@ -66,7 +68,7 @@ export function detectAiBot(userAgent: string | null | undefined): string | null
   return null;
 }
 
-/** Every token that needs its own robots.txt group — which is all of them. */
+/** Every token that needs its own robots.txt group — which is all of them. @internal */
 export function aiCrawlerTokens(): string[] {
   return AI_CRAWLERS.map(c => c.token);
 }
@@ -86,6 +88,8 @@ export interface RobotsGroup {
  * The agent surface an S10 origin serves, allowed in every group. All three
  * `robots.ts` files listed these by hand, and a path missing from one list is
  * an endpoint the origin advertises and then closes to the callers it named.
+ *
+ * @internal
  */
 export const AGENT_SURFACE_PATHS: readonly string[] = [
   '/api/mcp',
@@ -101,10 +105,12 @@ export const AGENT_SURFACE_PATHS: readonly string[] = [
  * renders a page runs those prefetches too — 43% of Googlebot's requests on
  * one wiki, against 10% for HTML — and nothing that reads robots.txt can use
  * one. Every group gets it.
+ *
+ * @internal
  */
 export const RSC_DISALLOW: readonly string[] = ['/*?_rsc=', '/*&_rsc='];
 
-/** The search engines that get the HTML site and none of its twins. */
+/** The search engines that get the HTML site and none of its twins. @internal */
 export const SEARCH_ENGINES: readonly string[] = ['Googlebot', 'Bingbot'];
 
 /**

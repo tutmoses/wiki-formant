@@ -92,6 +92,8 @@ function cleanPastedHtml(html: string): string {
  * which the editor cannot know, so the render path decides: `normaliseLinks`
  * from `wiki-formant/links`. Dropping both attributes from the mark also cleans
  * a legacy link the next time its page is saved.
+ *
+ * @internal
  */
 export const wikiLink = TiptapLink.extend({
   addAttributes() {
@@ -161,7 +163,7 @@ const SHORT_MAP = /maps\.app\.goo\.gl|goo\.gl\/maps/;
  * swap re-finds the node by its `url` attribute rather than caching a position,
  * because every keystroke between the paste and the resolve moves it.
  */
-export function insertEmbed(
+function insertEmbed(
   editor: Editor,
   url: string,
   { resolveMapUrl }: { resolveMapUrl: (url: string) => Promise<string | null> },
@@ -251,6 +253,8 @@ export interface ToolbarAction {
  * two titled their buttons with the internal key — a screen reader said
  * "codeBlock", and inline code and code block shared one icon and one name.
  * Upload and embed stay with the caller: they are the parts that differ.
+ *
+ * @internal
  */
 export const TOOLBAR_ACTIONS: readonly ToolbarAction[] = [
   { key: 'bold', label: 'Bold', active: 'bold', run: e => e.chain().focus().toggleBold().run() },
@@ -327,6 +331,8 @@ export type UrlPromptKind = 'link' | 'embed';
  * the link the cursor is in, across the whole link rather than the collapsed
  * selection, and an emptied address takes it off while keeping the text. An
  * embed with no address does nothing.
+ *
+ * @internal
  */
 export function applyUrlPrompt(
   editor: Editor,

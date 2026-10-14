@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { corpusEtag, corpusValidatorsFrom, notModified, textHeaders, markdownHeaders, descriptorHeaders, descriptorResponse, cleanSnippet, pageLine } from 'wiki-formant/http';
-import { parsePagination, paginatedResponse, listEnvelope, toOffset, adjacentPages } from 'wiki-formant/pagination';
+import { parsePagination, paginatedResponse, listEnvelope, adjacentPages } from 'wiki-formant/pagination';
 import { parseVersion, formatVersion, bump, compareVersions } from 'wiki-formant/versioning';
 import { documentTitle, fittingTitle, TITLE_BUDGET, TITLE_LIMIT } from 'wiki-formant/metadata';
 
@@ -62,10 +62,6 @@ test('the paginated response always carries totalPages', () => {
   const r = paginatedResponse(['a'], 45, 2, 20);
   assert.deepEqual(Object.keys(r).sort(), ['items', 'page', 'pageSize', 'total', 'totalPages']);
   assert.equal(r.totalPages, 3);
-});
-
-test('toOffset derives skip/take from the same clamped pair', () => {
-  assert.deepEqual(toOffset({ page: 3, pageSize: 20 }), { skip: 40, take: 20 });
 });
 
 test('versions parse tolerantly and bump correctly', () => {

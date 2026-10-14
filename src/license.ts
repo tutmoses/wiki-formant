@@ -57,6 +57,8 @@ export interface LicenseBlockOptions {
  * Returned as an array rather than a string because every caller splices it
  * into a document it is already building line by line, and a caller that wants
  * the string can join it.
+ *
+ * @internal
  */
 export function licenseLines({
   license,

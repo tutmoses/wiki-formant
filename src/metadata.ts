@@ -270,6 +270,8 @@ export const TITLE_BUDGET = 60;
  * characters on a working group and reached 93, and the symptom pages on
  * acuiq.com reached 88 before naming the symptom. That is the line worth
  * failing a build over; the band below it is worth reporting and no more.
+ *
+ * @internal
  */
 export const TITLE_LIMIT = 70;
 

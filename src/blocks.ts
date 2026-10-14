@@ -292,12 +292,12 @@ export function codeTabsToMarkdown(tabs: readonly CodeTab[]): string {
     .join('\n\n');
 }
 
-/** A maintenance notice as a blockquote. `label` is the caller's display string. */
+/** A maintenance notice as a blockquote. `label` is the caller's display string. @internal */
 export function bannerToMarkdown(label: string, text?: string | null): string {
   return `> **[${label}]**${text ? ` ${inlineToMarkdown(text)}` : ''}`;
 }
 
-/** A numbered citation list, or `''` when there is nothing to cite. */
+/** A numbered citation list, or `''` when there is nothing to cite. @internal */
 export function referencesToMarkdown(
   items: readonly ReferenceItem[],
   title = 'References',
@@ -315,7 +315,7 @@ export function statsToMarkdown(items: readonly StatItem[]): string {
   return items.map(s => `- **${s.value}${s.suffix ?? ''}** — ${s.label}`).join('\n');
 }
 
-/** Grouped links under their headings, with an optional lead paragraph. */
+/** Grouped links under their headings, with an optional lead paragraph. @internal */
 export function linkGridToMarkdown(
   groups: readonly LinkGridGroup[],
   intro?: string | null,

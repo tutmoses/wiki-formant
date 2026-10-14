@@ -162,13 +162,13 @@ const DEFAULT_ALPHA_INDEX_MIN_PAGES = 40;
 const metaValue = (page: FacetablePage, key: string): string =>
   ((page.metadata as Record<string, string> | null | undefined)?.[key] ?? '').trim();
 
-/** Bucket for titles that don't start with a letter (numerals, `$CAPER`). */
+/** Bucket for titles that don't start with a letter (numerals, `$CAPER`). @internal */
 export function firstLetter(title: string): string {
   const ch = title.trim()[0]?.toUpperCase() ?? '';
   return ch >= 'A' && ch <= 'Z' ? ch : '#';
 }
 
-/** Adding a filter already active removes it, so every chip is its own off-switch. */
+/** Adding a filter already active removes it, so every chip is its own off-switch. @internal */
 export function toggleFilter(filters: FacetFilters, key: string, value: string): FacetFilters {
   const next = { ...filters };
   if (next[key] === value) delete next[key];

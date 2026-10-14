@@ -97,11 +97,6 @@
       "import": "./dist/combobox.js",
       "default": "./dist/combobox.js"
     },
-    "./indexnow": {
-      "types": "./dist/indexnow.d.ts",
-      "import": "./dist/indexnow.js",
-      "default": "./dist/indexnow.js"
-    },
     "./crawlers": {
       "types": "./dist/crawlers.d.ts",
       "import": "./dist/crawlers.js",

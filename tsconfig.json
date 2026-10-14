@@ -21,7 +21,8 @@
     "types": [
       "node"
     ],
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "stripInternal": true
   },
   "include": [
     "src"

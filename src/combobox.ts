@@ -63,10 +63,12 @@ export interface ComboboxAria {
 
 /** The id of one option row. Exported because a caller that scrolls the
  *  highlighted row into view has to find it by the same id the input points at. */
+/** @internal */
 export function optionId(baseId: string, listKey: string | undefined, index: number): string {
   return `${listId(baseId, listKey)}-opt-${index}`;
 }
 
+/** @internal */
 export function listId(baseId: string, listKey?: string): string {
   return listKey ? `${baseId}-${listKey}` : `${baseId}-list`;
 }

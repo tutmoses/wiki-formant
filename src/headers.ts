@@ -32,7 +32,7 @@ export const DEFAULT_IFRAME_HOSTS: readonly string[] = [
   'embed.apple.com', 'maps.apple.com',
 ];
 
-/** `frame-src` sources for a host list — the one a sanitiser was given. */
+/** `frame-src` sources for a host list — the one a sanitiser was given. @internal */
 export const frameSources = (hosts: readonly string[] = DEFAULT_IFRAME_HOSTS): string[] =>
   hosts.length ? hosts.map(h => `https://${h}`) : ["'none'"];
 
@@ -46,6 +46,8 @@ export type CspDirective =
  * The policy all four origins shared line for line. Everything a site adds is
  * a source list it hands `contentSecurityPolicy`, which replaces the default
  * for that directive rather than appending, so a reader sees the whole list.
+ *
+ * @internal
  */
 export const BASE_CSP: Readonly<Partial<Record<CspDirective, readonly string[]>>> = {
   'default-src': ["'self'"],

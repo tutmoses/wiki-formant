@@ -209,6 +209,8 @@ export function diffBlocks<B extends DiffBlock, L = unknown>(
  *
  * A `modified` change is only ever recorded when `diffAttributes` returned
  * something, so a non-empty change set is always at least a minor bump.
+ *
+ * @internal
  */
 export function classifyChanges(
   changes: readonly BlockChange<unknown>[],
