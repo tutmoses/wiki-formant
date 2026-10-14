@@ -24,6 +24,7 @@ import { toMapEmbedUrl } from './maps.js';
 import { useClickOutside } from './react.js';
 import { cx } from './html.js';
 import { slugifyHeading, uniqueHeadingId } from './headings.js';
+import { CODE_LANGS, DEFAULT_LANG } from './blocks.js';
 
 /** Local `cn`. Both wikis import one; the package will not depend on one. */
 
@@ -262,9 +263,10 @@ export interface CodeBlockClassNames {
 }
 
 export interface CodeBlockOptions {
-  /** Selectable languages. Each wiki's own list, from its block-utils. */
-  langs: readonly string[];
-  defaultLang: string;
+  /** Selectable languages. Default `CODE_LANGS`. */
+  langs?: readonly string[];
+  /** Default `DEFAULT_LANG`. */
+  defaultLang?: string;
   classNames?: CodeBlockClassNames;
   icons?: {
     lang?: ReactNode;
@@ -276,11 +278,11 @@ export interface CodeBlockOptions {
 
 /** A code block whose language is pickable from a dropdown. */
 export function createCodeBlock({
-  langs,
-  defaultLang,
+  langs = CODE_LANGS,
+  defaultLang = DEFAULT_LANG,
   classNames = {},
   icons = {},
-}: CodeBlockOptions) {
+}: CodeBlockOptions = {}) {
   function CodeBlockView({
     node,
     updateAttributes,

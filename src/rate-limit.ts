@@ -147,6 +147,14 @@ export function clientKey(prefix: string, headers: HeaderReader): string {
   return `${prefix}:${clientIp(headers)}`;
 }
 
+/**
+ * `rateLimit` on the caller's address under `prefix`: the per-IP gate a dozen
+ * call sites across four apps wrote out as `rateLimit(clientKey(…), opts)`.
+ */
+export function limitClient(prefix: string, headers: HeaderReader, opts: RateLimitOptions): RateLimitResult {
+  return rateLimit(clientKey(prefix, headers), opts);
+}
+
 /** The message a 429 body carries, so every surface refuses in the same words. */
 export function retryMessage(retryAfterSec: number): string {
   return `Too many requests. Try again in ${retryAfterSec}s.`;

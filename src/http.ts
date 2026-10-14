@@ -168,6 +168,8 @@ export const VARY_ACCEPT = { Vary: 'Accept' } as const;
  * ones that had no validator at all: served as `Cache-Control: public` with no
  * `max-age`, a caller falls back to heuristic freshness and can never
  * revalidate, so a corrected card takes an unbounded time to reach anyone.
+ * Every one is public and read by browser agents too, so each allows any
+ * origin; six of the nine routes passed that by hand and three did not.
  */
 export function descriptorHeaders(
   etag: string,
@@ -178,6 +180,7 @@ export function descriptorHeaders(
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': `public, max-age=300, s-maxage=${maxAge}, stale-while-revalidate=${maxAge * 7}`,
     ETag: etag,
+    'Access-Control-Allow-Origin': '*',
     ...opts.extra,
   };
 }

@@ -219,6 +219,8 @@ export async function GET(request: Request) {
 }
 ```
 
+`descriptorResponse` and `descriptorHandler` serve a JSON descriptor (an agent card, a manifest, an OpenAPI document) with its own ETag and `Access-Control-Allow-Origin: *`, since every descriptor is public and browser agents read them; six of nine routes had passed the header by hand.
+
 `corpusValidatorsFrom(seed, stamps)` is that pair from an aggregate: the newest of `stamps` (the epoch when every one is null), appended to `seed` for the tag. `corpusRoute(validators, build)` is the whole handler, and skips the build on a 304.
 
 ```ts
@@ -634,13 +636,12 @@ Classes pass by name only. Limiting `style` to layout and paint is worth nothing
 
 ```ts
 const CodeBlock = createCodeBlock({
-  langs: CODE_LANGS, defaultLang: DEFAULT_LANG,
   classNames: { button: 'lang-btn', option: 'lang-option', optionActive: 'text-accent' },
   icons: { chevron: open => <ChevronDown className={open ? 'rotate-180' : ''} /> },
 });
 ```
 
-The ones that take config take it because that is exactly where the two copies differed — class tokens, the language list, and the API route a shortened map URL has to be resolved through. Injecting them is what lets one wiki keep `text-jupiter` and the other `text-accent` without either forking the node, and it keeps this file from dragging an icon library in behind it.
+The language list defaults to `CODE_LANGS` and `DEFAULT_LANG` from `wiki-formant/blocks`, which two wikis had typed identically; a wiki with its own passes `langs` and `defaultLang`. The ones that take config take it because that is exactly where the two copies differed — class tokens, the language list, and the API route a shortened map URL has to be resolved through. Injecting them is what lets one wiki keep `text-jupiter` and the other `text-accent` without either forking the node, and it keeps this file from dragging an icon library in behind it.
 
 `createTabs` returns `TabGroup` and `TabItem` together: `tabGroup`'s content expression is `tabItem+`, so registering one without the other leaves a node type the schema cannot satisfy. A pasted short map link inserts immediately with `about:blank` and swaps its `src` when the redirect resolves — pasting must not block on a network hop, and the node has to exist for the reader to see anything happen.
 
@@ -886,6 +887,8 @@ long, across every bucket that names it, rather than letting the refill trickle
 one token through at a time. `clientIp` reads `x-real-ip` first — Vercel sets it
 and overwrites any inbound copy — and the leftmost `x-forwarded-for` only where no
 `x-real-ip` was set, since a proxy that appends hands the client that slot.
+`limitClient(prefix, headers, opts)` is the per-address gate, `rateLimit` over
+`clientKey`, which a dozen call sites had written out.
 
 ## A bin
 

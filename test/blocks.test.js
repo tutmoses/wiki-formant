@@ -164,3 +164,9 @@ test('the async twin walks the same tree', async () => {
   assert.equal(out[1].blocks[0].text, 'inside!');
   assert.equal(out[2].columns[1].blocks[0].text, 'right!');
 });
+
+test('CODE_LANGS holds DEFAULT_LANG, and the core code-tab default opens on it', async () => {
+  const { CODE_LANGS, DEFAULT_LANG, coreBlockDefaults } = await import('wiki-formant/blocks');
+  assert.ok(CODE_LANGS.includes(DEFAULT_LANG));
+  assert.equal(coreBlockDefaults().codeTabs().tabs[0].language, DEFAULT_LANG);
+});

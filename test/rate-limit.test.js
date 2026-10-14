@@ -4,6 +4,7 @@ import {
   rateLimit,
   clientIp,
   clientKey,
+  limitClient,
   retryMessage,
   rateLimitHeaders,
   withRateLimit,
@@ -92,6 +93,18 @@ test('an unidentifiable caller shares one bucket rather than getting a fresh one
   const none = { get: () => null };
   assert.equal(clientIp(none), 'anon');
   assert.equal(clientIp({ get: () => '' }), 'anon');
+});
+
+test('limitClient is rateLimit on the caller\'s address under a prefix', () => {
+  resetRateLimits();
+  const a = new Headers({ 'x-real-ip': '9.9.9.9' });
+  const b = new Headers({ 'x-real-ip': '8.8.8.8' });
+  const one = { capacity: 1, refillPerSec: 0.001 };
+  assert.equal(limitClient('upload', a, one).ok, true);
+  assert.equal(limitClient('upload', a, one).ok, false);
+  assert.equal(limitClient('upload', b, one).ok, true, 'another address has its own bucket');
+  assert.equal(limitClient('search', a, one).ok, true, 'another prefix has its own bucket');
+  assert.equal(rateLimit(clientKey('upload', a), one).ok, false, 'the same bucket clientKey names');
 });
 
 test('every surface refuses in the same words', () => {

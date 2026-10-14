@@ -27,6 +27,14 @@ import {
 
 // ---- the shapes the standard block types carry ------------------------------
 
+/**
+ * The languages a code block or code tab offers, and the one a new one opens
+ * on. Two wikis carried this list character for character; a wiki with its own
+ * passes it to `createCodeBlock` and its tab editor.
+ */
+export const CODE_LANGS = ['javascript', 'typescript', 'css', 'json', 'bash', 'python', 'rust', 'sql', 'html', 'xml', 'jsx', 'tsx', 'markdown', 'yaml', 'toml'] as const;
+export const DEFAULT_LANG = 'rust';
+
 export interface CodeTab {
   label: string;
   language?: string;

@@ -156,6 +156,7 @@ test('a descriptor carries a validator and answers a conditional GET', async () 
     etag,
   );
   assert.match(descriptorHeaders('W/"x"')['Content-Type'], /application\/json/);
+  assert.equal(first.headers.get('Access-Control-Allow-Origin'), '*', 'a public descriptor is readable cross-origin');
 });
 
 test('a listing envelope tells an agent there is more and what to send', () => {
