@@ -649,7 +649,7 @@ export const POST = uploadHandler({
 });
 ```
 
-The bytes say what the file is, never the name or type, and SVG is refused. Every image is re-encoded, upright, so nothing from the source's metadata is kept, a phone's GPS position included; the bytes as sent are never stored. `encode` is the re-encode, the sniffed format by default; a wiki with an image standard resizes and converts there. Each uploader has a budget, keyed on `authorize`'s id and address. `maxBytes`, `maxPixels` and `rateLimit` take other limits, and `store` replaces Vercel Blob. `sharp` and `@vercel/blob` are optional peers.
+The bytes say what the file is, never the name or type, and SVG is refused. Every image is re-encoded, upright, so nothing from the source's metadata is kept, a phone's GPS position included; the bytes as sent are never stored. `encode` is the re-encode, the sniffed format by default; a wiki with an image standard resizes and converts there. Each uploader has a budget, keyed on `authorize`'s id and address. `maxBytes`, `maxPixels` and `rateLimit` take other limits, and `store` replaces Vercel Blob. `sharp` and `@vercel/blob` are optional peers. `normalizeImage(bytes, { maxPixels, encode })` is the same sniff, cap and re-encode without the route, for images that arrive another way – a server action, or a picture copied in from another site; it resolves to `{ buffer, format, contentType }` and throws a message fit to show the uploader.
 
 ## Editor nodes
 

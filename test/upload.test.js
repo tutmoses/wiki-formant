@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
-import { uploadHandler } from 'wiki-formant/upload';
+import { normalizeImage, uploadHandler } from 'wiki-formant/upload';
 import { resetRateLimits } from 'wiki-formant/rate-limit';
 
 const png = (w = 8, h = 8) => sharp({ create: { width: w, height: h, channels: 3, background: '#c06a73' } }).png().toBuffer();
@@ -94,4 +94,11 @@ test('each uploader has a budget', async () => {
   const refused = await handler(post(await png()));
   assert.equal(refused.status, 429);
   assert.ok(refused.headers.get('Retry-After'));
+});
+
+test('normalizeImage is the same check without the route, its refusals thrown', async () => {
+  const out = await normalizeImage(await png());
+  assert.deepEqual([out.format, out.contentType], ['png', 'image/png']);
+  await assert.rejects(normalizeImage(Buffer.from('<svg onload=alert(1)>')), /Invalid file/);
+  await assert.rejects(normalizeImage(await png(200, 200), { maxPixels: 10_000 }), /Image too large/);
 });
