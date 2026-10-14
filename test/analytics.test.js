@@ -298,7 +298,7 @@ test('a tracker defers the MCP and search events and files a search under its re
   t.trackSearch(() => { throw new Error('outside a request'); }, 'lost', 0);
   t.trackSearch(headers(), '   ', 0);
   assert.equal(tasks.length, 4);
-  await Promise.all(tasks.map(f => f()));
+  for (const f of tasks) await f();
   const events = inserts('Event').map(e => [e.values[1], e.values[2], JSON.parse(e.values[3])]);
   assert.deepEqual(events, [
     ['MCP Call', '/api/mcp', { server: 'kb', method: 'tools/call', tool: 'search', ua: 'Mozilla/5.0 (iPhone) Mobile' }],
