@@ -3,7 +3,7 @@
 // `revisions.ts` decides which bump a save asks for and stays free of
 // dependencies, because every write path imports it. This is the reading half:
 // the same walk, turned into what a reviewer is shown. It needs a text diff, so
-// it needs `fast-diff`, an optional peer; hence its own subpath.
+// it needs `fast-diff`; hence its own subpath.
 //
 // radix-wiki had it first and shipped both HTML bodies of every modified block
 // to the browser to diff there: 887 KB of payload for a 13-revision page whose

@@ -2,9 +2,8 @@
 
 // block-views.tsx — the block leaves the wikis share.
 //
-// Behind its own subpath for the reason `react.tsx` is: React is an OPTIONAL
-// peer, so a consumer that only wants the taxonomy or the MCP transport still
-// installs a package with no runtime dependencies.
+// Behind its own subpath for the reason `react.tsx` is: React is an optional
+// peer, so a consumer that only wants the taxonomy or the MCP transport needs no React.
 //
 // WHY THESE FIVE AND NOT THE SWITCH. The block union is per-repo and staying
 // that way (see the Block Model note in the workspace CLAUDE.md) — a closed

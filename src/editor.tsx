@@ -52,6 +52,10 @@ export type { LinkOptions } from '@tiptap/extension-link';
 export type { ImageOptions } from '@tiptap/extension-image';
 export type { TableOptions } from '@tiptap/extension-table';
 
+/** The view and the editor's type, so a consumer imports nothing from `@tiptap/*` itself. */
+export { EditorContent } from '@tiptap/react';
+export type { Editor } from '@tiptap/core';
+
 // ---- paste scrubbing --------------------------------------------------------
 
 /**

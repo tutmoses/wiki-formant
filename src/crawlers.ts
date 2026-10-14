@@ -75,8 +75,8 @@ export function aiCrawlerTokens(): string[] {
 
 /**
  * Structurally what Next's `MetadataRoute.Robots['rules']` wants, without
- * importing Next: this package has no runtime dependencies and is not going to
- * grow one for a shape that is three optional string fields.
+ * importing Next: this package does not depend on Next and is not going to for
+ * a shape that is three optional string fields.
  */
 export interface RobotsGroup {
   userAgent: string;

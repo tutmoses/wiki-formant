@@ -3,9 +3,8 @@
 // react.tsx — the collapsible wiki sidebar, and the table of contents inside it.
 //
 // This is the one part of the package that needs React, so it is the one part
-// behind its own subpath: `wiki-formant/react`. React is an OPTIONAL PEER
-// dependency, so a consumer that only wants the taxonomy or the MCP transport
-// still installs a package with no runtime dependencies at all.
+// behind its own subpath: `wiki-formant/react`. React is an optional peer, so a
+// consumer that only wants the taxonomy or the MCP transport needs no React.
 //
 // What is shared here is behaviour, not appearance. Every class name is passed
 // in, because the three wikis style their rails differently and always will;
@@ -522,7 +521,7 @@ export interface TypeaheadState<T> {
  *     per mount, not module-level, so a stale result cannot outlive the page.
  *
  * The debounce is inlined rather than pulled from a package: this one is nine
- * lines, and the point of the package is to have no runtime dependencies.
+ * lines, and a dependency for nine lines is not worth one.
  */
 export function useTypeahead<T>({
   fetch,

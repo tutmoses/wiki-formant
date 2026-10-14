@@ -11,7 +11,7 @@
 // Everything is an allowlist: unknown tags, unknown attributes (every on*
 // handler among them) and non-http(s) URLs are dropped, not escaped. Run it
 // server-side, on the render path, so it covers rows written before it existed
-// and no sanitiser ships to the client. `sanitize-html` is an optional peer.
+// and no sanitiser ships to the client.
 
 import sanitizeHtml from 'sanitize-html';
 import { DEFAULT_IFRAME_HOSTS } from './headers.js';

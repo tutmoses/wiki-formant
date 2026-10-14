@@ -2,10 +2,8 @@
 
 // tiptap.tsx — the custom editor nodes the wikis share.
 //
-// Behind its own subpath for the same reason `react.tsx` is: the four
-// `@tiptap/*` packages are OPTIONAL peer dependencies, so a consumer that only
-// wants the taxonomy or the MCP transport still installs a package with no
-// runtime dependencies at all.
+// Behind its own subpath so a module that only wants the taxonomy or the MCP
+// transport never loads the `@tiptap/*` packages.
 //
 // What is shared is the node schema and its behaviour, never appearance. Class
 // names and icons are injected, which is what lets one wiki keep `text-jupiter`
