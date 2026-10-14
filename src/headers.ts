@@ -105,7 +105,7 @@ interface WikiNextConfig {
   distDir?: string;
   experimental?: object;
   images?: object;
-  headers?: () => Promise<unknown[]>;
+  headers?: () => Promise<unknown[]> | unknown[];
 }
 
 /**
@@ -122,7 +122,8 @@ interface WikiNextConfig {
  *   Next's dev runtime is inline and `eval`. An origin that sets its policy
  *   per request (a nonce) passes none.
  *
- * Anything the app sets wins, and its own `headers()` follow these.
+ * Anything the app sets wins, and its own `headers()` follow these. Pass
+ * `NextConfig` as `T` so the object is typed as Next's own config.
  */
 export function withWikiDefaults<T extends WikiNextConfig>(config: T, { csp }: { csp?: string } = {}): T {
   return {

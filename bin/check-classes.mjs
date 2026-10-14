@@ -66,22 +66,28 @@ for (const f of cssFiles) {
   }
 }
 
-// Classes this project defines itself. Everything else the build emitted is a
-// Tailwind utility, which is what makes the composition count derivable rather
-// than a maintained prefix list. Read from rule preludes only, so a decimal in a
-// value or a class named in a comment is not taken for a selector.
-const globalsFile = walk(SRC_DIR, '.css').find(f => f.endsWith('globals.css'));
-const named = new Set();
-if (globalsFile) {
-  const css = fs.readFileSync(globalsFile, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+// Classes defined by this project's stylesheets or by wiki-formant's base.css.
+// Everything else the build emitted is a Tailwind utility, which is what makes
+// the composition count derivable rather than a maintained prefix list. Read
+// from rule preludes only, so a decimal in a value or a class named in a
+// comment is not taken for a selector.
+const classesIn = file => {
+  const out = new Set();
+  const css = fs.readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   for (const [, prelude] of css.matchAll(/([^{};]*)\{/g)) {
     if (prelude.trim().startsWith('@')) continue;
     for (const m of prelude.matchAll(/\.((?:\\.|[-\w])+)/g)) {
       const name = m[1].replace(/\\/g, '');
-      if (/^[A-Za-z_-]/.test(name)) named.add(name);
+      if (/^[A-Za-z_-]/.test(name)) out.add(name);
     }
   }
-}
+  return out;
+};
+const ownCss = walk(SRC_DIR, '.css');
+const globalsFile = ownCss.find(f => f.endsWith('globals.css'));
+const own = new Set(ownCss.flatMap(f => [...classesIn(f)]));
+const baseCss = new URL('../dist/base.css', import.meta.url);
+const named = new Set([...own, ...(fs.existsSync(baseCss) ? classesIn(baseCss) : [])]);
 
 // Only bare literals: anything interpolated is beyond a static check.
 const dead = new Map();
@@ -120,20 +126,22 @@ if (compositions.length) {
 }
 
 // Every token in the JavaScript the build ships, server and client. A selector
-// is referenced when its name appears whole, or when a prefix of it ending in `-`
-// or `_` does, which is how `editorial-banner-${variant}` is written.
+// is referenced when its name appears whole, when a prefix of it ending in `-`
+// or `_` does, which is how `editorial-banner-${variant}` is written, or when it
+// splits at a `-` or `_` into two shipped tokens, which is how `RailShell`'s
+// `${prefix}--open` is written.
 const shipped = new Set();
 for (const f of [...walk(STATIC_DIR, '.js'), ...walk('.next/server', '.js')]) {
   for (const [tok] of fs.readFileSync(f, 'utf8').matchAll(/[\w-]+/g)) shipped.add(tok);
 }
 const referenced = name =>
   shipped.has(name) ||
-  [...name].some((c, i) => i >= 3 && (c === '-' || c === '_') && shipped.has(name.slice(0, i + 1)));
-const unused = [...named].filter(n => !referenced(n)).sort();
+  [...name].some((c, i) => i >= 3 && (c === '-' || c === '_') && (shipped.has(name.slice(0, i + 1)) || (shipped.has(name.slice(0, i)) && shipped.has(name.slice(i)))));
+const unused = [...own].filter(n => !referenced(n)).sort();
 
 if (unused.length) {
   const verb = CHECK_UNUSED ? 'must be deleted' : 'advisory';
-  console.error(`check-classes: ${unused.length} selector(s) in ${globalsFile} referenced by nothing the build ships (${verb}):\n`);
+  console.error(`check-classes: ${unused.length} selector(s) in ${ownCss.join(', ')} referenced by nothing the build ships (${verb}):\n`);
   console.error(`  ${unused.join(', ')}\n`);
   console.error('  Class names inside HTML stored in a database do not count, so check stored content before deleting one.\n');
 }

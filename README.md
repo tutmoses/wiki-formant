@@ -268,7 +268,7 @@ Four configs had restated these by hand on the grounds that a config could not i
 `withWikiDefaults(config, { csp })` wraps the whole config: the headers on every route with `csp` enforced in production, AVIF before WebP from the image optimiser, Turbopack's build cache off (Vercel restored a stale one and shipped a stylesheet two commits old), and `distDir` from `STUDIO_DIST_DIR` for radix-studio's second dev server. What the app sets wins, and its own `headers()` follow these.
 
 ```ts
-export default withWikiDefaults({ async redirects() { /* … */ } }, { csp });
+export default withWikiDefaults<NextConfig>({ async redirects() { /* … */ } }, { csp });
 ```
 
 `contentSecurityPolicy` starts from the policy all four origins shared line for line, and each directive passed replaces its default rather than appending, so the call site reads as the whole list. An empty list drops a directive.
