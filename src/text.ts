@@ -30,6 +30,39 @@ export function stripHtml(html: string): string {
     .trim();
 }
 
+/**
+ * HTML as one plain line: tags become spaces, entities are decoded, and the
+ * space a tag left before punctuation is closed up again, or prose that wrapped
+ * a link around the word before a comma reads "the Radix network ." Unlike
+ * `stripHtml`, links keep no href: this is for a description, not evidence.
+ */
+export function plainText(html: string): string {
+  return decodeEntities(html.replace(/<[^>]+>/g, ' '))
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,.;:!?%)\]])/g, '$1')
+    .replace(/([(\[])\s+/g, '$1')
+    .trim();
+}
+
+const HEADINGS = /<h[1-6][^>]*>[\s\S]*?<\/h[1-6]>/gi;
+
+/**
+ * How a page opens: the first top-level `content` block that has prose once
+ * its headings are out, as plain text. Wiki pages open with an infobox far more
+ * often than not, so the first characters of the whole page are a flattened
+ * metadata table, which is what two wikis' descriptions said until both
+ * switched to this rule. `''` when no block has prose; a wiki with other
+ * prose-bearing types falls back to its own extractor.
+ */
+export function openingText(blocks: unknown): string {
+  for (const block of Array.isArray(blocks) ? blocks : []) {
+    if (block?.type !== 'content' || typeof block.text !== 'string') continue;
+    const text = plainText(block.text.replace(HEADINGS, ''));
+    if (text) return text;
+  }
+  return '';
+}
+
 /** The six maintenance-banner variants every wiki here renders. */
 export type BannerVariant = 'stub' | 'unsourced' | 'outdated' | 'promotional' | 'cleanup' | 'coi';
 

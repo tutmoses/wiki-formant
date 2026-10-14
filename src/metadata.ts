@@ -20,6 +20,7 @@
 // collection page had no ItemList at all.
 
 import { decodeEntities } from './markdown.js';
+import { plainText } from './text.js';
 import type { ReferenceItem } from './blocks.js';
 
 export interface ArticleMeta {
@@ -313,6 +314,36 @@ export function fittingTitle(
   const usable = variants.map(v => v.trim()).filter(Boolean);
   if (!usable.length) return '';
   return usable.find(v => v.length + suffix.length <= limit) ?? usable[usable.length - 1]!;
+}
+
+/** Characters a search result shows of a meta description before it cuts. */
+export const DESCRIPTION_LIMIT = 160;
+
+/**
+ * A meta description from any prose: HTML, markdown or plain. Tags, entities,
+ * link targets and bare URLs go; what is left is fitted to `limit` as whole
+ * sentences where they fill at least half of it, else cut at a word and marked
+ * with an ellipsis. Never longer than `limit`.
+ *
+ * Each of the four sites had its own: one clamped at 150 mid-word, one sliced
+ * at 160 with no mark, one fitted sentences, and one kept whatever sentences
+ * fitted however few. Pass a page's own excerpt where it has one and its
+ * opening (`openingText`) where it does not: `describe(excerpt || openingText(blocks))`.
+ */
+export function describe(text: string | null | undefined, limit = DESCRIPTION_LIMIT): string {
+  const t = plainText(text ?? '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\((?:https?:\/\/|mailto:|\/|#)[^)\s]*\)/g, '')
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/\(\s*\)/g, '')
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  if (t.length <= limit) return t;
+  const sentences = t.slice(0, limit + 1).match(/^.*[.!?](?=\s)/)?.[0];
+  if (sentences && sentences.length >= limit / 2) return sentences;
+  const cut = t.lastIndexOf(' ', limit - 1);
+  return `${t.slice(0, cut > 0 ? cut : limit - 1).replace(/[\s,;:–—-]+$/, '')}…`;
 }
 
 // ---- the site's own identity ----------------------------------------------------

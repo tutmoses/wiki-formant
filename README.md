@@ -440,6 +440,12 @@ const faq = faqPageLd(questionPairs(html), url);
 {faq && <JsonLd data={faq} />}
 ```
 
+`describe(text)` is a page's meta description from any prose, HTML, markdown or plain: tags, entities, link targets and bare URLs go, and the rest fits `DESCRIPTION_LIMIT` (160) as whole sentences where they fill half of it, else cut at a word with an ellipsis. Four sites had four rules, one cutting mid-word at 150 and one slicing at 160 with no mark. `openingText(blocks)` (`wiki-formant/text`) is what a page without an excerpt is described by: its first top-level `content` block with prose once the headings are out, since a page that opens with an infobox would otherwise be described by its metadata table.
+
+```ts
+const description = describe(page.metadata?.excerpt || openingText(page.content));
+```
+
 `sitePageMetadata({ siteName, handle })` binds the three fields Next drops from every page that sets its own card, with `locale` defaulting to `en_US`. `siteGraphLd` is the Organization, WebSite (with its `SearchAction`) and `WebAPI` as one `@graph` for the root layout, every node carrying an `@id`, and `siteRefs(url)` hands out the same ids for a page's `publisher` and `isPartOf` — so no page writes an inline copy of the publisher that can disagree with the layout's.
 
 ```ts
