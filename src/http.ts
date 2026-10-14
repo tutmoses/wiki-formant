@@ -119,8 +119,12 @@ export function textHeaders(
  *
  * `lastModified` is optional because not every corpus has a row timestamp to
  * offer, and a twin that stamps the epoch is worse than one that stamps
- * nothing. `extra` carries whatever the mount needs on top — an `X-Robots-Tag`
- * where the twin is a second public URL with no canonical of its own.
+ * nothing. `extra` carries whatever the mount needs on top.
+ *
+ * `noindex` is for a twin of an HTML page: a search engine that reads the twin
+ * has the page already, and Google indexed `.md` beside the HTML until four
+ * routes each set `X-Robots-Tag` by hand. A document with no HTML page, such
+ * as AGENTS.md, leaves it off.
  *
  * Pass `etag`. The twin is the single most recrawled URL a page has, and a
  * response with no validator is a full render on every pass forever — the same
@@ -131,7 +135,7 @@ export function textHeaders(
  */
 export function markdownHeaders(
   lastModified?: string | null,
-  opts: { maxAge?: number; etag?: string; extra?: Record<string, string> } = {},
+  opts: { maxAge?: number; etag?: string; noindex?: boolean; extra?: Record<string, string> } = {},
 ): Record<string, string> {
   const maxAge = opts.maxAge ?? 3600;
   return {
@@ -139,6 +143,7 @@ export function markdownHeaders(
     'Cache-Control': `public, s-maxage=${maxAge}, stale-while-revalidate=${maxAge * 24}`,
     ...(opts.etag ? { ETag: opts.etag } : {}),
     ...(lastModified ? { 'Last-Modified': lastModified } : {}),
+    ...(opts.noindex ? { 'X-Robots-Tag': 'noindex' } : {}),
     ...opts.extra,
   };
 }

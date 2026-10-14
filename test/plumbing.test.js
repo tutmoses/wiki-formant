@@ -133,6 +133,11 @@ test('a markdown twin can carry a validator', () => {
   assert.equal(markdownHeaders().ETag, undefined);
 });
 
+test('a twin of an HTML page is kept out of the index; a document of its own is not', () => {
+  assert.equal(markdownHeaders(LM, { noindex: true })['X-Robots-Tag'], 'noindex');
+  assert.equal(markdownHeaders(LM)['X-Robots-Tag'], undefined);
+});
+
 test('a descriptor carries a validator and answers a conditional GET', async () => {
   const card = { name: 'x', version: '1.0.0' };
   const first = descriptorResponse(new Request('https://x/.well-known/agent-card.json'), card);

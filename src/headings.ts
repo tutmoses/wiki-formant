@@ -15,6 +15,8 @@
 // `id="notes"`. One `used` set per page is what makes the dedupe hold.
 
 import { getAttr, stripTags } from './html.js';
+import { scrollTables } from './dom.js';
+import { normaliseLinks, type NormaliseLinkOptions } from './links.js';
 
 /** A heading found in a page's HTML, in document order. */
 export interface Heading {
@@ -190,4 +192,15 @@ export function outlineIssues(html: string): OutlineIssue[] {
 
   if (h1s.length === 1 && headings.length === 1) issues.push({ fault: 'noSubheading', level: 1 });
   return issues;
+}
+
+/**
+ * The pass every app runs over a content block's stored HTML before it renders:
+ * heading ids, a scroll box round each table, and, given `links`, every anchor
+ * tagged internal or external. Four apps wrote the same chain in three orders.
+ * Pass one `used` set (and one `links.citedRefs`) across a page's blocks.
+ */
+export function articleHtml(html: string, { links, ...headings }: HeadingIdOptions & { links?: NormaliseLinkOptions } = {}): string {
+  const out = scrollTables(injectHeadingIds(html, headings));
+  return links ? normaliseLinks(out, links) : out;
 }

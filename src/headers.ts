@@ -11,7 +11,8 @@
 // `youtube-nocookie.com` its sanitiser kept, so those embeds survived cleaning
 // and then rendered blank.
 //
-// Zero imports, so a config pays for nothing it does not use.
+// Zero imports, so a config pays for nothing it does not use. `withWikiDefaults`
+// is here for the same reason: next.config.ts is its only caller.
 
 /** A header as Next's `headers()` wants it. */
 export interface HeaderEntry {
@@ -97,4 +98,43 @@ export function securityHeaders(csp?: string | null): HeaderEntry[] {
     { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
     { key: 'X-DNS-Prefetch-Control', value: 'on' },
   ];
+}
+
+/** The parts of a Next config `withWikiDefaults` fills in. */
+interface WikiNextConfig {
+  distDir?: string;
+  experimental?: object;
+  images?: object;
+  headers?: () => Promise<unknown[]>;
+}
+
+/**
+ * An app's Next config with the settings every app here wrote out the same way:
+ *
+ * - `distDir` from `STUDIO_DIST_DIR`, set only by radix-studio's renders, which
+ *   boot a second dev server beside the running one, and Next allows one per
+ *   distDir.
+ * - `turbopackFileSystemCacheForBuild: false`. Next 16.3 turns Turbopack's
+ *   build cache on and Vercel restores it from the last deployment; caper
+ *   shipped a stylesheet two commits stale that way in October 2026.
+ * - AVIF before WebP from the image optimiser.
+ * - `securityHeaders` on every route, with `csp` enforced in production only:
+ *   Next's dev runtime is inline and `eval`. An origin that sets its policy
+ *   per request (a nonce) passes none.
+ *
+ * Anything the app sets wins, and its own `headers()` follow these.
+ */
+export function withWikiDefaults<T extends WikiNextConfig>(config: T, { csp }: { csp?: string } = {}): T {
+  return {
+    ...(process.env.STUDIO_DIST_DIR ? { distDir: process.env.STUDIO_DIST_DIR } : {}),
+    ...config,
+    experimental: { turbopackFileSystemCacheForBuild: false, ...config.experimental },
+    images: { formats: ['image/avif', 'image/webp'], ...config.images },
+    async headers() {
+      return [
+        { source: '/:path*', headers: securityHeaders(process.env.NODE_ENV === 'production' ? csp : null) },
+        ...((await config.headers?.()) ?? []),
+      ];
+    },
+  };
 }

@@ -2,7 +2,7 @@
 
 The portable half of a wiki: derived taxonomy, a spec-correct MCP transport, markdown twins, and the conditional-GET plumbing an agent surface needs.
 
-Zero runtime dependencies. Web-standard `Request`/`Response`, so it runs unchanged on Next route handlers, Hono, Bun, Deno and workers.
+The editor, history, sanitiser, chart and passkey modules bring their libraries as dependencies (`@tiptap/*`, `fast-diff`, `sanitize-html`, `lightweight-charts`, `@simplewebauthn/*`), since every wiki here uses all five. What only some apps use stays an optional peer: `pg`, `react`, `jose` and `@radixdlt/rola` for ROLA, `sharp` and `@vercel/blob` for uploads. Web-standard `Request`/`Response`, so it runs unchanged on Next route handlers, Hono, Bun, Deno and workers.
 
 ```bash
 npm install wiki-formant
@@ -193,9 +193,11 @@ return new Response(
       license: { spdx: 'CC-BY-4.0', url: 'https://creativecommons.org/licenses/by/4.0/' } },
     blocksToMarkdown(page.content), // your block types, your function
   ),
-  { headers: markdownHeaders(lastModified, { etag }) },
+  { headers: markdownHeaders(lastModified, { etag, noindex: true }) },
 );
 ```
+
+`noindex` sends `X-Robots-Tag: noindex`, for a twin of an HTML page: a search engine that reads it has the page already. A document with no HTML page, an AGENTS.md, leaves it off.
 
 Block trees stay in your app — every project owns its own type set. Give this module HTML and it gives you markdown.
 
@@ -262,6 +264,12 @@ const nextConfig = {
 ```
 
 Four configs had restated these by hand on the grounds that a config could not import an ESM-only package. It could not because no subpath had a `default` condition, and Next resolves a config's imports the way `require` does; every subpath has one now, and Node 24 loads the module there unchanged.
+
+`withWikiDefaults(config, { csp })` wraps the whole config: the headers on every route with `csp` enforced in production, AVIF before WebP from the image optimiser, Turbopack's build cache off (Vercel restored a stale one and shipped a stylesheet two commits old), and `distDir` from `STUDIO_DIST_DIR` for radix-studio's second dev server. What the app sets wins, and its own `headers()` follow these.
+
+```ts
+export default withWikiDefaults({ async redirects() { /* … */ } }, { csp });
+```
 
 `contentSecurityPolicy` starts from the policy all four origins shared line for line, and each directive passed replaces its default rather than appending, so the call site reads as the whole list. An empty list drops a directive.
 
@@ -414,7 +422,7 @@ npx indexnow https://radix.wiki --hours 6
 npx indexnow https://radix.wiki --all        # every row: a new origin or a new key
 ```
 
-Rows with no `lastModified` go only in a full submission. A 403 or 422 from the engine exits 1.
+Rows with no `lastModified` go only in a full submission. A 403 or 422 from the engine exits 1. A sitemap index is read one level down, as `check-pages` reads it.
 
 ## Page metadata
 
@@ -485,7 +493,7 @@ was. That half is not here.
 
 What each revision changed, as a history view shows it. `revisions` stays free
 of dependencies because every save imports it; this is the reading half, and it
-needs `fast-diff`, an optional peer.
+needs `fast-diff`.
 
 ```tsx
 import { withChanges } from 'wiki-formant/history';
@@ -560,7 +568,7 @@ In React, `useArticlePasses(ref, [blocks])` runs the three passes and `useTweetE
 
 `sortTables` makes the tables stored in article HTML sortable by their headers. They arrive as a string a `dangerouslySetInnerHTML` wrote, so React never sees their rows and cannot sort them. A column is dates if every filled cell starts with one, numbers if every one does, and text otherwise — one stray value makes the whole column text, which beats sorting half of it by one rule and half by another. A third press restores the author's order, which is often chronological or ranked and otherwise needs a reload. Label/value tables and tables with merged cells are left alone. The markup it writes — `aria-sort` on the cell, a `.sort-header` button inside it — is the markup a React sortable header should write too, so both kinds of table draw their arrows from one stylesheet rule.
 
-`scrollTables(html)` is the one table pass that runs on the string, before render: it wraps each stored table in a `.table-scroll` box, and `base.css` lets that box scroll sideways. A table box ignores `overflow`, so a table with an address or a URL in a cell is as wide as that token whatever its column, and a scroll box added by an effect would arrive after the table had already been laid out too wide. Call it on the render path beside `injectHeadingIds`. A table already in a box keeps it, so it is safe on HTML that has been through it once.
+`scrollTables(html)` is the one table pass that runs on the string, before render: it wraps each stored table in a `.table-scroll` box, and `base.css` lets that box scroll sideways. A table box ignores `overflow`, so a table with an address or a URL in a cell is as wide as that token whatever its column, and a scroll box added by an effect would arrive after the table had already been laid out too wide. Call it on the render path beside `injectHeadingIds`. A table already in a box keeps it, so it is safe on HTML that has been through it once. `articleHtml(html, { used, slug, anchor, links })` (`wiki-formant/headings`) is that chain: heading ids, the scroll boxes, and, given `links`, `normaliseLinks`.
 
 The embed's origin is written down once. It is both the embed host and the allow-list `onTweetResize` checks before believing a posted height, and it had been spelled out at four call sites across two repos. Any page can `postMessage`; only the embed host may size the embed.
 
@@ -623,7 +631,7 @@ A `codeTabs` tab's `code` is source text in every wiki here, and every view trea
 
 ## Sanitising stored HTML
 
-`wiki-formant/sanitize` is the allowlist between an author's saved HTML and a reader's browser. The block views render two HTML fields themselves — `linkGrid` descriptions and `references` text — and a repo renders `content.text` beside them, so the guard ships with the renderer. `codeTabs` is not one of them: its code is source. `sanitize-html` is an optional peer; run it server-side, on the render path, so it covers rows written before it existed and no sanitiser ships to the client.
+`wiki-formant/sanitize` is the allowlist between an author's saved HTML and a reader's browser. The block views render two HTML fields themselves — `linkGrid` descriptions and `references` text — and a repo renders `content.text` beside them, so the guard ships with the renderer. `codeTabs` is not one of them: its code is source. Run it server-side, on the render path, so it covers rows written before it existed and no sanitiser ships to the client.
 
 ```ts
 import { createHtmlSanitizer, sanitizeCoreLeaf } from 'wiki-formant/sanitize';
@@ -653,7 +661,7 @@ The bytes say what the file is, never the name or type, and SVG is refused. Ever
 
 ## Editor nodes
 
-`wiki-formant/tiptap` carries the custom nodes both wiki editors had written twice: `Iframe`, `YouTube` (the stock extension plus the paste rule it does not ship with), `TwitterEmbed`, `createMapEmbed`, `createCodeBlock` and `createTabs`. The four `@tiptap/*` packages are optional peers, so a consumer taking only the taxonomy still installs a package with no runtime dependencies.
+`wiki-formant/tiptap` carries the custom nodes both wiki editors had written twice: `Iframe`, `YouTube` (the stock extension plus the paste rule it does not ship with), `TwitterEmbed`, `createMapEmbed`, `createCodeBlock` and `createTabs`.
 
 ```ts
 const CodeBlock = createCodeBlock({
@@ -790,7 +798,6 @@ returns the whole of it. `gate.route` is the sign-in route,
 `gate.signedIn(cookieValue)` is the check a page makes, `gate.open()` is true
 while no passkey is saved, and `gate.cookie` is the cookie's name. The two tables (`Passkey`, `PasskeyToken`) ship as Prisma
 models in `prisma/passkey.prisma`, and every token is kept only as its hash.
-`@simplewebauthn/server` is an optional peer.
 
 There is no sign-up. While no passkey is saved, the page saves the first one
 from whoever opens it, so the owner should do that as soon as the door ships.
@@ -806,14 +813,18 @@ export const gate = createPasskeyGate({ sql, rpName: 'Caper' });
 export const POST = gate.route;
 
 // src/app/stats/page.tsx
-if (!(await gate.signedIn((await cookies()).get(gate.cookie)?.value)))
-  return <PasskeyButton endpoint="/api/passkey" invite={invite} create={await gate.open()} />;
-const q = statsQuery(await searchParams); // ?days= (1, 7, 30, 90, 365 or all, else 30) and the filters
-return <Stats digest={await digest(sql, q)} {...q} />;
+const q = statsQuery(params); // ?days= (1, 7, 30, 90, 365 or all, else 30) and the filters
+return (
+  <StatsGate gate={gate} session={(await cookies()).get(gate.cookie)?.value} invite={params.invite} host="caper.network">
+    {async () => <Stats digest={await digest(sql, q)} {...q} />}
+  </StatsGate>
+);
 ```
 
+`StatsGate` (`wiki-formant/stats`) renders `children` for a signed-in reader and, for anyone else, the line saying what the prompt will do and the `PasskeyButton` that does it; `classNames` places the text, the button's box, the button and its error.
+
 `PasskeyButton` (`wiki-formant/passkey-button`) is the browser half and has its
-own subpath, because it imports the optional peer `@simplewebauthn/browser`.
+own subpath, because it imports `@simplewebauthn/browser`.
 `Stats` (`wiki-formant/stats`) renders a `digest` as one page: the
 headline figures, each with its change from the window before
 (`.stats-delta[data-better]`, a share or for the bounce rate points, for the
@@ -836,8 +847,7 @@ events only from their visitors. Agent tool calls and missed searches are
 events no visit reaches, so their rows are not links. `ViewDay` keeps totals,
 not visits, so a narrowed page starts at `counted_from`, the first day the site
 counted itself, says so, and drops the comparison with the window before. The chart is `TimeChart` with a count
-axis from zero, so `lightweight-charts` is an optional peer that a stats page
-needs installed.
+axis from zero.
 
 ## ROLA sign-in
 
@@ -932,7 +942,19 @@ package's tests still reach it, and the `.d.ts` leaves it out.
 
 `wiki-formant/db` holds `pgPoolConfig(url)`, the options every app here hands to
 `new pg.Pool()`: ten clients on Supabase's 6543 transaction pooler, three on the
-5432 session pooler, whose fifteen-client cap a build's workers share.
+5432 session pooler, whose fifteen-client cap a build's workers share. It also
+holds `prismaConfig(root, schema?)`, what an app's prisma.config.ts hands
+`defineConfig`: `.env` loaded from `root`, the schema folder (or one file) and
+migrations under it, and DIRECT_URL preferred, because the Prisma CLI's
+connections hang on the transaction pooler.
+
+```ts
+// prisma.config.ts
+import { defineConfig } from 'prisma/config';
+import { prismaConfig } from 'wiki-formant/db';
+
+export default defineConfig(prismaConfig(import.meta.dirname));
+```
 
 `rateLimit` takes `blockMs` (and a `blockKey`, default the bucket's own) for a
 caller already shown to be abusive: running dry blocks the key outright for that
@@ -961,7 +983,7 @@ npx analytics-digest --days 30 --handle radixwiki --siblings caper.network,acuiq
 npx analytics-digest --days 7 --gap "Symptom Miss:term"   # adds an event to the search gaps
 ```
 
-`passkey-invite` prints a single-use link that saves another passkey for the page it names, good for a day (`--days n` for longer). Run it the same way:
+`passkey-invite` prints a single-use link that saves another passkey for the page it names, good for a day (`--days n` for longer). No routine calls it: the site's owner runs it by hand, from an app's checkout, when a second device or a second person needs into the stats page. Run it the same way:
 
 ```sh
 npx passkey-invite https://caper.network/stats
@@ -972,6 +994,12 @@ npx passkey-invite https://caper.network/stats
 ```sh
 npx prisma-models            # write both into prisma/schema
 npx prisma-models --check    # in the build, before prisma generate
+```
+
+An app that keeps one schema file and writes the models into it by hand, because each needs a relation the shipped one cannot carry, checks them in place: `--in` names the file and compares model by model, ignoring comments and spacing, and `--tenant` lets each `siteId` drop its default and gain a `@relation` on it.
+
+```sh
+npx prisma-models analytics --check --in prisma/schema.prisma --tenant   # miow
 ```
 
 `fts-ddl <table>` rebuilds a table's `search_tsv` generated column and its GIN index from the expression `wiki-formant/search` queries, over `DIRECT_URL` (else `DATABASE_URL` on 5432). Run it before declaring the column in `schema.prisma`; the bin's header says why.

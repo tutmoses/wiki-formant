@@ -10,8 +10,10 @@
 // `?entry=`, `?source=`, `?country=` and `?device=` narrow it. Every row in a
 // list is a link that adds its own, and every narrowing a link that drops it.
 
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { STATS_FILTERS, type Digest, type StatsFilter } from './analytics.js';
+import type { PasskeyGate } from './passkey.js';
+import { PasskeyButton } from './passkey-button.js';
 import { StatsFigures } from './stats-figures.js';
 
 export interface StatsProps {
@@ -168,5 +170,45 @@ export function Stats({ digest: d, days, filter = {}, ranges = STATS_RANGES }: S
         <StatsList title="Searches that found nothing" rows={rows(d.gaps, 'query', 'events')} />
       </div>
     </div>
+  );
+}
+
+export interface StatsGateProps {
+  gate: PasskeyGate;
+  /** The gate's cookie from the request: `(await cookies()).get(gate.cookie)?.value`. */
+  session: string | undefined;
+  /** `?invite=` from the link, when there is one. */
+  invite?: string | undefined;
+  /** The site's host, named in the prompt. */
+  host: string;
+  /** The route that serves `gate.route`. */
+  endpoint?: string;
+  /** What a signed-in reader sees, rendered only for one. */
+  children: () => ReactNode | Promise<ReactNode>;
+  classNames?: { text?: string; actions?: string; button?: string; error?: string };
+}
+
+/**
+ * A stats page's door: `children` for a signed-in reader, else a line saying
+ * what the passkey prompt will do and the button that does it. With an invite
+ * it saves a passkey, as it does while the site has none; otherwise it signs
+ * in. Three apps wrote this branch and its three sentences.
+ */
+export async function StatsGate({ gate, session, invite, host, endpoint = '/api/passkey', children, classNames: c = {} }: StatsGateProps) {
+  if (!invite && (await gate.signedIn(session))) return children();
+  const open = !invite && (await gate.open());
+  return (
+    <>
+      <p className={c.text}>
+        {invite
+          ? `Save a passkey on this device to open ${host}'s stats.`
+          : open
+            ? `No passkey is saved for ${host} yet. Save the first one here; any after that needs an invite.`
+            : 'Sign in with a passkey saved for this site.'}
+      </p>
+      <div className={c.actions}>
+        <PasskeyButton endpoint={endpoint} invite={invite} create={open} className={c.button} errorClassName={c.error} />
+      </div>
+    </>
   );
 }

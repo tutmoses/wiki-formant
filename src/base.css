@@ -40,6 +40,31 @@
   .columns-layout > .column-view { align-self: stretch; }
 }
 
+/* ---- layout primitives ------------------------------------------------------
+   A column, a row and a row with its ends pushed apart. radix-wiki and caper
+   wrote these with the same gaps, and acuiq2 the column; a site that meant
+   something else by a name renamed its own. The gaps are the ones all of them
+   used, so they stay here rather than going back to every stylesheet. */
+.stack, .stack-xs, .stack-sm, .stack-lg { display: flex; flex-direction: column; gap: 1rem; }
+.stack-xs { gap: 0.25rem; }
+.stack-sm { gap: 0.5rem; }
+.stack-lg { gap: 1.5rem; }
+.row, .row-xs, .row-md, .row-lg { display: flex; align-items: center; gap: 0.5rem; }
+.row-xs { gap: 0.25rem; }
+.row-md { gap: 0.75rem; }
+.row-lg { gap: 1rem; }
+.spread { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
+.badge { display: inline-flex; align-items: center; border-radius: 9999px; }
+
+/* A page whose first block is an infobox, one column with the infobox on top.
+   Where it splits into prose and a rail is the site's: a viewport width on one,
+   its column's width on another. Both items need `min-width: 0`, or the one
+   shared track sizes to the widest item's min-content and the other inherits
+   the overflow. */
+.page-with-infobox { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "infobox" "content"; }
+.page-with-infobox > .page-main-content { grid-area: content; min-width: 0; }
+.page-with-infobox > .infobox { grid-area: infobox; min-width: 0; }
+
 /* ---- the block views and the infobox ---------------------------------------
    The structure three or four sites had each restated around this markup;
    padding, gaps, radii and colour stay theirs. A stats block is two columns,
