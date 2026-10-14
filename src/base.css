@@ -40,6 +40,27 @@
   .columns-layout > .column-view { align-self: stretch; }
 }
 
+/* ---- the block views and the infobox ---------------------------------------
+   The structure three or four sites had each restated around this markup;
+   padding, gaps, radii and colour stay theirs. A stats block is two columns,
+   three or four from 40rem; a code-tab strip is a row of buttons; a banner sets
+   its icon beside its text; a long address in an infobox wraps. */
+.stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 40rem) {
+  .stat-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .stat-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.stat-card { display: flex; flex-direction: column; }
+.code-tabs { overflow: hidden; }
+.code-tabs-list { display: flex; }
+.code-tabs-btn { cursor: pointer; }
+.editorial-banner { display: flex; }
+.infobox { overflow-wrap: anywhere; }
+.infobox-series { display: flex; flex-direction: column; }
+.heading-anchor,
+.ref-backlink,
+.reference-link { text-decoration: none; }
+
 /* ---- stored tab groups (activateTabGroups) --------------------------------
    Only the active panel shows. Before the script runs, the first tab's content
    stands in for the group rather than every tab at once. */
@@ -174,7 +195,7 @@ pre:hover > .code-copy-btn,
    `TimeChart`: the canvas, a loading or empty state over it, and the range and
    step buttons pinned to its top-left corner. A site gives the buttons and the
    box their look; pressed is all this marks. */
-.chart { position: relative; margin: 0; }
+.chart { position: relative; margin: 0; overflow: hidden; }
 /* Its own stacking context: the library's canvases stack themselves, and the buttons go over them. */
 .chart-canvas { position: relative; z-index: 0; height: var(--chart-height, 15rem); }
 /* The chart lays itself out in a <table>; a site's table styles are not for it. */
@@ -192,7 +213,7 @@ pre:hover > .code-copy-btn,
 .chart-controls > div { display: flex; gap: 2px; }
 /* A rule between groups: ranges, then steps, then the candles switch. */
 .chart-controls > * + * { border-inline-start: 1px solid color-mix(in srgb, currentColor 25%, transparent); padding-inline-start: 0.5rem; }
-.chart-controls :is(button, a) { font: inherit; color: inherit; text-decoration: none; background: none; cursor: pointer; opacity: 0.6; }
+.chart-controls :is(button, a) { padding: 0.125rem 0.375rem; font: inherit; color: inherit; text-decoration: none; background: none; cursor: pointer; opacity: 0.6; }
 /* An icon sits on the text's line, so an icon button is as tall as a labelled one. */
 .chart-icon { display: inline-block; width: 1em; height: 1em; vertical-align: -0.125em; }
 /* A button is pressed; a link (a stats page's window) is the page shown. */
