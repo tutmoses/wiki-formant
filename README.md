@@ -786,6 +786,22 @@ counted itself, says so, and drops the comparison with the window before. The ch
 axis from zero, so `lightweight-charts` is an optional peer that a stats page
 needs installed.
 
+## ROLA sign-in
+
+`wiki-formant/rola` is the part of a Radix wallet sign-in two sites had each written: a single-use challenge, the wallet's proof of it, and the HS256 token a verified address is handed. How a site keeps the session stays with it, because the two keep it differently: radix-wiki a `Session` row behind a seven-day cookie, caper a stateless token it slides forward, with a short one for agents.
+
+```ts
+const rola = createRola({ expectedOrigin, dAppDefinitionAddress, networkId, applicationName, challenges: prisma.challenge });
+const { challenge } = await rola.generateChallenge();
+const v = await rola.verifySignedChallenge(signed);        // { isValid, error? }
+
+const secret = sessionSecret(process.env.JWT_SECRET);      // throws under 32 characters
+const token = await signSession({ id: signed.address }, secret, 7 * 86400);
+const claims = await verifySession<{ id: string }>(bearerToken(request.headers) ?? cookie, secret);
+```
+
+Where the two copies differed, this takes the stricter. A challenge is spent by one conditional delete, so two requests racing with one signature cannot both pass, and it is spent whatever the outcome; making one purges the expired. Only an account proof signs in. Verification pins HS256. `jose` and `@radixdlt/rola` are optional peers.
+
 ## Charts
 
 `TimeChart` (`wiki-formant/chart`) is every time-series chart on the four sites:
