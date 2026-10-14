@@ -228,6 +228,11 @@
       "import": "./dist/sanitize.js",
       "default": "./dist/sanitize.js"
     },
+    "./upload": {
+      "types": "./dist/upload.d.ts",
+      "import": "./dist/upload.js",
+      "default": "./dist/upload.js"
+    },
     "./corpus": {
       "types": "./dist/corpus.d.ts",
       "import": "./dist/corpus.js",
@@ -320,7 +325,9 @@
     "react": ">=18",
     "sanitize-html": ">=2",
     "jose": ">=6",
-    "@radixdlt/rola": ">=2"
+    "@radixdlt/rola": ">=2",
+    "sharp": ">=0.33",
+    "@vercel/blob": ">=2"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -387,6 +394,12 @@
       "optional": true
     },
     "@radixdlt/rola": {
+      "optional": true
+    },
+    "sharp": {
+      "optional": true
+    },
+    "@vercel/blob": {
       "optional": true
     }
   }

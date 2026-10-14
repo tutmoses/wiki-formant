@@ -630,6 +630,21 @@ The default list is derived from what the editor nodes in `wiki-formant/tiptap` 
 
 Classes pass by name only. Limiting `style` to layout and paint is worth nothing while `class` is free, because every site's own stylesheet ships `fixed inset-0 z-50`, and those draw a fake prompt over the chrome as well as `position` does.
 
+## Image uploads
+
+`wiki-formant/upload` is the route an editor's image upload posts to. Two wikis had written it and their limits had drifted: one took 25 MB with no cap on decoded pixels and trusted the Content-Type the client sent, the other 4 MB, 40 megapixels and the file's own leading bytes. These are the second one's defaults.
+
+```ts
+// src/app/api/upload/route.ts
+export const runtime = 'nodejs';
+export const POST = uploadHandler({
+  authorize: async () => (await currentUser())?.id ?? errors.unauthorized('Sign in to upload.'),
+  prefix: 'wiki/',
+});
+```
+
+The bytes say what the file is, never the name or type, and SVG is refused. Every image is re-encoded, upright, so nothing from the source's metadata is kept, a phone's GPS position included; the bytes as sent are never stored. `encode` is the re-encode, the sniffed format by default; a wiki with an image standard resizes and converts there. Each uploader has a budget, keyed on `authorize`'s id and address. `maxBytes`, `maxPixels` and `rateLimit` take other limits, and `store` replaces Vercel Blob. `sharp` and `@vercel/blob` are optional peers.
+
 ## Editor nodes
 
 `wiki-formant/tiptap` carries the custom nodes both wiki editors had written twice: `Iframe`, `YouTube` (the stock extension plus the paste rule it does not ship with), `TwitterEmbed`, `createMapEmbed`, `createCodeBlock` and `createTabs`. The four `@tiptap/*` packages are optional peers, so a consumer taking only the taxonomy still installs a package with no runtime dependencies.
