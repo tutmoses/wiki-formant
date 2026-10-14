@@ -28,8 +28,8 @@
 // Connection: DIRECT_URL (the session pooler on 5432) when set, else
 // DATABASE_URL moved from 6543 to 5432. Both run DDL; the session port is the
 // one that never hangs on a long statement.
-import pg from 'pg';
 import { searchTsvDdl } from '../dist/search.js';
+import { connect } from './_cli.mjs';
 
 const table = process.argv[2];
 if (!table || !/^[a-z_][a-z0-9_]*$/.test(table)) {
@@ -37,26 +37,11 @@ if (!table || !/^[a-z_][a-z0-9_]*$/.test(table)) {
   process.exit(1);
 }
 
-if (!process.env.DIRECT_URL && !process.env.DATABASE_URL) {
-  try {
-    process.loadEnvFile('.env');
-  } catch {
-    // reported below
-  }
-}
-const url = process.env.DIRECT_URL || process.env.DATABASE_URL?.replace(':6543', ':5432');
-if (!url) {
-  console.error('no DIRECT_URL or DATABASE_URL in the environment or ./.env');
-  process.exit(1);
-}
-
 // A bad route hangs rather than erroring without a connect timeout.
-const client = new pg.Client({
-  connectionString: url.replace(/\?.*$/, ''),
-  ssl: { rejectUnauthorized: false },
-  connectionTimeoutMillis: 15000,
+const client = await connect({ direct: true, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 15000 }).catch(e => {
+  console.error(e.message);
+  process.exit(1);
 });
-await client.connect();
 const q = s => client.query(s).then(r => r.rows);
 try {
   const ddl = searchTsvDdl(table);

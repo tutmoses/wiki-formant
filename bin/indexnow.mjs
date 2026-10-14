@@ -9,7 +9,7 @@
 //   npx indexnow https://radix.wiki --hours 6
 //   npx indexnow https://radix.wiki --all        # every row: a new origin or a new key
 import { readdirSync, readFileSync } from 'node:fs';
-import { sitemapEntries, changedUrls, submitIndexNow } from '../dist/indexnow.js';
+import { readSitemap, changedUrls, submitIndexNow } from '../dist/indexnow.js';
 
 const args = process.argv.slice(2);
 const origin = args.find(a => /^https?:\/\//.test(a))?.replace(/\/$/, '');
@@ -40,12 +40,10 @@ if (live.trim() !== key) {
   process.exit(1);
 }
 
-const sitemap = await fetch(`${origin}/sitemap.xml`);
-if (!sitemap.ok) {
-  console.error(`${origin}/sitemap.xml answered ${sitemap.status}`);
+const entries = await readSitemap(`${origin}/sitemap.xml`).catch(e => {
+  console.error(e.message);
   process.exit(1);
-}
-const entries = sitemapEntries(await sitemap.text());
+});
 const urls = args.includes('--all') ? entries.map(e => e.url) : changedUrls(entries, Date.now() - hours * 3_600_000);
 const statuses = await submitIndexNow(key, urls);
 console.log(JSON.stringify({ origin, submitted: urls.length, statuses }));

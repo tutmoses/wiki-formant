@@ -18,6 +18,8 @@
 //
 // No subpath exports this: the bins and the tests import it from dist.
 
+import { escXml } from './feed.js';
+
 export type SourceListItem = string | { handle?: string; name?: string; url?: string };
 export interface SourceEntry {
   lastChecked?: string | null;
@@ -100,7 +102,7 @@ export function addBacklog(state: LogState, items: readonly BacklogEntry[], toda
   return added;
 }
 
-const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const esc = (s: unknown) => escXml(String(s ?? ''));
 const more = (shown: number, total: number, what: string) =>
   total > shown ? `<p><em>${total - shown} older ${what} held in state.</em></p>` : '';
 const table = (head: string[], rows: string[]) =>

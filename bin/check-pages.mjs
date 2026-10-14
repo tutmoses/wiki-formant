@@ -28,12 +28,11 @@
 // which is the right default, since an unlisted route is one nobody asked a
 // crawler to read.
 import { outlineIssues } from '../dist/headings.js';
+import { readSitemap } from '../dist/indexnow.js';
+import { decodeEntities } from '../dist/markdown.js';
 import { TITLE_BUDGET, TITLE_LIMIT } from '../dist/metadata.js';
+import { arg } from './_cli.mjs';
 
-const arg = name => {
-  const i = process.argv.indexOf(name);
-  return i >= 0 ? process.argv[i + 1] : undefined;
-};
 const has = name => process.argv.includes(name);
 
 const site = (arg('--site') || '').replace(/\/+$/, '');
@@ -52,20 +51,9 @@ const get = async url => {
   return { status: res.status, body: res.ok ? await res.text() : '' };
 };
 
-// The sitemap is the URL list, and a sitemap index is one more fetch deep.
+// The sitemap is the URL list.
 async function sitemapUrls(origin) {
-  const seen = [];
-  const read = async url => {
-    const { status, body } = await get(url);
-    if (status !== 200) return;
-    const locs = [...body.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)].map(m => m[1]);
-    if (/<sitemapindex/i.test(body)) {
-      for (const child of locs.slice(0, 20)) await read(child);
-    } else {
-      seen.push(...locs);
-    }
-  };
-  await read(`${origin}/sitemap.xml`);
+  const seen = (await readSitemap(`${origin}/sitemap.xml`, url => fetch(url, { headers: { 'user-agent': UA } })).catch(() => [])).map(e => e.url);
   // A sitemap states absolute production URLs by definition, so pointing
   // --site at a dev server would otherwise crawl production and report the
   // build you were trying to replace. The path is what the sitemap contributes;
@@ -88,8 +76,6 @@ const descriptionOf = html => {
   const m = html.match(/<meta[^>]+name=["']description["'][^>]*>/i);
   return m ? (m[0].match(/content=["']([\s\S]*?)["']/i)?.[1] ?? '').trim() : null;
 };
-const decode = s =>
-  s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'");
 
 const urls = await sitemapUrls(site);
 if (!urls.length) {
@@ -126,7 +112,7 @@ for (const url of checked) {
     });
   }
 
-  const title = decode(titleOf(page.body));
+  const title = decodeEntities(titleOf(page.body));
   if (!title) faults.push({ url, fault: 'noTitle', detail: '' });
   else {
     if (title.length > TITLE_LIMIT) faults.push({ url, fault: 'titleTooLong', detail: `${title.length} chars: ${title}` });

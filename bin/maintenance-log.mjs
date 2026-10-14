@@ -31,16 +31,12 @@
 // concurrent run's, and the row lock serialises the two. A revision's version
 // is the page's `version` column bumped a minor where the table has one, else
 // the latest revision's.
-import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { addBacklog, compact, ident, render, scopeSql } from '../dist/maintenance.js';
 import { bump } from '../dist/versioning.js';
+import { arg, connect, invalidate } from './_cli.mjs';
 
 const args = process.argv.slice(2);
-const arg = name => {
-  const i = args.indexOf(name);
-  return i >= 0 ? args[i + 1] : undefined;
-};
 const [mode, payload] = args.filter((a, i) => !a.startsWith('--') && !args[i - 1]?.match(/^--(?!dry-run)/));
 const dry = args.includes('--dry-run');
 const at = arg('--at') ?? '';
@@ -58,31 +54,17 @@ const scope = scopeSql(arg('--scope'), 3);
 const where = `tag_path = $1 AND slug = $2 AND ${scope.sql}`;
 const address = [at.slice(0, slugAt), at.slice(slugAt + 1), ...scope.values];
 
-if (!process.env.DATABASE_URL) {
-  try {
-    process.loadEnvFile('.env');
-  } catch {
-    // reported below
-  }
-}
-if (!process.env.DATABASE_URL) {
-  console.error('no DATABASE_URL in the environment or ./.env');
-  process.exit(1);
-}
-
 const readStdin = async () => {
   let data = '';
   for await (const chunk of process.stdin) data += chunk;
   return data;
 };
 
-// Imported once the command is known good: `pg` is the app's, not this package's.
-const { default: pg } = await import('pg');
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+let client;
 const q = (text, values) => client.query(text, values).then(r => r.rows);
 let wrote = false;
 try {
-  await client.connect();
+  client = await connect();
   const today = new Date().toISOString().slice(0, 10);
 
   if (mode === 'read') {
@@ -181,18 +163,11 @@ try {
     }
   }
 } catch (e) {
-  await client.query('ROLLBACK').catch(() => {});
+  await client?.query('ROLLBACK').catch(() => {});
   console.error(e.message);
   process.exitCode = 1;
 } finally {
-  await client.end().catch(() => {});
+  await client?.end().catch(() => {});
   const tag = arg('--invalidate');
-  if (wrote && tag) {
-    try {
-      execFileSync('vercel', ['cache', 'invalidate', '--tag', tag, '--yes'], { stdio: 'ignore' });
-      console.log(`cache: ${tag} tag invalidated`);
-    } catch (e) {
-      console.warn(`cache: ${tag} tag NOT invalidated (${e.message}); run \`vercel cache invalidate --tag ${tag}\``);
-    }
-  }
+  if (wrote && tag) await invalidate(tag);
 }

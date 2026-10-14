@@ -13,6 +13,8 @@
 // `/<key>.txt` from the origin, so the key is public by design, and the file in
 // each app's `public/` is the only copy.
 
+import { decodeEntities } from './markdown.js';
+
 export const INDEXNOW_ENDPOINT = 'https://api.indexnow.org/indexnow';
 
 /** The protocol's cap on the URLs in one POST. */
@@ -23,9 +25,6 @@ export interface IndexNowEntry {
   lastModified?: string;
 }
 
-const XML_ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
-const unescapeXml = (s: string) => s.trim().replace(/&(amp|lt|gt|quot|apos);/g, (_, e: string) => XML_ENTITIES[e]!);
-
 /** The `<loc>` and `<lastmod>` of every `<url>` in a sitemap. */
 export function sitemapEntries(xml: string): IndexNowEntry[] {
   const entries: IndexNowEntry[] = [];
@@ -33,8 +32,26 @@ export function sitemapEntries(xml: string): IndexNowEntry[] {
     const loc = /<loc>([\s\S]*?)<\/loc>/.exec(body)?.[1];
     if (!loc) continue;
     const lastmod = /<lastmod>([\s\S]*?)<\/lastmod>/.exec(body)?.[1];
-    entries.push(lastmod ? { url: unescapeXml(loc), lastModified: lastmod.trim() } : { url: unescapeXml(loc) });
+    const url = decodeEntities(loc.trim());
+    entries.push(lastmod ? { url, lastModified: lastmod.trim() } : { url });
   }
+  return entries;
+}
+
+/**
+ * Every entry of the sitemap at `url`, following a sitemap index one level down
+ * to at most 20 children. The `indexnow` and `check-pages` bins each parsed
+ * sitemaps, and only one of them read an index. Throws when `url` itself does
+ * not answer 200; a child that fails is skipped.
+ */
+export async function readSitemap(url: string, fetchImpl: typeof fetch = fetch): Promise<IndexNowEntry[]> {
+  const res = await fetchImpl(url);
+  if (!res.ok) throw new Error(`${url} answered ${res.status}`);
+  const xml = await res.text();
+  if (!/<sitemapindex/i.test(xml)) return sitemapEntries(xml);
+  const children = [...xml.matchAll(/<loc>([\s\S]*?)<\/loc>/g)].slice(0, 20).map(m => decodeEntities(m[1]!.trim()));
+  const entries: IndexNowEntry[] = [];
+  for (const child of children) entries.push(...(await readSitemap(child, fetchImpl).catch(() => [])));
   return entries;
 }
 
