@@ -10,21 +10,8 @@
 // not open the deployed site, and one saved on the site does not open localhost.
 //
 // Like analytics, the package owns the SQL and the app owns the connection. The
-// app declares the two tables in its own schema:
-//
-//   model Passkey {
-//     id         String   @id // the credential id, base64url
-//     publicKey  String       // base64url
-//     counter    Int
-//     transports String[]
-//     createdAt  DateTime @default(now()) @db.Timestamptz(3)
-//   }
-//
-//   model PasskeyToken {
-//     hash      String   @id // sha-256 of the token, base64url
-//     kind      String       // session | invite | challenge
-//     expiresAt DateTime @db.Timestamptz(3)
-//   }
+// two tables are Prisma models shipped in `prisma/passkey.prisma`, which the
+// `prisma-models` bin copies into the app's schema folder.
 //
 // Every token is stored as its hash, so a read of the table opens nothing. A
 // challenge is spent the moment a response quotes it, and an invite the moment

@@ -672,8 +672,8 @@ address and browser under a salt that is replaced every UTC day, and the old
 salt is deleted, so a visitor is told apart within a day and never followed
 into the next. Rows are kept 400 days. The package owns the SQL and the app
 owns the connection: `Sql` is one function that runs a statement with `$1, $2…`
-placeholders, and the four tables it needs are stated as Prisma models at the
-top of `src/analytics.ts`. The fourth, `ViewDay`, holds days a site counted
+placeholders, and the four tables it needs ship as Prisma models in
+`prisma/analytics.prisma` (see `prisma-models` below). The fourth, `ViewDay`, holds days a site counted
 elsewhere before it counted its own; `digest` adds them to any window that
 reaches back that far, and a site with no such history leaves it empty.
 
@@ -735,8 +735,8 @@ its readers asked for. The queries that return zero rows are the valuable ones
 nothing else, no account, password or email. `createPasskeyGate({ sql, rpName })`
 returns the whole of it. `gate.route` is the sign-in route,
 `gate.signedIn(cookieValue)` is the check a page makes, `gate.open()` is true
-while no passkey is saved, and `gate.cookie` is the cookie's name. The two tables (`Passkey`, `PasskeyToken`) are stated as Prisma
-models at the top of `src/passkey.ts`, and every token is kept only as its hash.
+while no passkey is saved, and `gate.cookie` is the cookie's name. The two tables (`Passkey`, `PasskeyToken`) ship as Prisma
+models in `prisma/passkey.prisma`, and every token is kept only as its hash.
 `@simplewebauthn/server` is an optional peer.
 
 There is no sign-up. While no passkey is saved, the page saves the first one
@@ -893,6 +893,13 @@ npx analytics-digest --days 7 --gap "Symptom Miss:term"   # adds an event to the
 
 ```sh
 npx passkey-invite https://caper.network/stats
+```
+
+`prisma-models` copies the models the analytics and passkey SQL reads, `prisma/analytics.prisma` and `prisma/passkey.prisma`, into an app's schema folder, and `--check` exits 1 when a copy is missing or has drifted. Prisma reads a schema split across one folder's files, so the app moves `prisma/schema.prisma` into `prisma/schema/`, points `prisma.config.ts`'s `schema` at the folder, and keeps its generator, datasource and own models there beside the shipped files. A generator `output` is relative to the file that declares it, so it gains a `../`.
+
+```sh
+npx prisma-models            # write both into prisma/schema
+npx prisma-models --check    # in the build, before prisma generate
 ```
 
 `fts-ddl <table>` rebuilds a table's `search_tsv` generated column and its GIN index from the expression `wiki-formant/search` queries, over `DIRECT_URL` (else `DATABASE_URL` on 5432). Run it before declaring the column in `schema.prisma`; the bin's header says why.

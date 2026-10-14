@@ -14,52 +14,9 @@
 //
 // The package owns the SQL; the app owns the connection. `Sql` is one function
 // that runs a parameterised statement, which Prisma, `pg` and postgres.js can
-// all supply in a line. The app declares the four tables in its own schema,
-// so `prisma db push` keeps them:
-//
-//   model View {
-//     id        BigInt   @id @default(autoincrement())
-//     siteId    String   @default("")
-//     path      String
-//     source    String?
-//     country   String?
-//     device    String
-//     visitor   String
-//     createdAt DateTime @default(now()) @db.Timestamptz(3)
-//     @@index([siteId, createdAt])
-//   }
-//
-//   model Event {
-//     id        BigInt   @id @default(autoincrement())
-//     siteId    String   @default("")
-//     name      String
-//     path      String?
-//     props     Json     @default("{}")
-//     visitor   String?
-//     createdAt DateTime @default(now()) @db.Timestamptz(3)
-//     @@index([siteId, name, createdAt])
-//   }
-//
-//   model Salt {
-//     day   String @id
-//     value String
-//   }
-//
-//   model ViewDay {
-//     siteId     String   @default("")
-//     day        DateTime @db.Date
-//     visitors   Int
-//     pageviews  Int
-//     visits     Int
-//     bounces    Int
-//     seconds    Int
-//     pages      Json     @default("{}")
-//     entryPages Json     @default("{}")
-//     sources    Json     @default("{}")
-//     countries  Json     @default("{}")
-//     devices    Json     @default("{}")
-//     @@id([siteId, day])
-//   }
+// all supply in a line. The four tables it needs are Prisma models shipped in
+// `prisma/analytics.prisma`, which the `prisma-models` bin copies into the
+// app's schema folder, so `prisma db push` keeps them.
 //
 // `ViewDay` holds days a site counted somewhere else before it counted its
 // own, one row a day with each breakdown as `{ value: visitors }`. Nothing

@@ -1,0 +1,57 @@
+// Shipped by wiki-formant (`npx prisma-models`). Edit it there, not here:
+// `prisma-models --check` fails on a copy that has drifted.
+//
+// Page views and events, counted by wiki-formant/analytics. Its SQL names these
+// tables as written, so they carry no @@map. A visitor is a hash under the day's
+// Salt, which is replaced daily; rows older than 400 days are deleted. `siteId`
+// is "" in an app that serves one site.
+
+model View {
+  id        BigInt   @id @default(autoincrement())
+  siteId    String   @default("")
+  path      String
+  source    String?
+  country   String?
+  device    String
+  visitor   String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([siteId, createdAt])
+}
+
+model Event {
+  id        BigInt   @id @default(autoincrement())
+  siteId    String   @default("")
+  name      String
+  path      String?
+  props     Json     @default("{}")
+  visitor   String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([siteId, name, createdAt])
+}
+
+model Salt {
+  day   String @id
+  value String
+}
+
+// Days a site counted somewhere else before it counted its own, one row a day
+// with each breakdown as { value: visitors }. Nothing writes or deletes it:
+// the app loads it once, and digest adds the days in a window to the views.
+model ViewDay {
+  siteId     String   @default("")
+  day        DateTime @db.Date
+  visitors   Int
+  pageviews  Int
+  visits     Int
+  bounces    Int
+  seconds    Int
+  pages      Json     @default("{}")
+  entryPages Json     @default("{}")
+  sources    Json     @default("{}")
+  countries  Json     @default("{}")
+  devices    Json     @default("{}")
+
+  @@id([siteId, day])
+}

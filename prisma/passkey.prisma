@@ -1,0 +1,21 @@
+// Shipped by wiki-formant (`npx prisma-models`). Edit it there, not here:
+// `prisma-models --check` fails on a copy that has drifted.
+//
+// The passkey door to a site's admin pages. wiki-formant/passkey owns the SQL
+// and names these tables as written, so they carry no @@map. Every token is
+// stored as its hash; `npx passkey-invite <url>` prints the link that saves a
+// passkey.
+
+model Passkey {
+  id         String   @id // the credential id, base64url
+  publicKey  String // base64url
+  counter    Int
+  transports String[]
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+}
+
+model PasskeyToken {
+  hash      String   @id // sha-256 of the token, base64url
+  kind      String // session | invite | challenge
+  expiresAt DateTime @db.Timestamptz(3)
+}

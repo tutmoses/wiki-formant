@@ -1,6 +1,6 @@
 {
   "name": "wiki-formant",
-  "version": "0.48.0",
+  "version": "0.49.0",
   "description": "The portable half of a wiki: derived taxonomy and facet controls, a version-negotiating MCP transport, markdown twins, block rendering, a rich-text editor engine, conditional-GET plumbing, and the headers and CSP every origin sends.",
   "type": "module",
   "license": "MIT",
@@ -246,11 +246,13 @@
     "analytics-digest": "bin/analytics-digest.mjs",
     "passkey-invite": "bin/passkey-invite.mjs",
     "fts-ddl": "bin/fts-ddl.mjs",
-    "indexnow": "bin/indexnow.mjs"
+    "indexnow": "bin/indexnow.mjs",
+    "prisma-models": "bin/prisma-models.mjs"
   },
   "files": [
     "dist",
     "bin",
+    "prisma",
     "tsconfig.base.json"
   ],
   "engines": {
