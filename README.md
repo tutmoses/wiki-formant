@@ -947,6 +947,18 @@ npx prisma-models --check    # in the build, before prisma generate
 npx fts-ddl pages
 ```
 
+`mark-verified` stamps `last_verified_at` on pages a sweep checked and found current, so `freshnessBanner` stops calling them outdated, and `maintenance-log` is the state I/O of a wiki-sweep routine whose memory lives in one page's `metadata.state`: `read`, `write` (the whole state, or `-` for stdin), `compact` and `backlog-add`, which appends under a row lock so another routine's item cannot be lost to a concurrent `write`. Every write compacts and re-renders the page; a revision is written at most once a day. Two wikis carried both scripts against their own tables, so the tables are arguments. Run them from the app's root, like `passkey-invite`:
+
+```sh
+npx mark-verified contents/tech/radix-engine scrypto       # one page
+npx mark-verified --all ecosystem --invalidate wiki        # a tag path, then the cache tag
+npx maintenance-log read --at contents/tech/operations/wiki-maintenance-log --routine wiki-sweep --author <id>
+npx maintenance-log backlog-add '[{"item": "…"}]' --at operations/wiki-maintenance-log --routine caper-wiki-sweep \
+  --pages wiki_pages --revisions wiki_revisions --page-key wiki_page_id --scope caper_id
+```
+
+`--scope column` keeps to rows where the column is NULL (`=value` for one value), `--table`/`--pages`/`--revisions` default to `pages` and `revisions`, and `--invalidate <tag>` runs `vercel cache invalidate` after a write.
+
 ## A reusable workflow
 
 `.github/workflows/publish-mcp-registry.yml` republishes an origin's server to the MCP registry when the version in its `server.json` moves. Each app keeps its own trigger and calls it with its domain:

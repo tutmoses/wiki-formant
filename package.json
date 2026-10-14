@@ -252,7 +252,9 @@
     "passkey-invite": "bin/passkey-invite.mjs",
     "fts-ddl": "bin/fts-ddl.mjs",
     "indexnow": "bin/indexnow.mjs",
-    "prisma-models": "bin/prisma-models.mjs"
+    "prisma-models": "bin/prisma-models.mjs",
+    "mark-verified": "bin/mark-verified.mjs",
+    "maintenance-log": "bin/maintenance-log.mjs"
   },
   "files": [
     "dist",
