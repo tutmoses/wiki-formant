@@ -266,8 +266,9 @@ export interface DigestOptions {
   siblings?: string[];
   gaps?: Gap[];
   /**
-   * MCP callers left out of `agent_tool_calls`, matched inside the user agent.
-   * The default is the conformance suites (`<repo>-mcp-test`) and the studio's own tools.
+   * The site's own agents, left out of `agents`, `top_agents` and
+   * `agent_tool_calls`, matched inside the user agent. The default is the
+   * conformance suites (`<repo>-mcp-test`) and the studio's own tools.
    */
   ownAgents?: string[];
   /**
@@ -280,6 +281,12 @@ export interface DigestOptions {
 
 type Ranked<K extends string, M extends string> = Array<Record<K, string> & Record<M, number>>;
 
+/**
+ * An agent's name from its event: the roster's label, else what its user agent
+ * calls itself, `compatible; X` or the first product token.
+ */
+const AGENT_NAME = `coalesce(props->>'bot', substring(props->>'ua' from 'compatible; ?([^/;) ]+)'), nullif(split_part(split_part(props->>'ua', '/', 1), ' ', 1), ''), '(unknown)')`;
+
 /** One UTC day of the figures a digest totals; a visit falls on the day it began. */
 export interface DigestDay {
   date: string;
@@ -290,6 +297,7 @@ export interface DigestDay {
   bounces: number;
   /** Seconds from each visit's first view to its last, summed. */
   seconds: number;
+  agents: number;
   visitors_incl_agents: number;
   /** Clicks on links to the site's X handle; zero without a handle. */
   follow_clicks: number;
@@ -302,6 +310,13 @@ export interface Digest {
   bounce_rate: number | null;
   /** Mean seconds from a visit's first view to its last; null with no visits. */
   visit_duration: number | null;
+  /**
+   * Agents, counted as visitors are: an AI crawler, an MCP client, or anything
+   * else reading the machine surface (`trackAiBot`), one per address and user
+   * agent a day, the site's own left out. They run no page script, so they are
+   * never among `visitors`.
+   */
+  agents: number;
   /** Visitors plus every agent that sent an event, such as an MCP call. */
   visitors_incl_agents: number;
   /**
@@ -310,7 +325,10 @@ export interface Digest {
    * the archive cannot stand in for it: event figures always, all of them
    * when filtered.
    */
-  previous: Record<'visitors' | 'pageviews' | 'bounce_rate' | 'visit_duration' | 'visitors_incl_agents' | 'follow_clicks', number | null>;
+  previous: Record<
+    'visitors' | 'pageviews' | 'bounce_rate' | 'visit_duration' | 'agents' | 'visitors_incl_agents' | 'follow_clicks',
+    number | null
+  >;
   /** The first UTC day this site counted itself, before which only `ViewDay` speaks; null with no views. */
   counted_from: string | null;
   top_sources: Ranked<'source', 'visitors'>;
@@ -324,6 +342,8 @@ export interface Digest {
   /** Every day in the window with anything in it, oldest first. */
   by_day: DigestDay[];
   follow_clicks: { events: number; visitors: number } | null;
+  /** Each agent by name: the roster's label, else what its user agent calls itself. */
+  top_agents: Ranked<'agent', 'visitors'>;
   agent_tool_calls: Ranked<'tool', 'events'>;
   gaps: Ranked<'query', 'events'>;
 }
@@ -355,6 +375,8 @@ export async function digest(
   const follows = handle && `name = 'Outbound Link: Click' AND props->>'url' ILIKE ANY(${$([`%x.com/${handle}%`, `%twitter.com/${handle}%`])}::text[])`;
   const tests = STATS_FILTERS.flatMap(k => (filter[k] ? [VISIT_TEST[k]($(filter[k]))] : []));
   const day = (at: string) => `to_char(${at} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`;
+  /** The site's own agents, as a test on an event's user agent. */
+  const ours = `coalesce(props->>'ua', '') ILIKE ANY(${$(ownAgents.map(a => `%${a}%`))}::text[])`;
 
   const gapSelects = gaps.map(g => {
     const prop = $(g.prop);
@@ -386,6 +408,9 @@ export async function digest(
     ), e${s} AS (
       SELECT name, props, visitor, "createdAt" AS at FROM "Event" WHERE "siteId" = $1 AND ${at}
       ${tests.length ? `AND visitor IN (SELECT visitor FROM v${s})` : ''}
+    ), ag${s} AS (
+      SELECT visitor, at, ${AGENT_NAME} AS agent FROM e${s}
+      WHERE name IN ('AI Bot Visit', 'MCP Call') AND visitor IS NOT NULL AND NOT ${ours}
     ), a${s} AS (
       SELECT * FROM "ViewDay" WHERE "siteId" = $1 AND day >= ${dayAgo(back + 1)}${back ? ` AND day < ${dayAgo(back)}` : ''}${tests.length ? ' AND false' : ''}
     ), sessions${s} AS (
@@ -402,6 +427,7 @@ export async function digest(
       'pageviews', (SELECT count(*) FROM v${s}) + (SELECT pageviews FROM archived${s}),
       'bounce_rate', (SELECT round(100.0 * bounces / nullif(visits, 0)) FROM sessions${s}),
       'visit_duration', (SELECT round(seconds / nullif(visits, 0)) FROM sessions${s}),
+      'agents', (SELECT count(DISTINCT visitor) FROM ag${s}),
       'visitors_incl_agents', (SELECT count(DISTINCT visitor) FROM (SELECT visitor FROM v${s} UNION SELECT visitor FROM e${s}) u) + (SELECT visitors FROM archived${s})`;
 
   const [row] = (await sql(
@@ -422,23 +448,24 @@ export async function digest(
       'devices', ${list(merged('device', 'devices', 'SELECT device, count(DISTINCT visitor) FROM v GROUP BY 1'))},
       'by_day', ${list(
         `SELECT date, sum(visitors) AS visitors, sum(pageviews) AS pageviews, sum(visits) AS visits, sum(bounces) AS bounces,
-          sum(seconds) AS seconds, sum(agents) AS visitors_incl_agents, sum(follows) AS follow_clicks FROM (
-          SELECT ${day('at')}, count(DISTINCT visitor), count(*), 0, 0, 0, 0, 0 FROM v GROUP BY 1
-          UNION ALL SELECT ${day('at')}, 0, 0, count(*), count(*) FILTER (WHERE views = 1), coalesce(sum(seconds), 0), 0, 0 FROM visits GROUP BY 1
-          UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, count(DISTINCT visitor), 0 FROM (SELECT at, visitor FROM v UNION ALL SELECT at, visitor FROM e) u GROUP BY 1
-          ${follows ? `UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, 0, count(*) FROM e WHERE ${follows} GROUP BY 1` : ''}
-          UNION ALL SELECT to_char(day, 'YYYY-MM-DD'), visitors, pageviews, visits, bounces, seconds, visitors, 0 FROM a
-        ) t(date, visitors, pageviews, visits, bounces, seconds, agents, follows) GROUP BY 1`,
+          sum(seconds) AS seconds, sum(agents) AS agents, sum(everyone) AS visitors_incl_agents, sum(follows) AS follow_clicks FROM (
+          SELECT ${day('at')}, count(DISTINCT visitor), count(*), 0, 0, 0, 0, 0, 0 FROM v GROUP BY 1
+          UNION ALL SELECT ${day('at')}, 0, 0, count(*), count(*) FILTER (WHERE views = 1), coalesce(sum(seconds), 0), 0, 0, 0 FROM visits GROUP BY 1
+          UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, count(DISTINCT visitor), 0, 0 FROM ag GROUP BY 1
+          UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, 0, count(DISTINCT visitor), 0 FROM (SELECT at, visitor FROM v UNION ALL SELECT at, visitor FROM e) u GROUP BY 1
+          ${follows ? `UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, 0, 0, count(*) FROM e WHERE ${follows} GROUP BY 1` : ''}
+          UNION ALL SELECT to_char(day, 'YYYY-MM-DD'), visitors, pageviews, visits, bounces, seconds, 0, visitors, 0 FROM a
+        ) t(date, visitors, pageviews, visits, bounces, seconds, agents, everyone, follows) GROUP BY 1`,
         undefined,
         '1',
       )},
       'follow_clicks', ${
         follows ? `(SELECT json_build_object('events', count(*), 'visitors', count(DISTINCT visitor)) FROM e WHERE ${follows})` : 'NULL'
       },
+      'top_agents', ${list('SELECT agent, count(DISTINCT visitor) AS visitors FROM ag GROUP BY 1', 10)},
       'agent_tool_calls', ${list(
         `SELECT coalesce(props->>'tool', '(none)') AS tool, count(*) AS events FROM e
-         WHERE name = 'MCP Call' AND props->>'method' = 'tools/call'
-           AND NOT coalesce(props->>'ua', '') ILIKE ANY(${$(ownAgents.map(a => `%${a}%`))}::text[])
+         WHERE name = 'MCP Call' AND props->>'method' = 'tools/call' AND NOT ${ours}
          GROUP BY 1`,
         10,
       )},
@@ -453,7 +480,7 @@ export async function digest(
   if (d.counted_from && before < d.counted_from) {
     const p = d.previous;
     if (tests.length) for (const k of Object.keys(p) as (keyof typeof p)[]) p[k] = null;
-    else p.visitors_incl_agents = p.follow_clicks = null;
+    else p.agents = p.visitors_incl_agents = p.follow_clicks = null;
   }
   return d;
 }

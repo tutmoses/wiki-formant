@@ -93,9 +93,29 @@ test('a bot visit is counted off the response path, a person is not', async () =
   const event = { waitUntil: p => waited.push(p) };
   const load = async () => ({ trackEvent: async (...args) => { recorded.push(args); } });
   const req = ua => ({ url: 'https://w.test/x', headers: new Headers({ 'user-agent': ua }) });
-  assert.equal(trackAiBot(req('Mozilla/5.0 Firefox'), event, load), null);
+  assert.equal(trackAiBot(req('Mozilla/5.0 Firefox'), event, load), false);
   assert.equal(waited.length, 0);
-  assert.equal(trackAiBot(req('Mozilla/5.0 (compatible; GPTBot/1.2)'), event, load), 'GPTBot');
+  assert.equal(trackAiBot(req('Mozilla/5.0 (compatible; GPTBot/1.2)'), event, load), true);
   await Promise.all(waited);
-  assert.deepEqual(recorded[0].slice(0, 3), ['AI Bot Visit', 'https://w.test/x', { bot: 'GPTBot' }]);
+  assert.deepEqual(recorded[0].slice(0, 3), ['AI Bot Visit', 'https://w.test/x', { bot: 'GPTBot', ua: 'Mozilla/5.0 (compatible; GPTBot/1.2)' }]);
+});
+
+test('an agent on no roster is counted on what only agents read, a search engine is not', async () => {
+  const waited = [];
+  const recorded = [];
+  const event = { waitUntil: p => waited.push(p) };
+  const load = async () => ({ trackEvent: async (...args) => { recorded.push(args); } });
+  const req = (path, ua, accept) => ({ url: `https://w.test${path}`, headers: new Headers({ 'user-agent': ua, ...(accept ? { accept } : {}) }) });
+  for (const path of ['/about.md', '/llms.txt', '/llms-full.txt', '/openapi.json', '/.well-known/agent-card.json']) {
+    assert.equal(trackAiBot(req(path, 'agent-collector/0.1'), event, load), true, path);
+  }
+  assert.equal(trackAiBot(req('/about', 'node', 'text/markdown'), event, load), true);
+  // A person, an agent on an ordinary page, a search engine on a twin, no user agent at all.
+  assert.equal(trackAiBot(req('/about', 'Mozilla/5.0 Firefox', 'text/html,*/*'), event, load), false);
+  assert.equal(trackAiBot(req('/about', 'node'), event, load), false);
+  assert.equal(trackAiBot(req('/llms.txt', 'Mozilla/5.0 (compatible; Googlebot/2.1)'), event, load), false);
+  assert.equal(trackAiBot({ url: 'https://w.test/a.md', headers: new Headers() }, event, load), false);
+  await Promise.all(waited);
+  assert.equal(recorded.length, 6);
+  assert.deepEqual(recorded[0][2], { ua: 'agent-collector/0.1' });
 });

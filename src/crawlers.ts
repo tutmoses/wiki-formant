@@ -1,7 +1,8 @@
 // crawlers.ts — one roster of AI crawler tokens, for both surfaces that need it.
 //
 // The proxy counts an "AI Bot Visit" by user-agent substring, and `robots.ts`
-// gives each agent its own group. Both read this one roster.
+// gives each agent its own group. Both read this one roster. The proxy also
+// counts any agent reading the machine surface, roster or not.
 //
 // One difference between the two uses is deliberate. `Applebot-Extended`
 // never fetches a page: it is a robots.txt-only token that Applebot consults
@@ -13,6 +14,7 @@
 // to `*` and is granted whatever that grants.
 
 import type { Tracker } from './analytics.js';
+import { wantsMarkdown } from './http.js';
 import type { HeaderReader } from './rate-limit.js';
 
 export interface AiCrawler {
@@ -153,19 +155,36 @@ export function crawlerRules(opts: {
 }
 
 /**
- * Count an AI crawler's visit from a proxy, without holding up its response.
+ * What only an agent asks for: a markdown twin, an `llms` export, the OpenAPI
+ * document, a well-known descriptor. MCP is left out, since "MCP Call" counts it.
+ */
+const AGENT_ONLY = /\.md$|^\/llms[\w-]*\.txt$|^\/openapi\.json$|^\/\.well-known\//;
+
+/**
+ * Count an agent's visit from a proxy, without holding up its response: a
+ * crawler on the roster wherever it goes, and anything but a search engine
+ * that asks for what only agents read, since most agents are on no roster.
+ * The user agent is kept beside the label, so `digest` can name an agent the
+ * roster does not know and leave out the site's own.
  *
  * `load` is a dynamic import of the module that records it, because that
  * module pulls in a database client, and a static import would load it for
  * every request the proxy sees, bots or not. Three proxies wrote these lines.
- * Returns the bot's label, or null.
+ * Returns whether the request was counted.
  */
 export function trackAiBot(
   request: { url: string; headers: HeaderReader },
   event: { waitUntil(promise: Promise<unknown>): void },
   load: () => Promise<Pick<Tracker, 'trackEvent'>>,
-): string | null {
-  const bot = detectAiBot(request.headers.get('user-agent'));
-  if (bot) event.waitUntil(load().then(m => m.trackEvent('AI Bot Visit', request.url, { bot }, request.headers)));
-  return bot;
+): boolean {
+  const ua = request.headers.get('user-agent') ?? '';
+  const bot = detectAiBot(ua);
+  const agent =
+    bot !== null ||
+    (!!ua && !SEARCH_ENGINES.some(s => ua.includes(s)) && (AGENT_ONLY.test(new URL(request.url).pathname) || wantsMarkdown(request)));
+  if (agent) {
+    const props = { ...(bot ? { bot } : {}), ua: ua.slice(0, 80) };
+    event.waitUntil(load().then(m => m.trackEvent('AI Bot Visit', request.url, props, request.headers)));
+  }
+  return agent;
 }

@@ -392,7 +392,7 @@ different lists.
 ```ts
 import { trackAiBot, crawlerRules } from 'wiki-formant/crawlers';
 
-trackAiBot(request, event, () => import('@/lib/track'));   // in proxy.ts: label, or null
+trackAiBot(request, event, () => import('@/lib/track'));   // in proxy.ts: whether it counted
 const rules = crawlerRules({ allow: '/', disallow, aiAllow });
 ```
 
@@ -408,7 +408,7 @@ Every agent group also allows the agent surface — `/api/mcp`, the three `llms`
 
 `crawlerRules` returns every group robots.txt needs: the wildcard, one per AI crawler, and one for each search engine. Search engines get the HTML site and none of its twins — `/*.md$` always, plus `searchDisallow` — because the `*` group keeps the machine surface open to agents, and for Google a twin is a page it already has. Two origins wrote that group by hand and the third never did, so Google crawled its twins. The `<Link>` prefetch payload (`?_rsc=`) is refused in every group.
 
-`trackAiBot(request, event, load)` counts an `AI Bot Visit` inside `event.waitUntil`. `load` is a dynamic import because the tracker pulls in a database client, which a static import would load for every request the proxy sees.
+`trackAiBot(request, event, load)` counts an `AI Bot Visit` inside `event.waitUntil`: a crawler on the roster wherever it goes, and anything but a search engine that asks for what only agents read (a `.md` twin or `Accept: text/markdown`, the `llms` exports, `/openapi.json`, `/.well-known/`), since most agents are on no roster. Its user agent is kept, so `digest` can name it. `load` is a dynamic import because the tracker pulls in a database client, which a static import would load for every request the proxy sees.
 
 ## IndexNow
 
@@ -778,10 +778,13 @@ and may be a batch; `trackSearch` normalises a search box's free text so
 the same question aggregates as one row, and drops an empty one. Pass the request's headers and the
 event joins whoever sent it, person or agent.
 
-`digest(sql, { days })` reads a site back as one JSON object: visitors, page
-views, bounce rate, visit length, sources (a link's `utm_source`, else the
-referring host), top and entry pages, countries, devices, visitors by day, MCP
-tool calls, and the searches that found nothing. A visit is a run of one
+`digest(sql, { days })` reads a site back as one JSON object: visitors, agents,
+page views, bounce rate, visit length, sources (a link's `utm_source`, else the
+referring host), top and entry pages, countries, devices, visitors and agents by
+day, the agents by name, MCP tool calls, and the searches that found nothing.
+An agent is counted as a visitor is, one address and user agent a day, from its
+`AI Bot Visit` and `MCP Call` events; it runs no page script, so it is never
+among the visitors. `ownAgents` leaves the site's own out. A visit is a run of one
 visitor's views with no gap over 30 minutes. A multi-tenant app passes a `site`
 key to every call and a `site` resolver to `collect`.
 
@@ -831,8 +834,8 @@ headline figures, each with its change from the window before
 site's stylesheet to colour), one of them per day, every non-empty
 ranked list, and `?days=` links between windows, all time among them, pinned in
 the chart's frame as its own buttons are (`TimeChart`'s `controls`). Each
-figure is a button that charts it: visitors, page views, bounce rate, visit
-length, visitors with agents and clicks to X. `digest`'s `by_day` carries every
+figure is a button that charts it: visitors, agents, page views, bounce rate,
+visit length and clicks to X. `digest`'s `by_day` carries every
 one of those per UTC day, a visit on the day it began, so the days add up to the
 totals. A day with no visits has no bounce rate or visit length and is left out
 of those charts rather than drawn as zero. Everything but the figures and the

@@ -42,6 +42,7 @@ interface Figure {
 
 const figuresOf = ({ previous: p, ...d }: Digest): Figure[] => [
   { label: 'Visitors', value: count(d.visitors), delta: change(d.visitors, p.visitors), day: r => r.visitors },
+  { label: 'Agents', value: count(d.agents), delta: change(d.agents, p.agents), day: r => r.agents },
   { label: 'Page views', value: count(d.pageviews), delta: change(d.pageviews, p.pageviews), day: r => r.pageviews },
   {
     label: 'Bounce rate',
@@ -57,12 +58,6 @@ const figuresOf = ({ previous: p, ...d }: Digest): Figure[] => [
     day: r => (r.visits ? r.seconds / r.visits : null),
     format: duration,
   },
-  {
-    label: 'With agents',
-    value: count(d.visitors_incl_agents),
-    delta: change(d.visitors_incl_agents, p.visitors_incl_agents),
-    day: r => r.visitors_incl_agents,
-  },
   ...(d.follow_clicks
     ? [
         {
@@ -76,7 +71,7 @@ const figuresOf = ({ previous: p, ...d }: Digest): Figure[] => [
 ];
 
 const DAY = 86_400;
-const EMPTY: DigestDay = { date: '', visitors: 0, pageviews: 0, visits: 0, bounces: 0, seconds: 0, visitors_incl_agents: 0, follow_clicks: 0 };
+const EMPTY: DigestDay = { date: '', visitors: 0, pageviews: 0, visits: 0, bounces: 0, seconds: 0, agents: 0, visitors_incl_agents: 0, follow_clicks: 0 };
 
 /**
  * The figures as `.stats-figures button[aria-pressed]`, each with its change

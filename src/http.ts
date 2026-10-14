@@ -157,7 +157,7 @@ export function markdownHeaders(
  * one URL in two formats under `public, s-maxage` with no Vary, so a shared
  * cache could hand the markdown to the next JSON client, or the reverse.
  */
-export function wantsMarkdown(request: { url: string; headers: { get(name: string): string | null } }): boolean {
+export function wantsMarkdown(request: { url: string; headers: { get(name: string): string | null | undefined } }): boolean {
   return (
     new URL(request.url).searchParams.get('format') === 'text' ||
     /text\/(markdown|plain)/.test(request.headers.get('accept') ?? '')

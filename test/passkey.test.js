@@ -98,11 +98,12 @@ test('a site with no passkey asks the browser to save one without an invite', as
 });
 
 const DIGEST = {
-  visitors: 12, pageviews: 30, bounce_rate: 50, visit_duration: 75, visitors_incl_agents: 15,
-  previous: { visitors: 10, pageviews: 30, bounce_rate: 46, visit_duration: 100, visitors_incl_agents: null, follow_clicks: null },
+  visitors: 12, pageviews: 30, bounce_rate: 50, visit_duration: 75, agents: 3, visitors_incl_agents: 15,
+  previous: { visitors: 10, pageviews: 30, bounce_rate: 46, visit_duration: 100, agents: null, visitors_incl_agents: null, follow_clicks: null },
   top_sources: [{ source: 'x', visitors: 4 }], top_pages: [{ page: '/', visitors: 9 }, { page: '/a', visitors: 3 }],
   entry_pages: [], from_posts: [], sibling_referrals: [], countries: [{ country: 'GB', visitors: 5 }],
-  devices: [{ device: 'phone', visitors: 7 }], by_day: [], follow_clicks: null, agent_tool_calls: [], gaps: [],
+  devices: [{ device: 'phone', visitors: 7 }], by_day: [], follow_clicks: null,
+  top_agents: [{ agent: 'ClaudeBot', visitors: 2 }, { agent: 'node', visitors: 1 }], agent_tool_calls: [], gaps: [],
   counted_from: '2026-10-01',
 };
 
@@ -113,7 +114,9 @@ test('the stats page leaves out empty lists and marks the window shown', () => {
   assert.match(out, /<span>Page views<\/span><strong>30<small class="stats-delta">0%<\/small><\/strong>/);
   assert.match(out, /<span>Bounce rate<\/span><strong>50%<small class="stats-delta" data-better="false">\+4 pp<\/small><\/strong>/);
   assert.match(out, /<span>Visit length<\/span><strong>1m 15s<small class="stats-delta" data-better="false">-25%<\/small><\/strong>/);
-  assert.match(out, /<span>With agents<\/span><strong>15<\/strong>/);
+  // Agents sit beside visitors, and are named in a list that narrows nothing.
+  assert.match(out, /<span>Visitors<\/span>.*?<\/button><button type="button" aria-pressed="false"><span>Agents<\/span><strong>3<\/strong>/);
+  assert.match(out, /<h2>Agents<\/h2><ol><li style="--share:1"><span>ClaudeBot<\/span>/);
   assert.match(out, /aria-pressed="false"><span>Bounce rate<\/span>/);
   assert.match(out, /1m 15s/);
   assert.match(out, /United Kingdom/);

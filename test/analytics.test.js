@@ -215,13 +215,24 @@ test('the window before is the same chain, bounded on both sides', async () => {
   assert.match(query, /'follow_clicks', \(SELECT count\(\*\) FROM e_p WHERE name = 'Outbound Link: Click'/);
 });
 
-const PREVIOUS = { visitors: 5, pageviews: 9, bounce_rate: 50, visit_duration: 30, visitors_incl_agents: 6, follow_clicks: 1 };
+test('agents are named and counted apart from visitors, the site\'s own left out', async () => {
+  const { sql, calls } = fakeSql();
+  await digest(sql, { days: 7, ownAgents: ['-mcp-test'] });
+  const { query, values } = calls.at(-1);
+  assert.match(query, /ag AS \(\s*SELECT visitor, at, coalesce\(props->>'bot', .* FROM e\s+WHERE name IN \('AI Bot Visit', 'MCP Call'\) AND visitor IS NOT NULL AND NOT coalesce\(props->>'ua', ''\) ILIKE ANY\(\$\d+::text\[\]\)/);
+  assert.match(query, /'agents', \(SELECT count\(DISTINCT visitor\) FROM ag\)/);
+  assert.match(query, /'previous', json_build_object\(.*'agents', \(SELECT count\(DISTINCT visitor\) FROM ag_p\)/s);
+  assert.match(query, /'top_agents', \(SELECT coalesce\(json_agg\(t\), '\[\]'\) FROM \(SELECT agent, count\(DISTINCT visitor\) AS visitors FROM ag GROUP BY 1/);
+  assert.equal(values.filter(v => Array.isArray(v) && v[0] === '%-mcp-test%').length, 1);
+});
+
+const PREVIOUS = { visitors: 5, pageviews: 9, bounce_rate: 50, visit_duration: 30, agents: 4, visitors_incl_agents: 6, follow_clicks: 1 };
 const digestOf = digest => async query => (query.includes('json_build_object') ? [{ digest: { ...digest, previous: { ...PREVIOUS } } }] : []);
 
 test('a window before the site counted itself compares no events, and nothing when filtered', async () => {
   const since = { counted_from: new Date().toISOString().slice(0, 10) };
   const plain = await digest(digestOf(since), { days: 30 });
-  assert.deepEqual(plain.previous, { ...PREVIOUS, visitors_incl_agents: null, follow_clicks: null });
+  assert.deepEqual(plain.previous, { ...PREVIOUS, agents: null, visitors_incl_agents: null, follow_clicks: null });
   const narrowed = await digest(digestOf(since), { days: 30, filter: { device: 'phone' } });
   assert.ok(Object.values(narrowed.previous).every(v => v === null));
   const settled = await digest(digestOf({ counted_from: '2000-01-01' }), { days: 30, filter: { device: 'phone' } });

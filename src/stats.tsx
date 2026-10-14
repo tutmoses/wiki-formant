@@ -166,6 +166,7 @@ export function Stats({ digest: d, days, filter = {}, ranges = STATS_RANGES }: S
         <StatsList title="Sibling sites" rows={rows(d.sibling_referrals, 'source', 'visitors')} to={to('source')} />
         <StatsList title="Countries" rows={rows(d.countries, 'country', 'visitors')} label={country} to={to('country')} />
         <StatsList title="Devices" rows={rows(d.devices, 'device', 'visitors')} to={to('device')} />
+        <StatsList title="Agents" rows={rows(d.top_agents, 'agent', 'visitors')} />
         <StatsList title="Agent tool calls" rows={rows(d.agent_tool_calls, 'tool', 'events')} />
         <StatsList title="Searches that found nothing" rows={rows(d.gaps, 'query', 'events')} />
       </div>
