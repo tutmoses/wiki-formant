@@ -668,15 +668,18 @@ The language list defaults to `CODE_LANGS` and `DEFAULT_LANG` from `wiki-formant
 
 `createHeadingIds({ slug })` decorates each heading in the editor with the id its published copy will carry, through `uniqueHeadingId` — the dedupe `injectHeadingIds` uses — so a rail listing headings mid-edit links to the anchors readers will get. `uploadImageTo('/api/upload')` is the `uploadImage` two editors had written identically.
 
-`toolbarActions([...])` picks the formatting commands, in order, with the labels a screen reader announces — two toolbars titled buttons with the internal key, so one said "codeBlock". Render each through `ToolbarButton` (named, and `aria-pressed`, since these are toggles), and run a table command with `runTableAction`. Upload and embed stay with the caller; they are the parts that differ.
+`toolbarActions([...])` picks the formatting commands, in order, with the labels a screen reader announces — two toolbars titled buttons with the internal key, so one said "codeBlock". `WikiToolbar` lays them out the way three wikis had each assembled them by hand: the format buttons, Remove link while the cursor is in a link, upload and embed, the insert buttons, and the table controls while the cursor is in a table. Every button is a `ToolbarButton` (named, and `aria-pressed`, since these are toggles); the link button opens the address field and reads as on while it is open. Which buttons, icons and classes are yours; a toolbar shaped differently builds from `ToolbarButton` and `runTableAction` directly.
+
+```tsx
+<WikiToolbar editor={editor} isActive={isActive} prompt={url} actions={FORMAT} trailing={INSERT} onUpload={triggerUpload} embed
+  icons={{ ...ICONS, unlink: <Unlink />, upload: <Upload />, embed: <Globe /> }}
+  classNames={{ toolbar: 'toolbar', button: 'toolbar-btn', pressed: 'toolbar-btn-on', divider: 'toolbar-divider' }} />
+<UrlPromptField prompt={url} classNames={{ row: 'row', input: 'input', apply: 'btn', cancel: 'btn-quiet' }} />
+```
 
 `useUrlPrompt(editor, { resolveMapUrl })` is the link and embed address field under a toolbar, in place of a `window.prompt` that blocks the page and cannot show the link the cursor is in. Three editors had written it and one still used the prompt; only one copy both opened a link field on the current address and unlinked on an emptied one. The hook carries both, closes the field when the editor it serves changes (a toolbar shared between blocks would otherwise apply it to the wrong one), and leaves the markup to you.
 
-```tsx
-const url = useUrlPrompt(editor, { resolveMapUrl });
-<ToolbarButton label="Link" pressed={url.kind === 'link'} onPress={() => url.toggle('link')}>…</ToolbarButton>
-{url.kind && <input autoFocus value={url.value} onChange={e => url.setValue(e.target.value)} onKeyDown={url.onKeyDown} />}
-```
+`UrlPromptField` is its markup: an address input on which Enter applies and Escape closes, and Apply and Cancel.
 
 A link is stored as its `href` and the `link` class, nothing else. Stock Tiptap writes `target="_blank" rel="noopener noreferrer nofollow"` onto every link, internal ones included, which on a site throws away its own link equity and opens in-site navigation in new tabs. Whether a link is external depends on the host serving the page, so `normaliseLinks` decides it at render time. A legacy link loses both attributes the next time its page is saved.
 
@@ -685,6 +688,36 @@ The redirect resolves through the wiki's own route, because the editor cannot re
 ```ts
 export const GET = resolveMapHandler({ authorize: async () => !!(await currentUser()) });
 ```
+
+## Block editor
+
+`wiki-formant/block-editor` is the block list an author edits and the fields of the core types. Three wikis had written it, 500 to 700 lines each, and had drifted: one dropped a stored code language its list did not name, one let a typed count run past the row cap, one named every remove button "Remove", one never marked the block being edited. The behaviour is here once; the look arrives as a kit.
+
+```tsx
+const KIT: BlockEditorKit = {
+  classNames: { list: 'stack', card: 'block-card', action: 'icon-btn', input: 'input', row: 'row', … },
+  icons: { add: <Plus />, up: <ChevronUp />, down: <ChevronDown />, duplicate: <Copy />, remove: <Trash2 /> },
+  Choice: ToggleGroup,   // optional: a <select> otherwise
+  Menu: PopoverMenu,     // optional: an inline panel otherwise
+};
+const SCHEMA: BlockSchema<Block> = {
+  meta: type => BLOCK_META[type], create: createBlock, duplicate: duplicateBlock,
+  types: PAGE_TYPES, nestedTypes: ATOMIC_TYPES, single: ['infobox'],
+  renderBody: (block, onUpdate) => {
+    switch (block.type) {
+      case 'codeTabs': return <CodeTabsFields block={block} onUpdate={onUpdate} />;
+      case 'columns': return <ColumnsFields block={block} onUpdate={onUpdate} />;
+      case 'daoTimeline': return <DaoTimelineEdit block={block} onUpdate={onUpdate} />;
+      …
+    }
+  },
+};
+<BlockEditor blocks={blocks} onChange={setBlocks} schema={SCHEMA} kit={KIT} />
+```
+
+The dispatch stays a `switch` over the wiki's own union, so a new type is a compile error there. `CodeTabsFields`, `StatsFields`, `ReferencesFields`, `LinkGridFields`, `BannerFields`, `PageListFields`, `ColumnsFields` and `InfoboxFields` take the core blocks `wiki-formant/blocks` declares; the two containers hold the same list, offering `nestedTypes`. `Field`, `Choice` and `LimitField` are exported for a wiki's own editors, so its native types wear the same kit. A card is marked `data-selected` while it is being edited and `data-nested` inside a container; a type the build does not know is shown by its raw type and carried through untouched. Keep the kit and the schema stable — a module constant or a `useMemo` — since both reach every card through context, and a fresh one re-renders every card on every keystroke.
+
+The core blocks are `ContentBlock`, `CodeTabsBlock`, `StatsBlock`, `LinkGridBlock`, `ReferencesBlock`, `BannerBlock`, `ColumnsBlock<A>` and `InfoboxBlock<A>`, `A` being the wiki's atomic union. A wiki builds its union from them beside its own `recentPages` and `pageList`, which hold its own page rows or a section, and its native types.
 
 ## Analytics
 

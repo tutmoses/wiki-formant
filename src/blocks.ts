@@ -23,6 +23,7 @@ import {
   referencesToText,
   statsToText,
   stripHtml,
+  type BannerVariant,
 } from './text.js';
 
 // ---- the shapes the standard block types carry ------------------------------
@@ -91,6 +92,39 @@ export interface LinkGridGroup {
   description?: string | null;
   links: readonly LinkGridLink[];
 }
+
+// ---- the core blocks, as stored ---------------------------------------------
+//
+// The leaf types above are what a VIEW reads, loose enough for any wiki's rows.
+// These are what every wiki here STORES and edits for eight of its core types,
+// identical in all three: each leaf gains the id an editor keys a row by, and
+// a few fields narrow. A wiki builds its own closed union from them — its
+// `recentPages` and `pageList`, which hold its own page rows or a section
+// rather than a tag path, and its native types beside them — so its `switch`
+// stays exhaustive and the editors in `wiki-formant/block-editor` can take
+// these blocks without knowing the rest of its union.
+
+export type EditableCodeTab = CodeTab & { language: string };
+export type EditableStatItem = StatItem & { id: string; value: string };
+export type EditableReferenceItem = ReferenceItem & { id: string; url?: string };
+export type EditableLinkGridGroup = LinkGridGroup & { id: string; links: LinkGridLink[] };
+
+export interface ContentBlock { id: string; type: 'content'; text: string }
+export interface CodeTabsBlock { id: string; type: 'codeTabs'; tabs: EditableCodeTab[] }
+export interface StatsBlock { id: string; type: 'stats'; items: EditableStatItem[]; columns: 2 | 3 | 4 }
+export interface LinkGridBlock { id: string; type: 'linkGrid'; intro?: string; groups: EditableLinkGridGroup[] }
+export interface ReferencesBlock { id: string; type: 'references'; title?: string; items: EditableReferenceItem[] }
+/** A Wikipedia-style notice. `text` replaces the variant's standard message. */
+export interface BannerBlock { id: string; type: 'banner'; variant: BannerVariant; text?: string }
+/** `A` is the wiki's atomic union: a container never holds another container. */
+export interface ColumnsBlock<A> {
+  id: string;
+  type: 'columns';
+  columns: { id: string; blocks: A[] }[];
+  gap?: 'sm' | 'md' | 'lg';
+  align?: 'start' | 'center' | 'end' | 'stretch';
+}
+export interface InfoboxBlock<A> { id: string; type: 'infobox'; blocks: A[] }
 
 // ---- the container walk -----------------------------------------------------
 

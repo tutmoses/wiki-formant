@@ -19,7 +19,8 @@ const { Editor } = await import('@tiptap/core');
 const { default: StarterKit } = await import('@tiptap/starter-kit');
 const { createElement, act } = await import('react');
 const { createRoot } = await import('react-dom/client');
-const { applyUrlPrompt, useUrlPrompt, useWikiEditor, wikiLink } = await import('wiki-formant/editor');
+const editorModule = await import('wiki-formant/editor');
+const { applyUrlPrompt, useUrlPrompt, useWikiEditor, wikiLink } = editorModule;
 const { useUnsavedChanges, useSaveShortcut } = await import('wiki-formant/react');
 
 const noMaps = { resolveMapUrl: async () => null };
@@ -167,4 +168,39 @@ test('⌘S and Ctrl+S save with the latest callback, and nothing else does', () 
   assert.deepEqual(saves, [1, 2]);
   unmount();
   assert.equal(press({ key: 's', metaKey: true }), false);
+});
+
+test('the toolbar shows Remove link and the table controls only where they apply', () => {
+  const { WikiToolbar, toolbarActions } = editorModule;
+  const editor = editorWith('<p>See <a href="/old">the guide</a>.</p>');
+  const root = createRoot(document.getElementById('root'));
+  const prompt = { kind: 'link', toggle: () => {} };
+  const render = () =>
+    act(() =>
+      root.render(
+        createElement(WikiToolbar, {
+          editor,
+          isActive: a => (typeof a === 'string' ? editor.isActive(a) : false),
+          prompt,
+          actions: toolbarActions(['bold', 'link']),
+          onUpload: () => {},
+          icons: { bold: 'B', link: 'L', unlink: 'U', upload: '↑' },
+          classNames: { pressed: 'on' },
+        }),
+      ),
+    );
+  render();
+  const label = l => document.querySelector(`[aria-label="${l}"]`);
+  // The prompt is open on a link, so the link button reads as on.
+  assert.equal(label('Link').getAttribute('aria-pressed'), 'true');
+  assert.equal(label('Bold').getAttribute('aria-pressed'), 'false');
+  assert.equal(label('Remove link'), null);
+  assert.ok(label('Upload image'));
+  assert.equal(label('Embed'), null);
+  caretIn(editor, 'guide');
+  render();
+  assert.ok(label('Remove link'));
+  assert.ok(!document.body.textContent.includes('+Col'));
+  act(() => root.unmount());
+  editor.destroy();
 });

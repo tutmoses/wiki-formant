@@ -34,6 +34,7 @@ import { useEditor } from '@tiptap/react';
 import type { AnyExtension, Editor } from '@tiptap/core';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { toMapEmbedUrl } from './maps.js';
+import { cx } from './html.js';
 
 /**
  * Re-exported so the COMMAND AUGMENTATIONS reach consumers.
@@ -322,7 +323,133 @@ export function ToolbarButton({
   );
 }
 
+export interface WikiToolbarProps {
+  editor: Editor;
+  /** `useWikiEditor`'s `isActive`. */
+  isActive: (a?: ActiveDescriptor) => boolean;
+  /** `useUrlPrompt`'s state: the link button opens it, and shows pressed while it is open. */
+  prompt: UrlPromptState;
+  /** The formatting buttons, before Remove link, upload and embed. */
+  actions: readonly ToolbarAction[];
+  /** The insert buttons after them, such as table and tabs. */
+  trailing?: readonly ToolbarAction[];
+  /** Shows the upload button, which calls this: `useWikiEditor`'s `triggerUpload`. */
+  onUpload?: () => void;
+  /** Shows the embed button, which opens the prompt on an embed address. */
+  embed?: boolean;
+  icons: Partial<Record<ToolbarKey, ReactNode>> & { unlink: ReactNode; upload?: ReactNode; embed?: ReactNode };
+  classNames?: {
+    toolbar?: string;
+    button?: string;
+    /** Added to a button that is on. */
+    pressed?: string;
+    divider?: string;
+    /** A table control, which is a word rather than an icon. */
+    tableButton?: string;
+    /** Added to the table controls that delete. */
+    danger?: string;
+  };
+}
+
+/**
+ * The formatting bar three wikis had each assembled from `toolbarActions`,
+ * `ToolbarButton` and `TABLE_ACTIONS`, in the same order with the same rules:
+ * a link button that needs an address and so opens the prompt, a Remove link
+ * button while the cursor is in a link, upload and embed between the format
+ * and insert groups, and the table controls while the cursor is in a table.
+ * Which buttons, which icons and which classes are the caller's.
+ */
+export function WikiToolbar({ editor, isActive, prompt, actions, trailing = [], onUpload, embed, icons, classNames: c = {} }: WikiToolbarProps) {
+  const button = ({ key, label, active, run }: ToolbarAction) => {
+    const pressed = isActive(active) || (key === 'link' && prompt.kind === 'link');
+    return (
+      <ToolbarButton
+        key={key}
+        label={label}
+        pressed={active ? pressed : undefined}
+        onPress={() => (run ? run(editor) : prompt.toggle('link'))}
+        className={cx(c.button, pressed && c.pressed)}
+      >
+        {icons[key]}
+      </ToolbarButton>
+    );
+  };
+  return (
+    <div className={c.toolbar} role="toolbar" aria-label="Text formatting">
+      {actions.map(button)}
+      {editor.isActive('link') && (
+        <ToolbarButton label="Remove link" onPress={() => editor.chain().focus().extendMarkRange('link').unsetLink().run()} className={c.button}>
+          {icons.unlink}
+        </ToolbarButton>
+      )}
+      {onUpload && (
+        <ToolbarButton label="Upload image" onPress={onUpload} className={c.button}>
+          {icons.upload}
+        </ToolbarButton>
+      )}
+      {embed && (
+        <ToolbarButton
+          label="Embed"
+          pressed={prompt.kind === 'embed'}
+          onPress={() => prompt.toggle('embed')}
+          className={cx(c.button, prompt.kind === 'embed' && c.pressed)}
+        >
+          {icons.embed}
+        </ToolbarButton>
+      )}
+      {trailing.map(button)}
+      {editor.isActive('table') && (
+        <>
+          <span className={c.divider} aria-hidden />
+          {TABLE_ACTIONS.map(([command, label, danger]) => (
+            <button key={command} type="button" className={cx(c.tableButton, danger && c.danger)} onClick={() => runTableAction(editor, command)}>
+              {label}
+            </button>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ---- the address field ------------------------------------------------------
+
+export interface UrlPromptFieldProps {
+  prompt: UrlPromptState;
+  placeholders?: { link?: string; embed?: string };
+  classNames?: { row?: string; input?: string; apply?: string; cancel?: string };
+}
+
+/**
+ * The address field under a toolbar, open while `prompt.kind` is set: Enter
+ * applies, Escape closes, and an emptied link address unlinks.
+ */
+export function UrlPromptField({ prompt, placeholders = {}, classNames: c = {} }: UrlPromptFieldProps) {
+  if (!prompt.kind) return null;
+  const link = prompt.kind === 'link';
+  return (
+    <div className={c.row}>
+      <input
+        autoFocus
+        type="text"
+        inputMode="url"
+        autoCapitalize="none"
+        className={c.input}
+        aria-label={link ? 'Link address' : 'Embed address'}
+        placeholder={link ? (placeholders.link ?? 'https://… (empty removes the link)') : (placeholders.embed ?? 'YouTube, X, Google or Apple Maps, or any iframe URL')}
+        value={prompt.value}
+        onChange={e => prompt.setValue(e.target.value)}
+        onKeyDown={prompt.onKeyDown}
+      />
+      <button type="button" className={c.apply} onClick={prompt.apply}>
+        {link ? 'Apply' : 'Embed'}
+      </button>
+      <button type="button" className={c.cancel} onClick={prompt.close}>
+        Cancel
+      </button>
+    </div>
+  );
+}
 
 export type UrlPromptKind = 'link' | 'embed';
 
