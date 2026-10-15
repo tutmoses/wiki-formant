@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bucketChart, chartSteps, formatChartValue, placeMarkers } from 'wiki-formant/chart';
+import { bucketChart, chartSteps, formatChartValue, placeMarkers, stepDecimals } from 'wiki-formant/chart';
 import { statsDays } from 'wiki-formant/stats';
 
 const DAY = 86_400;
@@ -49,6 +49,16 @@ test('values are compact from a thousand and four figures below', () => {
   assert.equal(formatChartValue(1234567), '1.23M');
   assert.equal(formatChartValue(0.012345), '0.01235');
   assert.equal(formatChartValue(12), '12');
+});
+
+test('an axis tick is written to its step, so neighbours never read alike', () => {
+  assert.equal(stepDecimals(0.25), 2);
+  assert.equal(stepDecimals(0.0005), 4);
+  assert.equal(stepDecimals(0.30000000000000004 - 0.25), 2);
+  assert.equal(stepDecimals(5000), 0);
+  assert.deepEqual([4.84e9, 4.845e9, 4.85e9].map(n => formatChartValue(n, 5e6)), ['4.84B', '4.845B', '4.85B']);
+  assert.deepEqual([1500, 1000, 500, 0].map(n => formatChartValue(n, 500)), ['1.5K', '1K', '500', '0']);
+  assert.deepEqual([0.0035, 0.0005].map(n => formatChartValue(n, 0.0005)), ['0.0035', '0.0005']);
 });
 
 test('the stats page takes all time as ?days=all', () => {

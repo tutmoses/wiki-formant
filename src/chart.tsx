@@ -12,7 +12,7 @@
 // on the point they fall in, so a spike carries the reason for it.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { AutoscaleInfo, IChartApi, ISeriesApi, ISeriesMarkersPluginApi, SeriesMarker, Time, UTCTimestamp } from 'lightweight-charts';
+import type { AutoscaleInfo, IChartApi, ISeriesApi, ISeriesMarkersPluginApi, LineType, SeriesMarker, Time, UTCTimestamp } from 'lightweight-charts';
 
 /**
  * One value at a time in Unix seconds, UTC. A price may carry the rest of its
@@ -121,10 +121,25 @@ export function placeMarkers(markers: readonly ChartMarker[], shown: readonly Ch
 
 const isCandle = (p: ChartPoint) => p.open !== undefined && p.high !== undefined && p.low !== undefined;
 
+/** The decimal places that write every multiple of `step` exactly: two for 0.25, none for 5000. */
+export function stepDecimals(step: number): number {
+  const exponent = Math.floor(Math.log10(step));
+  // The axis steps by 1, 2, 2.5 or 5 times a power of ten; rounding drops float noise.
+  const mantissa = String(Math.round((step / 10 ** exponent) * 1e6) / 1e6);
+  return Math.min(20, Math.max(0, (mantissa.split('.')[1]?.length ?? 0) - exponent));
+}
+
 const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 2 });
 const precise = new Intl.NumberFormat('en', { maximumSignificantDigits: 4 });
-/** Compact from a thousand up, four significant figures below. */
-export const formatChartValue = (n: number) => (Math.abs(n) >= 1e3 ? compact.format(n) : precise.format(n));
+/**
+ * Compact from a thousand up, four significant figures below. An axis tick is
+ * written to its step in the unit it reads in, so 4.845B is not a second 4.85B.
+ */
+export function formatChartValue(n: number, step?: number): string {
+  if (step === undefined) return Math.abs(n) >= 1e3 ? compact.format(n) : precise.format(n);
+  const unit = Math.abs(n) >= 1e3 ? 1e3 ** Math.min(4, Math.floor(Math.log10(Math.abs(n)) / 3)) : 1;
+  return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: stepDecimals(step / unit) }).format(n);
+}
 
 /**
  * A CSS colour at an opacity, as the rgba() the chart's parser reads. Drawn to
@@ -138,11 +153,15 @@ function rgba(colour: string, alpha = 1): string {
   return `rgba(${Array.from(ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)).join(', ')}, ${alpha})`;
 }
 
+// A count's axis starts at zero and stops there: the scale's bottom margin is off and
+// a few pixels below zero hold its label, where a margin would draw negative ticks.
 const fromZeroScale = (base: () => AutoscaleInfo | null) => {
   const info = base();
   if (info?.priceRange) info.priceRange.minValue = 0;
-  return info;
+  return info && { ...info, margins: { above: info.margins?.above ?? 0, below: 8 } };
 };
+const ownScale = (base: () => AutoscaleInfo | null) => base();
+const MARGIN_TOP = 0.15;
 
 export interface TimeChartProps {
   /** Daily points, oldest first, or a loader for every resolution the ranges need. */
@@ -157,8 +176,11 @@ export interface TimeChartProps {
   aggregate?: 'last' | 'mean';
   /** The value axis starts at zero, so a quiet week does not read as a collapse. */
   fromZero?: boolean;
-  /** The value axis and crosshair label. Read on every draw, so it need not be stable. */
-  format?: (n: number) => string;
+  /**
+   * The value axis and crosshair label. Read on every draw, so it need not be stable.
+   * An axis tick passes the spacing between ticks, so neighbours never read alike.
+   */
+  format?: (n: number, step?: number) => string;
   /** Open on candles, where the points carry them. A candles toggle shows either way. */
   candles?: boolean;
   /** In pixels. Otherwise the stylesheet's `--chart-height`, else 15rem. */
@@ -182,6 +204,8 @@ type Loaded = { resolution: ChartResolution; points: readonly ChartPoint[] } | {
 type Series = {
   api: IChartApi;
   area: ISeriesApi<'Area'>;
+  curved: LineType;
+  straight: LineType;
   candle: ISeriesApi<'Candlestick'>;
   volume: ISeriesApi<'Histogram'> | null;
   addVolume: () => ISeriesApi<'Histogram'>;
@@ -237,7 +261,17 @@ export function TimeChart({
       const ink = rgba(style.color);
       const up = rgba(style.getPropertyValue('--chart-up').trim() || style.color);
       const down = rgba(style.getPropertyValue('--chart-down').trim() || style.color, style.getPropertyValue('--chart-down').trim() ? 1 : 0.45);
-      const priceFormat = { type: 'custom', formatter: (n: number) => formatRef.current(n), minMove: 1e-12 } as const;
+      const priceFormat = {
+        type: 'custom',
+        formatter: (n: number) => formatRef.current(n),
+        // Ticks are evenly spaced, so the gap between any two is the step. Each is snapped to
+        // it, since the library's zero can arrive as -1e-18.
+        tickmarksFormatter: (ticks: number[]) => {
+          const step = ticks.length > 1 ? Math.abs(ticks[0]! - ticks[1]!) : 0;
+          return ticks.map(n => (step ? formatRef.current(Math.round(n / step) * step, step) : formatRef.current(n)));
+        },
+        minMove: 1e-12,
+      } as const;
       const guide = { color: rgba(style.color, 0.4), width: 1, style: LineStyle.Dotted, labelBackgroundColor: ink } as const;
       const grid = rgba(axis || style.color, 0.1);
       const api = createChart(el, {
@@ -252,8 +286,9 @@ export function TimeChart({
         },
         grid: { vertLines: { color: grid }, horzLines: { color: grid } },
         crosshair: { mode: CrosshairMode.Magnet, vertLine: guide, horzLine: guide },
-        rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.15, bottom: 0.1 } },
-        timeScale: { borderVisible: false, secondsVisible: false },
+        rightPriceScale: { borderVisible: false },
+        // The value axis settles its width after the points are fitted; the range holds through it.
+        timeScale: { borderVisible: false, secondsVisible: false, lockVisibleTimeRangeOnResize: true },
         handleScroll: false,
         handleScale: false,
       });
@@ -262,11 +297,9 @@ export function TimeChart({
         topColor: rgba(style.color, 0.4),
         bottomColor: rgba(style.color, 0.02),
         lineWidth: 2,
-        lineType: aggregate === 'mean' ? LineType.Curved : LineType.Simple,
         crosshairMarkerBackgroundColor: ink,
         crosshairMarkerBorderColor: ink,
         priceFormat,
-        ...(fromZero && { autoscaleInfoProvider: fromZeroScale }),
       });
       const candle = api.addSeries(CandlestickSeries, {
         visible: false,
@@ -290,6 +323,7 @@ export function TimeChart({
       };
       chart.current = {
         api, area, candle, volume: null, addVolume, up, down, ink,
+        curved: LineType.Curved, straight: LineType.Simple,
         areaMarkers: createSeriesMarkers(area, []),
         candleMarkers: createSeriesMarkers(candle, []),
       };
@@ -301,7 +335,15 @@ export function TimeChart({
       chart.current = null;
       setReady(false);
     };
-  }, [fromZero, aggregate]);
+  }, []);
+
+  // Applied to the chart in place: rebuilding it would leave a new chart with nothing drawn on it.
+  useEffect(() => {
+    const c = chart.current;
+    if (!ready || !c) return;
+    c.api.priceScale('right').applyOptions({ scaleMargins: { top: MARGIN_TOP, bottom: fromZero ? 0 : 0.1 } });
+    c.area.applyOptions({ lineType: aggregate === 'mean' ? c.curved : c.straight, autoscaleInfoProvider: fromZero ? fromZeroScale : ownScale });
+  }, [ready, fromZero, aggregate]);
 
   // One request per resolution for the life of the loader: every range from 30D up reads the same days.
   const cache = useRef(new Map<ChartResolution, Promise<readonly ChartPoint[]>>());

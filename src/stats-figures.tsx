@@ -7,11 +7,13 @@
 
 import { useMemo, useState, type ReactNode } from 'react';
 import type { Digest, DigestDay } from './analytics.js';
-import { TimeChart, type ChartPoint } from './chart.js';
+import { TimeChart, stepDecimals, type ChartPoint } from './chart.js';
 
 const count = (n: number) => n.toLocaleString('en');
-const duration = (s: number) => (s < 60 ? `${Math.round(s)}s` : `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`);
-const percent = (n: number) => `${Math.round(n)}%`;
+// Whole seconds and percentages, unless an axis tick's step needs more to tell it from the next.
+const places = (step?: number) => (step ? stepDecimals(step) : 0);
+const duration = (s: number, step?: number) => (s < 60 ? `${s.toFixed(places(step))}s` : `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`);
+const percent = (n: number, step?: number) => `${n.toFixed(places(step))}%`;
 interface Delta {
   text: string;
   /** Whether the change is the good way; absent when there is none. */
@@ -37,7 +39,7 @@ interface Figure {
   delta: Delta | null;
   /** The figure on one day; null where the day has nothing to divide by. */
   day: (d: DigestDay) => number | null;
-  format?: (n: number) => string;
+  format?: (n: number, step?: number) => string;
 }
 
 const figuresOf = ({ previous: p, ...d }: Digest): Figure[] => [

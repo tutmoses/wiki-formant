@@ -916,8 +916,14 @@ straight between closes and a count's is curved.
 
 `aggregate` is how a week or month is made from its days: `last` for a price,
 `mean` for a count, so the week in progress keeps its level instead of reading
-as a collapse. A single range draws no range buttons and shows every point.
+as a collapse. `fromZero` starts a count's axis at zero and stops it there, with
+no negative ticks under it. A single range draws no range buttons and shows every point.
 `chartSteps` is exported for a chart drawn elsewhere.
+
+`format` writes the axis and the crosshair label. An axis tick also gets the
+spacing between ticks as a second argument, so a formatter can write every tick
+to the same precision and two never read alike: `stepDecimals(step)` is the
+decimal places that takes, and `formatChartValue`, the default, uses it.
 
 `markers` are events, `{ time, label }`, each drawn as an arrow on the last
 point at or before it, so one mid-week lands on its week and two on one point
