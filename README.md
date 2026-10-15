@@ -535,6 +535,20 @@ export const GET = async (request: Request) => feedResponse(request, channel, aw
 had not — the recrawl the conditional-GET helpers exist to prevent. An empty feed
 carries no build date rather than a fictional one.
 
+## Sitemaps
+
+`treeSitemap(pages, { sections, sectionRow, pageRow })` returns the rows a wiki's tree adds to its sitemap: a row per section, dated by the newest page at or beneath it, then a row per page, dated by its own `updatedAt`. All three wikis listed their sections, and each dated them differently. One used the newest page beneath, one did the same from a derived tree, and one used no date at all. A section with no page beneath it carries no date rather than an invented one.
+
+```ts
+...treeSitemap(pages, {
+  sections: tagPrefixes(pages.map(p => p.tagPath)),
+  sectionRow: path => ({ url: `${SITE_URL}/wiki/${path}`, changeFrequency: 'weekly', priority: 0.6 }),
+  pageRow: p => ({ url: pageUrl(p), changeFrequency: 'weekly', priority: 0.7 }),
+}),
+```
+
+Every URL appears once. An empty-slug page is its section's own article, so it dates the section and gets no row of its own. A section whose URL a page already holds is served as that page, so the section row is dropped. `tagPrefixes` lists every path at or above the given ones, for a wiki whose sections are wherever its pages sit rather than a configured list. Which sections exist, the URLs, and each row's frequency and priority stay with the caller.
+
 ## Licence declarations
 
 
