@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { compact, addBacklog, render, ident, scopeSql } from '../dist/maintenance.js';
+import { compact, addBacklog, render, ident, scopeSql, staleWrite } from '../dist/maintenance.js';
 
 test('compact keeps open work items, pinned flags first, newest next, and caps the rest', () => {
   const backlog = [
@@ -18,6 +18,22 @@ test('compact keeps open work items, pinned flags first, newest next, and caps t
   assert.ok(!out.backlog.some(b => /^run \d|done thing/.test(b.item)));
   assert.equal(out.runHistory.length, 30);
   assert.equal(out.runHistory.at(-1).date, '39', 'the newest runs are the ones kept');
+});
+
+test('flags are capped at what the page shows, the newest kept, and work items fill behind them', () => {
+  const flags = Array.from({ length: 20 }, (_, i) => ({ date: `2026-10-${String(i + 1).padStart(2, '0')}`, item: `FLAG FOR A HUMAN: ${i}` }));
+  const out = compact({ backlog: [...flags, 'work'] });
+  assert.equal(out.backlog.length, 16);
+  assert.equal(out.backlog[0].item, 'FLAG FOR A HUMAN: 19');
+  assert.equal(out.backlog[14].item, 'FLAG FOR A HUMAN: 5');
+  assert.equal(out.backlog[15].item, 'work');
+});
+
+test('a write that would lose a later run is refused', () => {
+  assert.match(staleWrite({ totalRuns: 459 }, { totalRuns: 458 }), /totalRuns 458 over the stored 459/);
+  assert.match(staleWrite({ totalRuns: 3 }, {}), /totalRuns 0/);
+  assert.equal(staleWrite({ totalRuns: 459 }, { totalRuns: 459 }), null);
+  assert.equal(staleWrite({}, { totalRuns: 1 }), null);
 });
 
 test('compact ages out untouched sources, never banked verdicts', () => {

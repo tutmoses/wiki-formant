@@ -26,13 +26,15 @@
 // `write` takes the whole new state: read, change, write back. A revision is
 // written at most once a day, and on every `compact`; other writes edit the
 // page in place, because a full copy per run is what made radix-wiki's log
-// over half its revisions table. `backlog-add` is how another routine files an
+// over half its revisions table. `write` refuses a state whose totalRuns is
+// below the stored one: that state was read before another run wrote.
+// `backlog-add` is how another routine files an
 // item: `write` replaces the whole state, so an append through it could lose a
 // concurrent run's, and the row lock serialises the two. A revision's version
 // is the page's `version` column bumped a minor where the table has one, else
 // the latest revision's.
 import { randomUUID } from 'node:crypto';
-import { addBacklog, compact, ident, render, scopeSql } from '../dist/maintenance.js';
+import { PINNED, addBacklog, compact, ident, render, scopeSql, staleWrite } from '../dist/maintenance.js';
 import { bump } from '../dist/versioning.js';
 import { arg, connect, invalidate } from './_cli.mjs';
 
@@ -105,6 +107,8 @@ try {
       const text = payload === undefined || payload === '-' ? await readStdin() : payload;
       if (!text.trim()) throw new Error('write needs the state as JSON, as an argument or on stdin with `write -`');
       input = JSON.parse(text);
+      const stale = staleWrite(page.metadata?.state ?? {}, input);
+      if (stale) throw new Error(stale);
     }
     const state = compact(input);
     const content = render(state, routine);
@@ -120,6 +124,13 @@ try {
     for (const key of ['backlog', 'runHistory', 'feedback']) {
       const [before, after] = [(input[key] ?? []).length, state[key].length];
       if (before !== after) console.log(`  ${key}: ${before} → ${after}`);
+    }
+    const kept = new Set(state.backlog.map(b => b.item));
+    for (const b of input.backlog ?? []) {
+      const item = typeof b === 'string' ? b : b.item;
+      if (PINNED.test(item ?? '') && (typeof b === 'string' || (b.status ?? 'open') === 'open') && !kept.has(item)) {
+        console.log(`  flag dropped over the cap: ${item}`);
+      }
     }
     console.log(
       `  ${dry ? '[dry] ' : ''}state ${JSON.stringify(input).length} → ${JSON.stringify(state).length} B, ` +

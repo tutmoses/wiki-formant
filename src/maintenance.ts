@@ -14,7 +14,10 @@
 // its revisions table. Two kinds of entry are pinned against the caps because
 // a run cannot recreate them: a backlog item flagged for a human, and a
 // watermark that banks a verdict on a whole class of site (a bot wall, a 403),
-// which is what lets an audit spend no probes on its flag list.
+// which is what lets an audit spend no probes on its flag list. Flags have a
+// cap of their own, the page's backlog window: pinned without one, they grew to
+// 48 on radix-wiki's log and held most of the backlog's sixty slots, and a flag
+// that no longer fits on the page is one no human reads.
 //
 // No subpath exports this: the bins and the tests import it from dist.
 
@@ -47,14 +50,15 @@ export interface LogState {
   [key: string]: unknown;
 }
 
-/** Held in state. */
-const MAX = { backlog: 60, runs: 30, feedback: 40, sources: 150 };
 /** Shown on the page. What a reader pays is words, and the entries run long. */
 const SHOWN = { backlog: 15, runs: 5, feedback: 8, sources: 15 };
+/** Held in state. */
+const MAX = { backlog: 60, flags: SHOWN.backlog, runs: 30, feedback: 40, sources: 150 };
 
 /** "run 214 (ecosystem): link audit CLEAN…" is a diary entry, not a work item. */
 const JOURNAL = /^run\s+\d+\b/i;
-const PINNED = /FLAG FOR A HUMAN/i;
+/** @internal The bin names the flags a write drops. */
+export const PINNED = /FLAG FOR A HUMAN/i;
 const BANKED = /\bbanked\b|bot[- ]?(wall|block)|\b(403|429|999)\b|cloudflare/i;
 
 const itemOf = (b: BacklogEntry) => (typeof b === 'string' ? b : b.item);
@@ -68,7 +72,7 @@ export function compact(state: LogState): LogState {
     .map((b, i) => ({ status: 'open', ...(typeof b === 'string' ? { date: '', item: b } : b), i }))
     .filter(b => b.status === 'open' && b.item && (PINNED.test(b.item) || !JOURNAL.test(b.item)))
     .sort((a, b) => String(b.date ?? '').localeCompare(String(a.date ?? '')) || b.i - a.i);
-  const backlog = [...open.filter(b => PINNED.test(b.item)), ...open.filter(b => !PINNED.test(b.item))]
+  const backlog = [...open.filter(b => PINNED.test(b.item)).slice(0, MAX.flags), ...open.filter(b => !PINNED.test(b.item))]
     .slice(0, MAX.backlog)
     .map(({ i: _i, ...b }) => b);
 
@@ -87,6 +91,19 @@ export function compact(state: LogState): LogState {
     feedback: (state.feedback ?? []).slice(-MAX.feedback),
     runHistory: (state.runHistory ?? []).slice(-MAX.runs),
   };
+}
+
+/**
+ * Why a `write` of `next` over `stored` would lose runs, or null. A run that
+ * writes back a state it read before another run wrote (a copy left in /tmp, a
+ * stale variable) carries a lower `totalRuns`, and replacing the whole state
+ * with it silently erases what the later run recorded.
+ */
+export function staleWrite(stored: LogState, next: LogState): string | null {
+  const [had, has] = [stored.totalRuns ?? 0, next.totalRuns ?? 0];
+  return has < had
+    ? `refusing a state with totalRuns ${has} over the stored ${had}: it predates a run that has already written. Read the log again and reapply this run's changes.`
+    : null;
 }
 
 /** New backlog items, deduplicated against what is there, dated today unless they carry a date. */
