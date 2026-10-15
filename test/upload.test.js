@@ -96,6 +96,15 @@ test('each uploader has a budget', async () => {
   assert.ok(refused.headers.get('Retry-After'));
 });
 
+test('a fresh uploader id from the same address shares its budget', async () => {
+  resetRateLimits();
+  let n = 0;
+  const { handler } = harness({ authorize: async () => `u${n++}`, rateLimit: { capacity: 1, refillPerSec: 0.001 } });
+  assert.equal((await handler(post(await png()))).status, 200);
+  assert.equal((await handler(post(await png()))).status, 429);
+  assert.equal((await handler(post(await png(), 'a.png', 'image/png', '2.2.2.2'))).status, 200, 'another address has its own');
+});
+
 test('normalizeImage is the same check without the route, its refusals thrown', async () => {
   const out = await normalizeImage(await png());
   assert.deepEqual([out.format, out.contentType], ['png', 'image/png']);

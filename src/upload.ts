@@ -130,7 +130,11 @@ export function uploadHandler({
       const who = await authorize(request);
       if (who instanceof Response) return who;
 
-      const limit = limitClient(`upload:${who}`, request.headers, rateLimit);
+      // The address gets a bucket of its own: an id keyed with it is free to mint
+      // where sign-in is a self-signed wallet proof, so a fresh one per burst would
+      // otherwise refill the budget.
+      const limit = [limitClient(`upload:${who}`, request.headers, rateLimit), limitClient('upload-ip', request.headers, rateLimit)]
+        .find(l => !l.ok) ?? { ok: true as const };
       if (!limit.ok) {
         return errors.tooManyRequests(limit.retryAfterSec, `Too many uploads. Try again in ${limit.retryAfterSec}s.`);
       }
