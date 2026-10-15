@@ -309,25 +309,30 @@ export function StatsView({
  * The fallback `message` arrives as a prop because it is the wiki's editorial
  * voice — "You can help RADIX Wiki by expanding it" has a name in it. `icon`
  * is optional: a component library that hardcoded an icon set would make its
- * consumers install that icon set.
+ * consumers install that icon set. `policy` is the wiki's page for the
+ * standard the notice enforces; given, the label links to it, so a reader who
+ * meets "Needs citations" can find out what a citation has to be.
  */
 export function BannerView({
   variant,
   text,
   message,
   icon,
+  policy,
 }: {
   variant: string;
   text?: string | null;
   message: string;
   icon?: ReactNode;
+  policy?: string;
 }) {
   const known = bannerVariant(variant);
+  const label = BANNER_LABELS[known];
   return (
     <div className={cx('editorial-banner', `editorial-banner-${known}`)} role="note">
       {icon}
       <p className="editorial-banner-body">
-        <strong>{BANNER_LABELS[known]}.</strong> {text?.trim() || message}
+        <strong>{policy ? <a href={policy}>{label}</a> : label}.</strong> {text?.trim() || message}
       </p>
     </div>
   );

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { CodeTabsView, ColumnsView, PageRefsView } from 'wiki-formant/block-views';
+import { BannerView, CodeTabsView, ColumnsView, PageRefsView } from 'wiki-formant/block-views';
 import { pageRef } from 'wiki-formant/blocks';
 
 const tabs = [{ label: 'Rust', language: 'rust', code: 'fn f<T>() -> Vec<T> { a < b && c > d }' }];
@@ -54,4 +54,11 @@ test('inactive code tabs are hidden by attribute, not by a utility class', () =>
 test('columns carry gap and alignment as data, for base.css', () => {
   const out = renderToStaticMarkup(createElement(ColumnsView, { columns: [{ id: 'a', blocks: [] }], align: 'end', render: () => null }));
   assert.equal(out, '<div class="columns-layout" data-gap="md" data-align="end"><div class="column-view"></div></div>');
+});
+
+test('a notice links its label to the policy it enforces, when the wiki names one', () => {
+  const linked = renderToStaticMarkup(createElement(BannerView, { variant: 'unsourced', message: 'Add sources.', policy: '/policy/verifiability' }));
+  assert.match(linked, /<strong><a href="\/policy\/verifiability">Needs citations<\/a>\.<\/strong> Add sources\./);
+  const bare = renderToStaticMarkup(createElement(BannerView, { variant: 'nonsense', message: 'Tidy up.' }));
+  assert.match(bare, /<strong>Needs cleanup\.<\/strong> Tidy up\./);
 });
