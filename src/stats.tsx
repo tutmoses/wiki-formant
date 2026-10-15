@@ -13,7 +13,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { STATS_FILTERS, type Digest, type StatsFilter } from './analytics.js';
 import type { PasskeyGate } from './passkey.js';
-import { PasskeyButton } from './passkey-button.js';
+import { PasskeyButton, PasskeySignOut } from './passkey-button.js';
 import { StatsFigures } from './stats-figures.js';
 
 export interface StatsProps {
@@ -182,7 +182,7 @@ export interface StatsGateProps {
   invite?: string | undefined;
   /** The site's host, named in the prompt. */
   host: string;
-  /** The route that serves `gate.route`. */
+  /** The route that serves `gate.route` as POST and `gate.signOut` as DELETE. */
   endpoint?: string;
   /** What a signed-in reader sees, rendered only for one. */
   children: () => ReactNode | Promise<ReactNode>;
@@ -190,25 +190,29 @@ export interface StatsGateProps {
 }
 
 /**
- * A stats page's door: `children` for a signed-in reader, else a line saying
- * what the passkey prompt will do and the button that does it. With an invite
- * it saves a passkey, as it does while the site has none; otherwise it signs
- * in. Three apps wrote this branch and its three sentences.
+ * A stats page's door: `children` and a sign-out button for a signed-in
+ * reader, else a line saying what the passkey prompt will do and the button
+ * that does it. With an invite it saves a passkey; otherwise it signs in.
+ * Three apps wrote this branch and its sentences.
  */
 export async function StatsGate({ gate, session, invite, host, endpoint = '/api/passkey', children, classNames: c = {} }: StatsGateProps) {
-  if (!invite && (await gate.signedIn(session))) return children();
-  const open = !invite && (await gate.open());
+  if (!invite && (await gate.signedIn(session))) {
+    return (
+      <>
+        {await children()}
+        <div className={c.actions}>
+          <PasskeySignOut endpoint={endpoint} className={c.button} />
+        </div>
+      </>
+    );
+  }
   return (
     <>
       <p className={c.text}>
-        {invite
-          ? `Save a passkey on this device to open ${host}'s stats.`
-          : open
-            ? `No passkey is saved for ${host} yet. Save the first one here; any after that needs an invite.`
-            : 'Sign in with a passkey saved for this site.'}
+        {invite ? `Save a passkey on this device to open ${host}'s stats.` : 'Sign in with a passkey saved for this site.'}
       </p>
       <div className={c.actions}>
-        <PasskeyButton endpoint={endpoint} invite={invite} create={open} className={c.button} errorClassName={c.error} />
+        <PasskeyButton endpoint={endpoint} invite={invite} className={c.button} errorClassName={c.error} />
       </div>
     </>
   );

@@ -797,16 +797,17 @@ its readers asked for. The queries that return zero rows are the valuable ones
 
 `wiki-formant/passkey` is the door to a site's own admin pages: a passkey and
 nothing else, no account, password or email. `createPasskeyGate({ sql, rpName })`
-returns the whole of it. `gate.route` is the sign-in route,
-`gate.signedIn(cookieValue)` is the check a page makes, `gate.open()` is true
-while no passkey is saved, and `gate.cookie` is the cookie's name. The two tables (`Passkey`, `PasskeyToken`) ship as Prisma
+returns the whole of it. `gate.route` is the sign-in route, `gate.signOut` the
+sign-out route, `gate.signedIn(cookieValue)` is the check a page makes, and
+`gate.cookie` is the cookie's name. The two tables (`Passkey`, `PasskeyToken`) ship as Prisma
 models in `prisma/passkey.prisma`, and every token is kept only as its hash.
 
-There is no sign-up. While no passkey is saved, the page saves the first one
-from whoever opens it, so the owner should do that as soon as the door ships.
-Every passkey after that is saved from a single-use link that the
-`passkey-invite` bin prints from a machine holding `DATABASE_URL`. A passkey is
-bound to the host it was saved on, so localhost needs its own.
+There is no sign-up. Every passkey, the first among them, is saved from a
+single-use link that the `passkey-invite` bin prints from a machine holding
+`DATABASE_URL`, so a fresh deployment cannot be claimed by whoever reaches it
+first. A passkey is bound to the host it was saved on, so localhost needs its
+own. A session names the passkey that signed in: deleting a `Passkey` row signs
+out every session it opened.
 
 ```ts
 // src/lib/admin.ts
@@ -814,6 +815,7 @@ export const gate = createPasskeyGate({ sql, rpName: 'Caper' });
 
 // src/app/api/passkey/route.ts
 export const POST = gate.route;
+export const DELETE = gate.signOut;
 
 // src/app/stats/page.tsx
 const q = statsQuery(params); // ?days= (1, 7, 30, 90, 365 or all, else 30) and the filters
@@ -824,7 +826,7 @@ return (
 );
 ```
 
-`StatsGate` (`wiki-formant/stats`) renders `children` for a signed-in reader and, for anyone else, the line saying what the prompt will do and the `PasskeyButton` that does it; `classNames` places the text, the button's box, the button and its error.
+`StatsGate` (`wiki-formant/stats`) renders `children` and a sign-out button (`PasskeySignOut`) for a signed-in reader and, for anyone else, the line saying what the prompt will do and the `PasskeyButton` that does it; `classNames` places the text, the button's box, the button and its error.
 
 `PasskeyButton` (`wiki-formant/passkey-button`) is the browser half and has its
 own subpath, because it imports `@simplewebauthn/browser`.
@@ -986,7 +988,7 @@ npx analytics-digest --days 30 --handle radixwiki --siblings caper.network,acuiq
 npx analytics-digest --days 7 --gap "Symptom Miss:term"   # adds an event to the search gaps
 ```
 
-`passkey-invite` prints a single-use link that saves another passkey for the page it names, good for a day (`--days n` for longer). No routine calls it: the site's owner runs it by hand, from an app's checkout, when a second device or a second person needs into the stats page. Run it the same way:
+`passkey-invite` prints a single-use link that saves a passkey for the page it names, good for a day (`--days n` for longer). No routine calls it: the site's owner runs it by hand, from an app's checkout, for the first passkey and whenever another device or person needs into the stats page. Run it the same way:
 
 ```sh
 npx passkey-invite https://caper.network/stats

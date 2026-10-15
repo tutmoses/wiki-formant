@@ -70,6 +70,12 @@ export function createRola({ challenges, challengeTtlSec = 300, ...identity }: R
 
     async verifySignedChallenge(signed) {
       try {
+        // Anything but a string is a filter, not a challenge: an absent one
+        // matches every row, so one bad request would spend every pending
+        // sign-in's challenge.
+        if (typeof signed?.challenge !== 'string' || typeof signed.address !== 'string') {
+          return { isValid: false, error: 'Invalid or expired challenge' };
+        }
         const { count } = await challenges.deleteMany({
           where: { challenge: signed.challenge, expiresAt: { gt: new Date() } },
         });

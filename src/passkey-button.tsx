@@ -3,10 +3,10 @@
 // passkey-button.tsx – the browser half of `wiki-formant/passkey`.
 //
 // Its own subpath because it imports `@simplewebauthn/browser`, an optional
-// peer that only an app with a passkey door installs. With an invite, or with
-// `create` while the site has no passkey (`gate.open()`), it saves a new
-// passkey; otherwise it signs in with a saved one. Either way, success reloads
-// the page without the invite, and the server sees the new cookie.
+// peer that only an app with a passkey door installs. With an invite it saves a
+// new passkey; otherwise it signs in with a saved one. Either way, success
+// reloads the page without the invite, and the server sees the new cookie.
+// `PasskeySignOut` calls the route's DELETE (`gate.signOut`) and reloads.
 
 import { startAuthentication, startRegistration } from '@simplewebauthn/browser';
 import { useState } from 'react';
@@ -16,8 +16,6 @@ export interface PasskeyButtonProps {
   endpoint: string;
   /** The invite token from the link, when there is one. */
   invite?: string | undefined;
-  /** Save a passkey without an invite: pass `await gate.open()`. */
-  create?: boolean;
   className?: string;
   errorClassName?: string;
 }
@@ -28,8 +26,8 @@ async function post(endpoint: string, body: unknown) {
   return res.status === 204 ? null : res.json();
 }
 
-export function PasskeyButton({ endpoint, invite, create, className, errorClassName }: PasskeyButtonProps) {
-  const saving = !!invite || !!create;
+export function PasskeyButton({ endpoint, invite, className, errorClassName }: PasskeyButtonProps) {
+  const saving = !!invite;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,5 +57,21 @@ export function PasskeyButton({ endpoint, invite, create, className, errorClassN
         </p>
       )}
     </>
+  );
+}
+
+/** Ends the session at `endpoint` (`gate.signOut` as DELETE) and reloads the page. */
+export function PasskeySignOut({ endpoint, className }: { endpoint: string; className?: string }) {
+  return (
+    <button
+      type="button"
+      className={className}
+      onClick={async () => {
+        await fetch(endpoint, { method: 'DELETE' }).catch(() => null);
+        location.reload();
+      }}
+    >
+      Sign out
+    </button>
   );
 }

@@ -66,6 +66,18 @@ test('a challenge verifies once: unknown, expired and replayed ones are refused'
   }
 });
 
+test('a body with no challenge string spends no one else\'s challenge', async () => {
+  const challenges = memoryChallenges();
+  const rola = createRola({ ...identity, challenges });
+  const { challenge } = await rola.generateChallenge();
+  await rola.generateChallenge();
+  for (const signed of [{ address: 'account_rdx1a', proof }, { challenge: { not: '' }, address: 'account_rdx1a', proof }, {}]) {
+    assert.equal((await rola.verifySignedChallenge(signed)).isValid, false);
+  }
+  assert.equal(challenges.rows.size, 2);
+  assert.ok(challenges.rows.has(challenge));
+});
+
 test('a session token round-trips its claims, and anything but HS256 under the secret is refused', async () => {
   const secret = sessionSecret('x'.repeat(32));
   const token = await signSession({ id: 'account_rdx1a' }, secret, 60);

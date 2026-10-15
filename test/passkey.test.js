@@ -6,10 +6,11 @@ import { createPasskeyGate } from 'wiki-formant/passkey';
 import { Stats, statsDays, statsQuery } from 'wiki-formant/stats';
 
 // Just enough of PasskeyToken to follow a token through its life. Expiry is
-// the row's own `ttl` against a clock the test can move. `saved` is how many
-// rows Passkey holds.
+// the row's own `ttl` against a clock the test can move. `passkeys` holds the
+// ids of the saved passkeys.
 function fakeDb(saved = 1) {
   const rows = new Map();
+  const passkeys = new Set(saved ? ['pk'] : []);
   let now = 0;
   const sql = async (query, ...v) => {
     if (query.startsWith('DELETE FROM "PasskeyToken" WHERE "expiresAt"')) {
@@ -17,7 +18,7 @@ function fakeDb(saved = 1) {
       return [];
     }
     if (query.startsWith('INSERT INTO "PasskeyToken"')) {
-      rows.set(v[0], { kind: v[1], expires: now + v[2] });
+      rows.set(v[0], { kind: v[1], expires: now + v[2], passkeyId: v[3] });
       return [];
     }
     if (query.startsWith('DELETE FROM "PasskeyToken" WHERE hash')) {
@@ -26,16 +27,21 @@ function fakeDb(saved = 1) {
       rows.delete(v[0]);
       return [{ live: r.expires > now }];
     }
+    if (query.startsWith('SELECT 1 FROM "PasskeyToken" t JOIN "Passkey"')) {
+      const r = rows.get(v[0]);
+      return r && r.kind === 'session' && r.expires > now && passkeys.has(r.passkeyId) ? [{}] : [];
+    }
     if (query.startsWith('SELECT 1 FROM "PasskeyToken"')) {
       const r = rows.get(v[0]);
       return r && r.kind === v[1] && r.expires > now ? [{}] : [];
     }
-    if (query.startsWith('SELECT 1 FROM "Passkey" LIMIT 1')) return saved ? [{}] : [];
     if (query.startsWith('SELECT id')) return [];
     throw new Error(`unexpected: ${query}`);
   };
-  return { sql, rows, tick: s => (now += s) };
+  return { sql, rows, passkeys, tick: s => (now += s) };
 }
+
+const sha = async value => Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))).toString('base64url');
 
 const post = (body, ip = '203.0.113.1') =>
   new Request('https://site.test/api/passkey', {
@@ -87,14 +93,41 @@ test('a response nobody issued a challenge for is refused, and sets no cookie', 
   assert.equal(res.headers.get('set-cookie'), null);
 });
 
-test('a site with no passkey asks the browser to save one without an invite', async () => {
+test('a site with no passkey asks the browser to sign in, and saves none without an invite', async () => {
   const db = fakeDb(0);
   const gate = createPasskeyGate({ sql: db.sql, rpName: 'Site' });
-  assert.equal(await gate.open(), true);
-  const save = await (await gate.route(post({}, '203.0.113.5'))).json();
-  assert.equal(save.rp.id, 'site.test');
-  assert.equal(save.authenticatorSelection.residentKey, 'required');
-  assert.equal(await createPasskeyGate({ sql: fakeDb().sql, rpName: 'Site' }).open(), false);
+  const signIn = await (await gate.route(post({}, '203.0.113.5'))).json();
+  assert.equal(signIn.rp, undefined);
+  assert.equal(signIn.rpId, 'site.test');
+  const res = await gate.route(post({ response: { id: 'abc', rawId: 'abc', type: 'public-key', response: {} } }, '203.0.113.5'));
+  assert.equal(res.status, 403);
+  assert.equal(db.passkeys.size, 0);
+});
+
+test('a challenge is kept as the ceremony it was issued for', async () => {
+  const db = fakeDb();
+  const gate = createPasskeyGate({ sql: db.sql, rpName: 'Site' });
+  const invite = await gate.invite();
+  await gate.route(post({ invite }, '203.0.113.6'));
+  await gate.route(post({}, '203.0.113.6'));
+  assert.deepEqual([...db.rows.values()].map(r => r.kind).sort(), ['authentication', 'invite', 'registration']);
+});
+
+test('a session lives only as long as its passkey, and signing out ends it', async () => {
+  const db = fakeDb();
+  const gate = createPasskeyGate({ sql: db.sql, rpName: 'Site' });
+  db.rows.set(await sha('s1'), { kind: 'session', expires: 1000, passkeyId: 'pk' });
+  db.rows.set(await sha('s2'), { kind: 'session', expires: 1000, passkeyId: null });
+  assert.equal(await gate.signedIn('s1'), true);
+  assert.equal(await gate.signedIn('s2'), false, 'a session bound to no passkey is not one');
+  db.passkeys.delete('pk');
+  assert.equal(await gate.signedIn('s1'), false);
+
+  db.passkeys.add('pk');
+  const out = await gate.signOut(new Request('https://site.test/api/passkey', { method: 'DELETE', headers: { cookie: `a=b; ${gate.cookie}=s1` } }));
+  assert.equal(out.status, 204);
+  assert.match(out.headers.get('set-cookie'), /^passkey_session=; Path=\/; HttpOnly; SameSite=Lax; Max-Age=0; Secure$/);
+  assert.equal(await gate.signedIn('s1'), false);
 });
 
 const DIGEST = {

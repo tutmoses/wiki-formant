@@ -12,10 +12,14 @@ model Passkey {
   counter    Int
   transports String[]
   createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  sessions   PasskeyToken[]
 }
 
 model PasskeyToken {
   hash      String   @id // sha-256 of the token, base64url
-  kind      String // session | invite | challenge
+  kind      String // session | invite | registration | authentication
   expiresAt DateTime @db.Timestamptz(3)
+  // The passkey a session signed in with: deleting the passkey ends its sessions.
+  passkeyId String?
+  passkey   Passkey? @relation(fields: [passkeyId], references: [id], onDelete: Cascade)
 }

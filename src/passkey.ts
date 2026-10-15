@@ -1,10 +1,10 @@
 // passkey.ts – the door to a site's own admin pages: a passkey, and nothing else.
 //
 // No account, no password, no email. Whoever holds a passkey saved for the
-// site is in. While none is saved, the page saves the first one without asking
-// for anything, so the owner opens it from the deployed site the way they would
-// any other. Every passkey after that needs an invite link, which the
-// `passkey-invite` bin prints from a machine holding the database URL.
+// site is in. Every passkey, the first among them, is saved from an invite
+// link, which the `passkey-invite` bin prints from a machine holding the
+// database URL. A fresh deployment once saved the first passkey from whoever
+// opened the page, so a stranger who got there before the owner held the door.
 //
 // A passkey is bound to the host it was saved on. One saved on localhost does
 // not open the deployed site, and one saved on the site does not open localhost.
@@ -14,10 +14,10 @@
 // `prisma-models` bin copies into the app's schema folder.
 //
 // Every token is stored as its hash, so a read of the table opens nothing. A
-// challenge is spent the moment a response quotes it, and an invite the moment
-// a passkey is saved with it. The first passkey without an invite is checked
-// against an empty table in the insert itself, so two people racing to it
-// cannot both win.
+// challenge is spent the moment a response quotes it, and only by the ceremony
+// it was issued for; an invite the moment a passkey is saved with it. A session
+// names the passkey that signed in, and lives only as long as that passkey's
+// row: deleting a passkey signs out everyone who signed in with it.
 
 import {
   generateAuthenticationOptions,
@@ -33,7 +33,8 @@ import { clientKey, rateLimit, rateLimitedResponse } from './rate-limit.js';
 
 export type { Sql };
 
-type Kind = 'session' | 'invite' | 'challenge';
+/** A challenge's kind is its ceremony, so one issued to save a passkey cannot sign in. */
+type Kind = 'session' | 'invite' | 'registration' | 'authentication';
 
 const MINUTE = 60_000;
 const DAY = 86_400_000;
@@ -45,13 +46,14 @@ const hash = async (value: string) =>
   b64url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))));
 
 /** Store a token's hash; the token is returned and kept nowhere else. */
-async function issue(sql: Sql, kind: Kind, ms: number, value = token()) {
+async function issue(sql: Sql, kind: Kind, ms: number, value = token(), passkeyId: string | null = null) {
   await sql(`DELETE FROM "PasskeyToken" WHERE "expiresAt" < now()`);
   await sql(
-    `INSERT INTO "PasskeyToken" (hash, kind, "expiresAt") VALUES ($1, $2, now() + make_interval(secs => $3::int))`,
+    `INSERT INTO "PasskeyToken" (hash, kind, "expiresAt", "passkeyId") VALUES ($1, $2, now() + make_interval(secs => $3::int), $4)`,
     await hash(value),
     kind,
     Math.round(ms / 1000),
+    passkeyId,
   );
   return value;
 }
@@ -88,39 +90,56 @@ export interface PasskeyGateOptions {
 export interface PasskeyGate {
   /** The session cookie's name, for the app to read it with. */
   cookie: string;
-  /** Whether a session cookie's value is a live session. */
+  /** Whether a session cookie's value is a live session whose passkey is still saved. */
   signedIn(session: string | undefined): Promise<boolean>;
-  /** True while no passkey is saved, when the page offers to save the first one. */
-  open(): Promise<boolean>;
   /** A single-use invite token, good for `days`. The bin turns it into a link. */
   invite(days?: number): Promise<string>;
   /**
    * The whole sign-in route: `export const POST = gate.route`. The body is
    * `{ invite?, response? }`: without `response` it answers with the options
    * for the browser's prompt, with one it verifies it and sets the cookie. An
-   * invite, or a site with no passkey yet, turns the prompt into saving one.
+   * invite turns the prompt into saving one.
    */
   route(request: Request): Promise<Response>;
+  /** The sign-out route: `export const DELETE = gate.signOut`. Ends the session and clears the cookie. */
+  signOut(request: Request): Promise<Response>;
 }
 
 /** Any request that fails is told only that it failed. */
 const refuse = (status: number, error: string) => Response.json({ error }, { status });
 
 export function createPasskeyGate({ sql, rpName, cookie = 'passkey_session', sessionDays = 90 }: PasskeyGateOptions): PasskeyGate {
-  async function session(secure: boolean) {
-    const value = await issue(sql, 'session', sessionDays * DAY);
-    const attrs = [`${cookie}=${value}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${sessionDays * 86_400}`];
+  const setCookie = (value: string, maxAge: number, secure: boolean) => {
+    const attrs = [`${cookie}=${value}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${maxAge}`];
     if (secure) attrs.push('Secure');
     return new Response(null, { status: 204, headers: { 'set-cookie': attrs.join('; ') } });
-  }
+  };
 
-  const open = async () => ((await sql(`SELECT 1 FROM "Passkey" LIMIT 1`)) as unknown[]).length === 0;
+  async function session(passkeyId: string, secure: boolean) {
+    const value = await issue(sql, 'session', sessionDays * DAY, undefined, passkeyId);
+    return setCookie(value, sessionDays * 86_400, secure);
+  }
 
   return {
     cookie,
-    signedIn: async value => !!value && live(sql, 'session', value),
-    open,
+    signedIn: async value =>
+      !!value &&
+      ((await sql(
+        `SELECT 1 FROM "PasskeyToken" t JOIN "Passkey" p ON p.id = t."passkeyId"
+         WHERE t.hash = $1 AND t.kind = 'session' AND t."expiresAt" > now()`,
+        await hash(value),
+      )) as unknown[]).length > 0,
     invite: (days = 1) => issue(sql, 'invite', days * DAY),
+
+    async signOut(request) {
+      const value = request.headers
+        .get('cookie')
+        ?.split(/;\s*/)
+        .find(c => c.startsWith(`${cookie}=`))
+        ?.slice(cookie.length + 1);
+      if (value) await spend(sql, 'session', value);
+      return setCookie('', 0, new URL(request.url).protocol === 'https:');
+    },
 
     async route(request) {
       const limited = rateLimit(clientKey('passkey', request.headers), { capacity: 10, refillPerSec: 0.2 });
@@ -135,11 +154,12 @@ export function createPasskeyGate({ sql, rpName, cookie = 'passkey_session', ses
       } | null;
       const invite = typeof body?.invite === 'string' ? body.invite : undefined;
       const response = body?.response;
-      const expectedChallenge = (challenge: string) => spend(sql, 'challenge', challenge);
+      const ceremony = invite ? 'registration' : 'authentication';
+      const expectedChallenge = (challenge: string) => spend(sql, ceremony, challenge);
 
       if (!response) {
         if (invite && !(await live(sql, 'invite', invite))) return refuse(403, 'This invite has expired.');
-        const options = invite || (await open())
+        const options = invite
           ? await generateRegistrationOptions({
               rpName,
               rpID,
@@ -149,11 +169,11 @@ export function createPasskeyGate({ sql, rpName, cookie = 'passkey_session', ses
               authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' },
             })
           : await generateAuthenticationOptions({ rpID, userVerification: 'preferred' });
-        await issue(sql, 'challenge', CHALLENGE_MS, options.challenge);
+        await issue(sql, ceremony, CHALLENGE_MS, options.challenge);
         return Response.json(options);
       }
 
-      if (invite || (await open())) {
+      if (invite) {
         const result = await verifyRegistrationResponse({
           response,
           expectedChallenge,
@@ -163,19 +183,16 @@ export function createPasskeyGate({ sql, rpName, cookie = 'passkey_session', ses
         }).catch(() => null);
         if (!result?.verified) return refuse(400, 'That passkey could not be saved.');
         // Spent after the check, so a failed prompt leaves the invite to try again.
-        if (invite && !(await spend(sql, 'invite', invite))) return refuse(403, 'This invite has expired.');
+        if (!(await spend(sql, 'invite', invite))) return refuse(403, 'This invite has expired.');
         const { credential } = result.registrationInfo;
-        const saved = (await sql(
-          `INSERT INTO "Passkey" (id, "publicKey", counter, transports)
-           SELECT $1, $2, $3, $4::text[] WHERE $5::boolean OR NOT EXISTS (SELECT 1 FROM "Passkey") RETURNING id`,
+        await sql(
+          `INSERT INTO "Passkey" (id, "publicKey", counter, transports) VALUES ($1, $2, $3, $4::text[])`,
           credential.id,
           b64url(credential.publicKey),
           credential.counter,
           credential.transports ?? [],
-          !!invite,
-        )) as unknown[];
-        if (!saved.length) return refuse(403, 'This site already has a passkey. Adding another takes an invite.');
-        return session(protocol === 'https:');
+        );
+        return session(credential.id, protocol === 'https:');
       }
 
       const [passkey] = (await sql(
@@ -193,7 +210,7 @@ export function createPasskeyGate({ sql, rpName, cookie = 'passkey_session', ses
       }).catch(() => null);
       if (!result?.verified) return refuse(403, 'Sign-in failed.');
       await sql(`UPDATE "Passkey" SET counter = $2 WHERE id = $1`, passkey.id, result.authenticationInfo.newCounter);
-      return session(protocol === 'https:');
+      return session(passkey.id, protocol === 'https:');
     },
   };
 }
