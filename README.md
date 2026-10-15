@@ -661,7 +661,7 @@ The bytes say what the file is, never the name or type, and SVG is refused. Ever
 
 ## Editor nodes
 
-`wiki-formant/tiptap` carries the custom nodes both wiki editors had written twice: `Iframe`, `YouTube` (the stock extension plus the paste rule it does not ship with), `TwitterEmbed`, `createMapEmbed`, `createCodeBlock` and `createTabs`.
+`wiki-formant/tiptap` carries the custom nodes both wiki editors had written twice: `Iframe`, `YouTube` (the stock extension plus the paste rule it does not ship with), `TwitterEmbed`, `createMapEmbed`, `createCodeBlock` and `createTabs`. `Iframe` and `createMapEmbed` draw a frame only for an https src on `DEFAULT_IFRAME_HOSTS` (`embedSrc`), since an editor draws stored HTML where its author is signed in, and a `javascript:` src runs there under any CSP that allows inline script.
 
 ```ts
 const CodeBlock = createCodeBlock({

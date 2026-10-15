@@ -64,3 +64,22 @@ test('a link round-trips with its href and class, and loses a stored target and 
     '<p><a class="link" href="https://example.com">out</a></p>',
   );
 });
+
+test('an embed keeps only an https src on an allowed host, so stored HTML cannot run script in the editor', async () => {
+  const { JSDOM } = await import('jsdom');
+  const { window } = new JSDOM('');
+  Object.assign(globalThis, { window, document: window.document });
+  const { generateHTML, generateJSON } = await import('@tiptap/core');
+  const { default: StarterKit } = await import('@tiptap/starter-kit');
+  const { Iframe, createMapEmbed, embedSrc } = await import('wiki-formant/tiptap');
+  const extensions = [StarterKit, Iframe, createMapEmbed({ resolveMapUrl: async () => null })];
+  const roundTrip = stored => generateHTML(generateJSON(stored, extensions), extensions);
+
+  assert.equal(embedSrc('https://www.youtube.com/embed/x'), 'https://www.youtube.com/embed/x');
+  for (const bad of ['javascript:alert(1)', 'JaVaScRiPt:alert(1)', 'data:text/html,x', 'http://www.youtube.com/embed/x', 'https://evil.example/x', null]) {
+    assert.equal(embedSrc(bad), null, String(bad));
+  }
+  assert.doesNotMatch(roundTrip('<iframe src="javascript:alert(1)"></iframe>'), /javascript:/);
+  assert.doesNotMatch(roundTrip('<div data-map-embed><iframe src="javascript:alert(1)"></iframe></div>'), /javascript:/);
+  assert.match(roundTrip('<iframe src="https://www.google.com/maps/embed?pb=1"></iframe>'), /src="https:\/\/www\.google\.com\/maps\/embed\?pb=1"/);
+});

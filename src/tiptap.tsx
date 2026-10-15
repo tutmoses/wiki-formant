@@ -18,6 +18,7 @@ import { NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap
 import TiptapYoutube from '@tiptap/extension-youtube';
 import TiptapCodeBlock from '@tiptap/extension-code-block';
 import { onTweetResize, tweetEmbedSrc } from './dom.js';
+import { DEFAULT_IFRAME_HOSTS } from './headers.js';
 import { toMapEmbedUrl } from './maps.js';
 import { useClickOutside } from './react.js';
 import { cx } from './html.js';
@@ -27,6 +28,22 @@ import { CODE_LANGS, DEFAULT_LANG } from './blocks.js';
 /** Local `cn`. Both wikis import one; the package will not depend on one. */
 
 // ---- iframe -----------------------------------------------------------------
+
+/**
+ * An embed's address, if it is https on a host the sanitiser and the CSP
+ * admit; otherwise null, and the node draws an empty frame. The editor draws
+ * stored HTML on the origin where its author is signed in, and a
+ * `javascript:` src runs there under any CSP with 'unsafe-inline' script.
+ */
+export function embedSrc(src: unknown): string | null {
+  if (typeof src !== 'string') return null;
+  try {
+    const u = new URL(src);
+    return u.protocol === 'https:' && DEFAULT_IFRAME_HOSTS.includes(u.hostname) ? u.href : null;
+  } catch {
+    return null;
+  }
+}
 
 export const Iframe = TiptapNode.create({
   name: 'iframe',
@@ -42,7 +59,7 @@ export const Iframe = TiptapNode.create({
     return [
       'div',
       { 'data-iframe-embed': '', class: 'iframe-embed' },
-      ['iframe', mergeAttributes(HTMLAttributes, { frameborder: '0', allowfullscreen: 'true' })],
+      ['iframe', mergeAttributes({ ...HTMLAttributes, src: embedSrc(HTMLAttributes.src) }, { frameborder: '0', allowfullscreen: 'true' })],
     ];
   },
 });
@@ -190,7 +207,7 @@ export function createMapEmbed({ resolveMapUrl }: MapEmbedOptions) {
         [
           'iframe',
           {
-            src: node.attrs.src,
+            src: embedSrc(node.attrs.src),
             frameborder: '0',
             allowfullscreen: 'true',
             loading: 'lazy',
