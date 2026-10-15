@@ -4,7 +4,9 @@
 // The `indexnow` bin reads an origin's live sitemap, keeps the rows whose
 // `lastModified` falls inside the window, and posts them. It runs on the machine
 // that runs the sweeps, not as a cron on the host: a submission costs the origin
-// one cached sitemap fetch and no function time. The sitemap is the one place
+// one sitemap render and no scheduled function. The sitemap renders per request,
+// because one Vercel served from cache froze at the last deploy and listed none
+// of the pages edited since. The sitemap is the one place
 // every writer shows up — the editor, the MCP write tools, and the sweep scripts
 // that write to the database without passing through the app — so reading it
 // covers all of them with no hook in any.

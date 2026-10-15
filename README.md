@@ -412,7 +412,7 @@ Every agent group also allows the agent surface — `/api/mcp`, the three `llms`
 
 ## IndexNow
 
-Bing, Yandex, Seznam, Naver and Yep take a POST of changed URLs instead of waiting to recrawl. The `indexnow` bin reads an origin's live sitemap and posts the rows whose `lastModified` falls inside the window, so the editor, the MCP write tools and the sweep scripts that write straight to the database are all covered with no hook in any of them. It runs where the sweeps run, never as a cron on the host: a submission costs the origin one cached sitemap fetch and no function time.
+Bing, Yandex, Seznam, Naver and Yep take a POST of changed URLs instead of waiting to recrawl. The `indexnow` bin reads an origin's live sitemap and posts the rows whose `lastModified` falls inside the window, so the editor, the MCP write tools and the sweep scripts that write straight to the database are all covered with no hook in any of them. It runs where the sweeps run, never as a cron on the host: a submission costs the origin one sitemap render and no scheduled function. The sitemap must render per request. A cached one froze at the last deploy and listed none of the pages edited since, so this bin submitted nothing.
 
 The key is public by design, since an engine checks it by fetching `/<key>.txt`. The file in the app's `public/` is the only copy, and the bin finds it there, so run it from the app's root. It checks that the live origin serves the key before posting anything.
 
