@@ -8,6 +8,7 @@
 //
 //   npx fts-ddl pages
 //   npx fts-ddl wiki_pages
+//   npx fts-ddl '"WikiPage"'
 //
 // The column is rebuilt every run rather than skipped when it exists: a skip
 // is blind to a changed EXPRESSION, and Postgres normalises the stored one, so
@@ -32,7 +33,7 @@ import { searchTsvDdl } from '../dist/search.js';
 import { connect } from './_cli.mjs';
 
 const table = process.argv[2];
-if (!table || !/^[a-z_][a-z0-9_]*$/.test(table)) {
+if (!table || !/^([a-z_][a-z0-9_]*|"[A-Za-z_][A-Za-z0-9_]*")$/.test(table)) {
   console.error('usage: npx fts-ddl <table>');
   process.exit(1);
 }
@@ -43,6 +44,7 @@ const client = await connect({ direct: true, ssl: { rejectUnauthorized: false },
   process.exit(1);
 });
 const q = s => client.query(s).then(r => r.rows);
+const bare = table.replaceAll('"', '');
 try {
   const ddl = searchTsvDdl(table);
   await q('BEGIN');
@@ -52,9 +54,9 @@ try {
   await q(ddl.index);
   console.log('GIN index present');
   console.table(await q(`select column_name, data_type, is_generated from information_schema.columns
-    where table_name='${table}' and column_name='search_tsv'`));
+    where table_name='${bare}' and column_name='search_tsv'`));
   console.table(await q(`select count(*)::int rows, count(*) filter (where search_tsv is null)::int null_tsv from ${table}`));
-  console.table(await q(`select pg_size_pretty(pg_relation_size('${table}_search_tsv_idx')) index_size`));
+  console.table(await q(`select pg_size_pretty(pg_relation_size('"${bare}_search_tsv_idx"')) index_size`));
 } catch (e) {
   await q('ROLLBACK').catch(() => {});
   console.error(e.message);

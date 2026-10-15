@@ -21,7 +21,7 @@ test('the pattern is what Postgres receives, backslashes and all', () => {
 test('prose strips markup, entities and the JSON array literal', () => {
   const sql = proseSql();
   assert.ok(sql.startsWith('regexp_replace(translate(jsonb_path_query_array(content'));
-  assert.ok(sql.includes("'$.**.text'"), 'reads text at any depth, not the raw JSON');
+  assert.ok(sql.includes("'strict $.**.text','{}',true"), 'reads text at any depth once, not the raw JSON');
   assert.ok(sql.includes('chr(160)'), 'literal NBSP collapsed');
   assert.ok(sql.includes(EXPECTED_PATTERN));
   assert.ok(sql.endsWith("' ','g')"));

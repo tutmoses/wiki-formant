@@ -26,8 +26,11 @@
  * Every `text` value at any block depth, as prose.
  *
  * `$.**.text` rather than the raw JSON, so block ids and `type` discriminators
- * cannot score as prose. Then three classes of non-prose are collapsed to
- * spaces:
+ * cannot score as prose. In strict mode: lax, Postgres' default, unwraps each
+ * array `.**` meets and visits its elements twice, so every value came out
+ * twice — measured on all 624 miow pages in October 2026, doubling snippets and
+ * every lexeme in `search_tsv`. `silent` keeps strict from raising on items
+ * with no `text`. Then three classes of non-prose are collapsed to spaces:
  *
  *   - markup (`<[^>]*>`) and the `&nbsp;` entity
  *   - the JSON array literal's own syntax — `", "` between adjacent values,
@@ -44,7 +47,7 @@
  *                when the query aliases its table.
  */
 export function proseSql(content = 'content'): string {
-  return `regexp_replace(translate(jsonb_path_query_array(${content},'$.**.text')::text, chr(160),' '),'${PROSE_PATTERN}',' ','g')`;
+  return `regexp_replace(translate(jsonb_path_query_array(${content},'strict $.**.text','{}',true)::text, chr(160),' '),'${PROSE_PATTERN}',' ','g')`;
 }
 
 /**
@@ -80,6 +83,9 @@ export function searchTsvSql(content = 'content', title = 'title'): string {
  * rebuilds. The column is derived from `content`, so dropping it loses nothing.
  * Run it BEFORE declaring the column in a Prisma schema: `prisma db push` reads
  * a generated column it does not know about as drift and drops it.
+ *
+ * @param table the table as SQL names it: `pages`, or `"WikiPage"` for a
+ *              PascalCase Prisma model, whose index is `"WikiPage_search_tsv_idx"`.
  */
 export function searchTsvDdl(
   table: string,
@@ -90,7 +96,7 @@ export function searchTsvDdl(
       `ALTER TABLE ${table} DROP COLUMN IF EXISTS search_tsv`,
       `ALTER TABLE ${table} ADD COLUMN search_tsv tsvector GENERATED ALWAYS AS (${searchTsvSql(content, title)}) STORED`,
     ],
-    index: `CREATE INDEX IF NOT EXISTS ${table}_search_tsv_idx ON ${table} USING GIN (search_tsv)`,
+    index: `CREATE INDEX IF NOT EXISTS "${table.replaceAll('"', '')}_search_tsv_idx" ON ${table} USING GIN (search_tsv)`,
   };
 }
 

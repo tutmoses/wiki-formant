@@ -15,7 +15,13 @@ test('the tsvector DDL rebuilds the column in two statements and indexes it in a
   const ddl = searchTsvDdl('pages');
   assert.deepEqual(ddl.column[0], 'ALTER TABLE pages DROP COLUMN IF EXISTS search_tsv');
   assert.ok(ddl.column[1].includes(searchTsvSql()));
-  assert.equal(ddl.index, 'CREATE INDEX IF NOT EXISTS pages_search_tsv_idx ON pages USING GIN (search_tsv)');
+  assert.equal(ddl.index, 'CREATE INDEX IF NOT EXISTS "pages_search_tsv_idx" ON pages USING GIN (search_tsv)');
+});
+
+test('a quoted PascalCase table keeps its case in the index name', () => {
+  const ddl = searchTsvDdl('"WikiPage"');
+  assert.equal(ddl.column[0], 'ALTER TABLE "WikiPage" DROP COLUMN IF EXISTS search_tsv');
+  assert.equal(ddl.index, 'CREATE INDEX IF NOT EXISTS "WikiPage_search_tsv_idx" ON "WikiPage" USING GIN (search_tsv)');
 });
 
 test('markdown is asked for by format or by Accept, never by default', () => {

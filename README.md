@@ -1027,10 +1027,11 @@ An app that keeps one schema file and writes the models into it by hand, because
 npx prisma-models analytics --check --in prisma/schema.prisma --tenant   # miow
 ```
 
-`fts-ddl <table>` rebuilds a table's `search_tsv` generated column and its GIN index from the expression `wiki-formant/search` queries, over `DIRECT_URL` (else `DATABASE_URL` on 5432). Run it before declaring the column in `schema.prisma`; the bin's header says why.
+`fts-ddl <table>` rebuilds a table's `search_tsv` generated column and its GIN index from the expression `wiki-formant/search` queries, over `DIRECT_URL` (else `DATABASE_URL` on 5432). Run it before declaring the column in `schema.prisma`; the bin's header says why. A PascalCase Prisma table goes in quoted, as SQL names it.
 
 ```sh
 npx fts-ddl pages
+npx fts-ddl '"WikiPage"'
 ```
 
 `mark-verified` stamps `last_verified_at` on pages a sweep checked and found current, so `freshnessBanner` stops calling them outdated, and `maintenance-log` is the state I/O of a wiki-sweep routine whose memory lives in one page's `metadata.state`: `read`, `write` (the whole state, or `-` for stdin), `compact` and `backlog-add`, which appends under a row lock so another routine's item cannot be lost to a concurrent `write`. Every write compacts and re-renders the page, holding at most as many FLAG FOR A HUMAN items as the page shows; a revision is written at most once a day. `write` refuses a state whose `totalRuns` is below the stored one, which is a state read before another run wrote. Two wikis carried both scripts against their own tables, so the tables are arguments. Run them from the app's root, like `passkey-invite`:
