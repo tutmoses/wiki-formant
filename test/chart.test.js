@@ -32,8 +32,9 @@ test('a week of candles opens on its first, closes on its last and sums its volu
   ]);
 });
 
-test('counts take the mean of their days, so a week in progress keeps its level', () => {
+test("a count's week is the total of its days; a rate's, their mean", () => {
   const points = days('2026-09-28', [10, 20, 30, 40, 50, 60, 70, 8]);
+  assert.deepEqual(bucketChart(points, 'week', 'sum').map(p => p.value), [280, 8]);
   assert.deepEqual(bucketChart(points, 'week', 'mean').map(p => p.value), [40, 8]);
 });
 

@@ -847,7 +847,8 @@ own subpath, because it imports `@simplewebauthn/browser`.
 `Stats` (`wiki-formant/stats`) renders a `digest` as one page: the
 headline figures, each with its change from the window before
 (`.stats-delta[data-better]`, a share or for the bounce rate points, for the
-site's stylesheet to colour), one of them per day, every non-empty
+site's stylesheet to colour), one of them by day, week or month (a count's
+total, a rate's mean), every non-empty
 ranked list, and `?days=` links between windows, all time among them, pinned in
 the chart's frame as its own buttons are (`TimeChart`'s `controls`). Each
 figure is a button that charts it: visitors, agents, page views, bounce rate,
@@ -897,7 +898,7 @@ that makes 200 or fewer, so a year opens weekly and five years monthly.
 
 ```tsx
 // Daily points: the chart slices and steps them itself; 30D up.
-<TimeChart series={days} label="Transactions" aggregate="mean" fromZero />
+<TimeChart series={days} label="Transactions" aggregate="sum" fromZero />
 
 // A loader: asked for 'hour' (24H), '4h' (7D) or 'day' from 0 (every longer
 // range), once each.
@@ -915,8 +916,10 @@ the slot empty, except the last, which is the price now. A price's line is
 straight between closes and a count's is curved.
 
 `aggregate` is how a week or month is made from its days: `last` for a price,
-`mean` for a count, so the week in progress keeps its level instead of reading
-as a collapse. `fromZero` starts a count's axis at zero and stops it there, with
+`sum` for a count, so a week reads as the week's total, and `mean` for a rate,
+which no total makes sense of. A stepped range starts on a whole week or month,
+so its first point is not a few days of one; the week in progress is its total
+so far. `fromZero` starts a count's axis at zero and stops it there, with
 no negative ticks under it. A single range draws no range buttons and shows every point.
 `chartSteps` is exported for a chart drawn elsewhere.
 
@@ -932,7 +935,7 @@ range can make it, and `onView` hears the range and step on mount and on every
 change, for a page that keeps them in its URL:
 
 ```tsx
-<TimeChart series={days} label="Transactions" aggregate="mean" fromZero
+<TimeChart series={days} label="Transactions" aggregate="sum" fromZero
   markers={[{ time: haltAt, label: 'Halt' }]} step="month" onView={v => keep(v)} />
 ```
 `base.css` pins the buttons (`.chart-controls button[aria-pressed]`) to the

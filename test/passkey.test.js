@@ -155,7 +155,7 @@ test('the stats page leaves out empty lists and marks the window shown', () => {
   assert.match(out, /United Kingdom/);
   assert.match(out, /--share:0\.3333/);
   assert.doesNotMatch(out, /Entry pages|Clicks to X/);
-  assert.match(out, /<figure class="chart stats-chart"><div class="chart-canvas" role="img" aria-label="Visitors per day"><\/div>/);
+  assert.match(out, /<figure class="chart stats-chart"><div class="chart-canvas" role="img" aria-label="Visitors"><\/div>/);
   // The steps follow the windows in a group of their own, and a week of days makes only one week.
   assert.match(out, /<a href="\?days=all">All<\/a><\/div><div role="group" aria-label="Step"><button type="button" aria-pressed="true" title="One point per day">D<\/button><button type="button" aria-pressed="false" disabled="" title="One point per week">W<\/button><button type="button" aria-pressed="false" disabled="" title="One point per month">M<\/button><\/div><\/div><\/figure>/);
 });

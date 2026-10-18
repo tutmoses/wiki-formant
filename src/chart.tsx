@@ -30,6 +30,8 @@ export type ChartLoader = (resolution: ChartResolution, from: number) => Promise
 export type ChartMarker = { time: number; label: string };
 /** The range and step a reader has picked, for a page that keeps them in its URL. */
 export type ChartView = { range: ChartRange; step: ChartStep | null };
+/** How a week or month is made from its days: a price's last, a count's total, a rate's mean. */
+export type ChartAggregate = 'last' | 'sum' | 'mean';
 
 const DAY = 86_400;
 const RANGE: Record<ChartRange, { label: string; span: number; resolution: ChartResolution }> = {
@@ -71,12 +73,12 @@ function bucketStart(time: number, step: ChartStep): number {
 /**
  * Points, oldest first, one per step. A price keeps the last value in each
  * step, as a candle does its close: the first open, the highest high, the
- * lowest low. A count takes the mean of its days, so the week in progress does
- * not read as a collapse. Volume is summed.
+ * lowest low. A count is the total of its days; a rate, their mean. Volume is
+ * summed.
  *
  * @internal
  */
-export function bucketChart(points: readonly ChartPoint[], step: ChartStep, aggregate: 'last' | 'mean'): ChartPoint[] {
+export function bucketChart(points: readonly ChartPoint[], step: ChartStep, aggregate: ChartAggregate): ChartPoint[] {
   const out: ChartPoint[] = [];
   let n = 0;
   for (const p of points) {
@@ -88,6 +90,7 @@ export function bucketChart(points: readonly ChartPoint[], step: ChartStep, aggr
       continue;
     }
     if (aggregate === 'last') last.value = p.value;
+    else if (aggregate === 'sum') last.value += p.value;
     else last.value += (p.value - last.value) / ++n;
     if (last.high !== undefined && p.high !== undefined) last.high = Math.max(last.high, p.high);
     if (last.low !== undefined && p.low !== undefined) last.low = Math.min(last.low, p.low);
@@ -172,8 +175,8 @@ export interface TimeChartProps {
   ranges?: readonly ChartRange[];
   /** The range shown first. */
   range?: ChartRange;
-  /** A week or month of prices keeps its last; of counts, the mean of its days. */
-  aggregate?: 'last' | 'mean';
+  /** A week or month of prices keeps its last; of counts, the total of its days; of rates, their mean. */
+  aggregate?: ChartAggregate;
   /** The value axis starts at zero, so a quiet week does not read as a collapse. */
   fromZero?: boolean;
   /**
@@ -342,7 +345,7 @@ export function TimeChart({
     const c = chart.current;
     if (!ready || !c) return;
     c.api.priceScale('right').applyOptions({ scaleMargins: { top: MARGIN_TOP, bottom: fromZero ? 0 : 0.1 } });
-    c.area.applyOptions({ lineType: aggregate === 'mean' ? c.curved : c.straight, autoscaleInfoProvider: fromZero ? fromZeroScale : ownScale });
+    c.area.applyOptions({ lineType: aggregate === 'last' ? c.straight : c.curved, autoscaleInfoProvider: fromZero ? fromZeroScale : ownScale });
   }, [ready, fromZero, aggregate]);
 
   // One request per resolution for the life of the loader: every range from 30D up reads the same days.
@@ -390,7 +393,10 @@ export function TimeChart({
     if (resolution !== 'day' || !windowed.length) return drawn(windowed, [], null);
     const { steps, fallback } = chartSteps(end - windowed[0]!.time);
     const chosen = step && steps.includes(step) ? step : fallback;
-    return drawn(chosen === 'day' ? windowed : bucketChart(windowed, chosen, aggregate), steps, chosen);
+    if (chosen === 'day') return drawn(windowed, steps, chosen);
+    // A stepped range starts on a whole week or month, so its first total is not a few days of one.
+    const from = bucketStart(windowed[0]!.time, chosen);
+    return drawn(bucketChart(points.filter(p => p.time >= from), chosen, aggregate), steps, chosen);
   }, [points, range, ranges.length, resolution, step, aggregate]);
 
   // While a resolution loads, the last one stays under the skeleton; an empty or failed one clears it.

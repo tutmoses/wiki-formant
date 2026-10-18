@@ -1,13 +1,13 @@
 'use client';
 
 // stats-figures.tsx — the stats page's headline figures and the chart under
-// them. Each figure is a button that charts that figure per day, so the chart
+// them. Each figure is a button that charts that figure by day, week or month, so the chart
 // is not only visitors. Its own module because it holds state; `Stats` stays a
 // server component and hands it the digest, which is plain JSON.
 
 import { useMemo, useState, type ReactNode } from 'react';
 import type { Digest, DigestDay } from './analytics.js';
-import { TimeChart, stepDecimals, type ChartPoint } from './chart.js';
+import { TimeChart, stepDecimals, type ChartAggregate, type ChartPoint } from './chart.js';
 
 const count = (n: number) => n.toLocaleString('en');
 // Whole seconds and percentages, unless an axis tick's step needs more to tell it from the next.
@@ -40,6 +40,8 @@ interface Figure {
   /** The figure on one day; null where the day has nothing to divide by. */
   day: (d: DigestDay) => number | null;
   format?: (n: number, step?: number) => string;
+  /** A week or month of a count is its total; of a rate, the mean of its days. */
+  aggregate?: ChartAggregate;
 }
 
 const figuresOf = ({ previous: p, ...d }: Digest): Figure[] => [
@@ -52,6 +54,7 @@ const figuresOf = ({ previous: p, ...d }: Digest): Figure[] => [
     delta: change(d.bounce_rate, p.bounce_rate, { points: true, lowerIsBetter: true }),
     day: r => (r.visits ? (100 * r.bounces) / r.visits : null),
     format: percent,
+    aggregate: 'mean',
   },
   {
     label: 'Visit length',
@@ -59,6 +62,7 @@ const figuresOf = ({ previous: p, ...d }: Digest): Figure[] => [
     delta: change(d.visit_duration, p.visit_duration),
     day: r => (r.visits ? r.seconds / r.visits : null),
     format: duration,
+    aggregate: 'mean',
   },
   ...(d.follow_clicks
     ? [
@@ -114,9 +118,9 @@ export function StatsFigures({ digest, first, windows }: { digest: Digest; first
       </div>
       <TimeChart
         series={series}
-        label={`${figure.label} per day`}
+        label={figure.label}
         ranges={['all']}
-        aggregate="mean"
+        aggregate={figure.aggregate ?? 'sum'}
         fromZero
         format={figure.format}
         controls={windows}
