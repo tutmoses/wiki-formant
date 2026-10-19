@@ -786,6 +786,10 @@ const SCHEMA: BlockSchema<Block> = {
 
 The dispatch stays a `switch` over the wiki's own union, so a new type is a compile error there. `CodeTabsFields`, `StatsFields`, `ReferencesFields`, `LinkGridFields`, `BannerFields`, `PageListFields`, `ColumnsFields` and `InfoboxFields` take the core blocks `wiki-formant/blocks` declares; the two containers hold the same list, offering `nestedTypes`. `Field`, `Choice` and `LimitField` are exported for a wiki's own editors, so its native types wear the same kit. A card is marked `data-selected` while it is being edited and `data-nested` inside a container; a type the build does not know is shown by its raw type and carried through untouched. Keep the kit and the schema stable — a module constant or a `useMemo` — since both reach every card through context, and a fresh one re-renders every card on every keystroke.
 
+An editor that draws each block in place, with a list of its own (miow's), hosts the same fields in `<BlockFieldsKit kit={KIT}>`, without `<BlockEditor>`. Only the two container fields need the full editor, since they hold a block list.
+
+A banner with no text of its own shows `BANNER_MESSAGES` from `wiki-formant/text`, a sentence per variant that names no wiki; `BannerView` takes it unless `message` overrides it.
+
 The core blocks are `ContentBlock`, `CodeTabsBlock`, `StatsBlock`, `LinkGridBlock`, `ReferencesBlock`, `BannerBlock`, `ColumnsBlock<A>` and `InfoboxBlock<A>`, `A` being the wiki's atomic union. A wiki builds its union from them beside its own `recentPages` and `pageList`, which hold its own page rows or a section, and its native types.
 
 ## Analytics
