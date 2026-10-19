@@ -44,9 +44,3 @@ export function incrementVersion(version: SemVer, changeType: ChangeType): SemVe
 export function bump(version: string | null | undefined, changeType: ChangeType): string {
   return formatVersion(incrementVersion(parseVersion(version), changeType));
 }
-
-export function compareVersions(a: string, b: string): number {
-  const x = parseVersion(a);
-  const y = parseVersion(b);
-  return x.major - y.major || x.minor - y.minor || x.patch - y.patch;
-}

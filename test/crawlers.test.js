@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AI_CRAWLERS, crawlerRules, aiCrawlerTokens, detectAiBot, RSC_DISALLOW, SEARCH_ENGINES, trackAiBot } from 'wiki-formant/crawlers';
+import { AI_CRAWLERS, crawlerRules, detectAiBot, RSC_DISALLOW, SEARCH_ENGINES, trackAiBot } from 'wiki-formant/crawlers';
 
 test('the matcher returns the label the proxies used', () => {
   assert.equal(detectAiBot('Mozilla/5.0 (compatible; GPTBot/1.2; +https://openai.com/gptbot)'), 'GPTBot');
@@ -25,14 +25,14 @@ test('a robots-only token is never counted as a visit', () => {
   // using crawled data for AI. Counting it would count a request that cannot
   // happen. It still needs its robots group, which is the next test.
   assert.equal(detectAiBot('Applebot-Extended/1.0'), null);
-  assert.ok(aiCrawlerTokens().includes('Applebot-Extended'));
+  assert.ok(AI_CRAWLERS.map(c => c.token).includes('Applebot-Extended'));
 });
 
 test('BUG: every measured crawler now has a robots group', () => {
   // Bytespider, CCBot, cohere-ai, Claude-Web and Meta-ExternalFetcher were
   // matched by every proxy in the workspace and named by no robots.txt. A named
   // agent with no group falls through to `*`; these five had neither.
-  const tokens = aiCrawlerTokens();
+  const tokens = AI_CRAWLERS.map(c => c.token);
   for (const missing of ['Bytespider', 'CCBot', 'cohere-ai', 'Claude-Web', 'Meta-ExternalFetcher']) {
     assert.ok(tokens.includes(missing), `${missing} has no robots group`);
   }

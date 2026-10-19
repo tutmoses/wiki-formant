@@ -106,5 +106,3 @@ export async function categoryView<P extends FacetablePage & { tagPath: string; 
     sections,
   };
 }
-
-export type CategoryView<P> = Awaited<ReturnType<typeof categoryView<P & FacetablePage & { tagPath: string; slug: string }>>>;

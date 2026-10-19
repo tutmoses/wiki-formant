@@ -9,7 +9,7 @@ import { ccBy40, openApiLicense } from 'wiki-formant/license';
 import { uniqueHeadingId, injectHeadingIds } from 'wiki-formant/headings';
 import { bannerVariant } from 'wiki-formant/text';
 import { pageMetadata } from 'wiki-formant/metadata';
-import { MCP_PROTOCOL_VERSION } from 'wiki-formant/mcp';
+import { MCP_PROTOCOL_VERSION, toolCard } from 'wiki-formant/mcp';
 
 test('the tsvector DDL rebuilds the column in two statements and indexes it in a third', () => {
   const ddl = searchTsvDdl('pages');
@@ -56,6 +56,20 @@ test('the MCP manifest takes versions and tools from the transport and lists tit
   assert.equal(m.mcp.endpoint, 'https://w.test/api/mcp');
   assert.deepEqual(m.tools, [{ name: 't', title: 'T', description: 'x', inputSchema: { type: 'object' } }]);
   assert.deepEqual(m.auth, { reads: 'none' });
+});
+
+test('BUG: the manifest advertises outputSchema where tools/list does', () => {
+  // The manifest carried its own tool projection and that projection had no
+  // outputSchema, so `/.well-known/mcp.json` said a tool answers with prose
+  // while `tools/list` said it answers with structuredContent. Both surfaces
+  // now project through `toolCard`.
+  const out = { type: 'object', properties: { n: { type: 'number' } } };
+  const m = mcpManifest({
+    name: 'W', registryName: 'test.w/w', version: '1.0.0', description: 'd', url: 'https://w.test',
+    tools: [{ name: 't', description: 'x', inputSchema: { type: 'object' }, outputSchema: out, handler: () => {} }],
+  });
+  assert.deepEqual(m.tools[0].outputSchema, out);
+  assert.deepEqual(toolCard({ name: 't', description: 'x', inputSchema: { type: 'object' }, outputSchema: out }), m.tools[0]);
 });
 
 test('every agent card names its spec, server card and licence the same way', () => {

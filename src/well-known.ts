@@ -11,7 +11,7 @@
 // Next dependency and keeps each app's route a two-liner.
 
 import type { License } from './license.js';
-import { MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSIONS } from './mcp.js';
+import { MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSIONS, toolCard } from './mcp.js';
 import { MCP_RATE_LIMIT_TEXT } from './rate-limit.js';
 import { descriptorResponse } from './http.js';
 
@@ -251,6 +251,7 @@ export interface ManifestTool {
   title?: string;
   description: string;
   inputSchema: unknown;
+  outputSchema?: unknown;
   annotations?: unknown;
 }
 
@@ -297,13 +298,7 @@ export function mcpManifest(config: McpManifestConfig): Record<string, unknown> 
       rateLimit: MCP_RATE_LIMIT_TEXT,
     },
     ...extra,
-    tools: tools.map(({ name, title, description, inputSchema, annotations }) => ({
-      name,
-      ...(title ? { title } : {}),
-      description,
-      inputSchema,
-      ...(annotations ? { annotations } : {}),
-    })),
+    tools: tools.map(toolCard),
   };
 }
 

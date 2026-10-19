@@ -13,7 +13,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { STATS_FILTERS, type Digest, type StatsFilter } from './analytics.js';
 import type { PasskeyGate } from './passkey.js';
-import { PasskeyButton, PasskeySignOut, StatsFigures } from './stats-figures.js';
+import { PasskeyButton, PasskeySignOut, StatsFigures, count } from './stats-figures.js';
 
 export interface StatsProps {
   /** One window's figures, from `digest` in `wiki-formant/analytics`. */
@@ -59,7 +59,6 @@ const href = (days: number, filter: StatsFilter) => {
   return `?${q}`;
 };
 
-const count = (n: number) => n.toLocaleString('en');
 const regions = new Intl.DisplayNames(['en'], { type: 'region' });
 const country = (code: string) => {
   try {

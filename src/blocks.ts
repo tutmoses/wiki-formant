@@ -301,11 +301,7 @@ export function someBlock<B>(
   predicate: (block: B) => boolean,
   containers: (block: B) => B[][] | null,
 ): boolean {
-  return blocks.some(block => {
-    const groups = containers(block);
-    if (!groups) return predicate(block);
-    return groups.some(group => someBlock(group, predicate, containers));
-  });
+  return leafBlocks(blocks, containers).some(predicate);
 }
 
 // ---- the shared leaf renderers ----------------------------------------------

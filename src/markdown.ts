@@ -148,11 +148,8 @@ export function htmlToMarkdown(html: string): string {
 
   out = out
     .replace(
-      /<pre\b[^>]*>\s*<code\b[^>]*>([\s\S]*?)<\/code>\s*<\/pre>/gi,
-      (_m, code: string) => block(`\`\`\`\n${decodeEntities(code).trim()}\n\`\`\``),
-    )
-    .replace(
-      /<pre\b[^>]*>([\s\S]*?)<\/pre>/gi,
+      // `<code>` is optional: a stored block may be `<pre><code>` or a bare `<pre>`.
+      /<pre\b[^>]*>\s*(?:<code\b[^>]*>)?([\s\S]*?)(?:<\/code>\s*)?<\/pre>/gi,
       (_m, code: string) => block(`\`\`\`\n${decodeEntities(code).trim()}\n\`\`\``),
     )
     .replace(

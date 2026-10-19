@@ -70,11 +70,6 @@ export function detectAiBot(userAgent: string | null | undefined): string | null
   return null;
 }
 
-/** Every token that needs its own robots.txt group — which is all of them. @internal */
-export function aiCrawlerTokens(): string[] {
-  return AI_CRAWLERS.map(c => c.token);
-}
-
 /**
  * Structurally what Next's `MetadataRoute.Robots['rules']` wants, without
  * importing Next: this package does not depend on Next and is not going to for
@@ -149,7 +144,7 @@ export function crawlerRules(opts: {
     // honestly as itself was told the endpoint was off limits. The roster is
     // for indexing policy, not for hiding a documented endpoint.
     { userAgent: '*', allow: [...new Set([...[opts.allow].flat(), ...aiAllow])], disallow },
-    ...aiCrawlerTokens().map(userAgent => ({ userAgent, allow: aiAllow, disallow })),
+    ...AI_CRAWLERS.map(({ token: userAgent }) => ({ userAgent, allow: aiAllow, disallow })),
     ...SEARCH_ENGINES.map(userAgent => ({ userAgent, allow: '/', disallow: searchDisallow })),
   ];
 }

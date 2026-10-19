@@ -114,13 +114,7 @@ export function injectHeadingIds(html: string, options: HeadingIdOptions = {}): 
  * consumers use only the injector above.
  */
 export function headingsFrom(html: string): Heading[] {
-  const out: Heading[] = [];
-  for (const [, tag, attrs, content] of html.matchAll(HEADING)) {
-    const id = getAttr(attrs ?? '', 'id');
-    const text = stripTags(content ?? '');
-    if (id && text) out.push({ id, text, level: Number(tag![1]) });
-  }
-  return out;
+  return headingOutline(html).filter(h => h.id);
 }
 
 /**

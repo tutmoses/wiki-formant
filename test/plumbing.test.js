@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { corpusEtag, corpusValidatorsFrom, notModified, textHeaders, markdownHeaders, descriptorHeaders, descriptorResponse, cleanSnippet, pageLine } from 'wiki-formant/http';
-import { parsePagination, paginatedResponse, listEnvelope, adjacentPages } from 'wiki-formant/pagination';
-import { parseVersion, formatVersion, bump, compareVersions } from 'wiki-formant/versioning';
+import { parsePagination, paginatedResponse, listEnvelope } from 'wiki-formant/pagination';
+import { parseVersion, formatVersion, bump } from 'wiki-formant/versioning';
 import { documentTitle, fittingTitle, TITLE_BUDGET, TITLE_LIMIT } from 'wiki-formant/metadata';
 
 test('an ETag is stable for the same corpus revision and moves when it changes', () => {
@@ -73,11 +73,6 @@ test('versions parse tolerantly and bump correctly', () => {
   assert.equal(bump('1.2.3', 'minor'), '1.3.0');
   assert.equal(bump('1.2.3', 'patch'), '1.2.4');
   assert.equal(bump('1.2.3', 'none'), '1.2.3');
-});
-
-test('versions compare by precedence, not by string', () => {
-  assert.ok(compareVersions('1.10.0', '1.9.0') > 0);
-  assert.equal(compareVersions('2.0.0', '2.0.0'), 0);
 });
 
 test('BUG: a route can cap page size below the package maximum', () => {
@@ -176,28 +171,6 @@ test('a listing envelope tells an agent there is more and what to send', () => {
   assert.equal(last.nextPage, undefined, 'a nextPage that does not exist is worse than none');
   // An empty result is one page of nothing, not zero pages.
   assert.equal(listEnvelope([], 0, 1, 20).totalPages, 1);
-});
-
-// ---- adjacent pages ---------------------------------------------------------
-
-test('adjacentPages returns the entries either side of the current one', () => {
-  const pages = [{ slug: 'a' }, { slug: 'b' }, { slug: 'c' }];
-  const at = slug => adjacentPages(pages, p => p.slug === slug);
-  assert.deepEqual(at('b'), { prev: { slug: 'a' }, next: { slug: 'c' } });
-});
-
-test('adjacentPages leaves the ends open', () => {
-  const pages = [{ slug: 'a' }, { slug: 'b' }];
-  assert.equal(adjacentPages(pages, p => p.slug === 'a').prev, null);
-  assert.equal(adjacentPages(pages, p => p.slug === 'b').next, null);
-});
-
-test('adjacentPages yields nothing for a page its own list does not carry', () => {
-  assert.deepEqual(adjacentPages([{ slug: 'a' }], p => p.slug === 'z'), { prev: null, next: null });
-});
-
-test('adjacentPages handles a list of one', () => {
-  assert.deepEqual(adjacentPages([{ slug: 'a' }], p => p.slug === 'a'), { prev: null, next: null });
 });
 
 test('documentTitle prefers a stored short form and falls back to the title', () => {

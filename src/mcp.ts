@@ -155,6 +155,32 @@ export interface McpTool {
   handler: (args: Record<string, unknown>, ctx: ToolContext) => Promise<unknown>;
 }
 
+/**
+ * A tool as every surface advertises it — `tools/list`, the agent card and
+ * `/.well-known/mcp.json`. The handler and the A2A skill stay behind.
+ *
+ * One projection because the two copies drifted: the manifest's had no
+ * `outputSchema`, so a descriptor said a tool answers with prose while
+ * `tools/list` said it answers with `structuredContent`.
+ */
+export function toolCard(tool: {
+  name: string;
+  title?: string;
+  description: string;
+  inputSchema: unknown;
+  outputSchema?: unknown;
+  annotations?: unknown;
+}): Record<string, unknown> {
+  return {
+    name: tool.name,
+    ...(tool.title ? { title: tool.title } : {}),
+    description: tool.description,
+    inputSchema: tool.inputSchema,
+    ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
+    ...(tool.annotations ? { annotations: tool.annotations } : {}),
+  };
+}
+
 export interface McpResource {
   uri: string;
   name: string;
@@ -352,6 +378,18 @@ function typeOf(v: unknown): string {
   return typeof v;
 }
 
+/** A JSON-RPC success envelope. The error twin is `rpcError` below. */
+const ok = (id: RpcId, result: object) => ({ jsonrpc: '2.0', id, result });
+
+/**
+ * The -32602 a lookup miss answers with: what was asked for, then everything
+ * this server does expose, as prose one retry can act on.
+ */
+const notFound = (id: RpcId, lead: string, kind: string, names: readonly string[], dataKey: string) =>
+  rpcError(id, -32602, `${lead} This server exposes: ${names.length ? quote(names) : `no ${kind}`}.`, {
+    [dataKey]: names,
+  });
+
 const rpcError = (id: RpcId, code: number, message: string, data?: object) => ({
   jsonrpc: '2.0' as const,
   id,
@@ -526,29 +564,21 @@ async function handleRpc(
   try {
     switch (method) {
       case 'initialize':
-        return {
-          jsonrpc: '2.0',
-          id,
-          result: {
-            protocolVersion: negotiateProtocol(p.protocolVersion),
-            capabilities: capabilitiesOf(config),
-            serverInfo: config.serverInfo,
-            instructions: config.instructions,
-          },
-        };
+        return ok(id, {
+          protocolVersion: negotiateProtocol(p.protocolVersion),
+          capabilities: capabilitiesOf(config),
+          serverInfo: config.serverInfo,
+          instructions: config.instructions,
+        });
 
       // What `initialize` tells a legacy client, asked the modern way. The
       // transport adds `resultType`, the cache hints and `_meta` serverInfo.
       case 'server/discover':
-        return {
-          jsonrpc: '2.0',
-          id,
-          result: {
-            supportedVersions: [...MCP_PROTOCOL_VERSIONS],
-            capabilities: capabilitiesOf(config),
-            instructions: config.instructions,
-          },
-        };
+        return ok(id, {
+          supportedVersions: [...MCP_PROTOCOL_VERSIONS],
+          capabilities: capabilitiesOf(config),
+          instructions: config.instructions,
+        });
 
       // Notifications have no response at all.
       case 'notifications/initialized':
@@ -556,95 +586,47 @@ async function handleRpc(
         return null;
 
       case 'ping':
-        return { jsonrpc: '2.0', id, result: {} };
+        return ok(id, {});
 
       case 'tools/list':
-        return {
-          jsonrpc: '2.0',
-          id,
-          result: {
-            tools: config.tools.map(
-              ({ name, title, description, inputSchema, outputSchema, annotations }) => ({
-                name,
-                ...(title ? { title } : {}),
-                description,
-                inputSchema,
-                ...(outputSchema ? { outputSchema } : {}),
-                ...(annotations ? { annotations } : {}),
-              }),
-            ),
-          },
-        };
+        return ok(id, { tools: config.tools.map(toolCard) });
 
       case 'resources/list':
-        return {
-          jsonrpc: '2.0',
-          id,
-          result: {
-            resources: resources.map(({ uri, name, description, mimeType }) => ({
-              uri,
-              name,
-              description,
-              mimeType,
-            })),
-          },
-        };
+        return ok(id, {
+          resources: resources.map(({ uri, name, description, mimeType }) => ({ uri, name, description, mimeType })),
+        });
 
       // Declared `resources` makes a client ask for templates too. There are
       // none to give — every resource here is a fixed URI — but an empty list
       // is the answer to that question, where -32601 reads as a broken server.
       case 'resources/templates/list':
-        return { jsonrpc: '2.0', id, result: { resourceTemplates: [] } };
+        return ok(id, { resourceTemplates: [] });
 
       case 'resources/read': {
         const { uri } = p as { uri?: string };
         const resource = uri ? resources.find(r => r.uri === uri) : undefined;
         const content = resource ? await resource.read() : null;
         if (content == null) {
-          const uris = resources.map(r => r.uri);
           const lead = uri ? `Unknown resource "${uri}".` : 'Missing "uri" in params.';
-          return rpcError(
-            id,
-            -32602,
-            `${lead} This server exposes: ${uris.length ? quote(uris) : 'no resources'}.`,
-            { availableResources: uris },
-          );
+          return notFound(id, lead, 'resources', resources.map(r => r.uri), 'availableResources');
         }
-        return {
-          jsonrpc: '2.0',
-          id,
-          result: { contents: [{ uri, mimeType: resource!.mimeType, text: content }] },
-        };
+        return ok(id, { contents: [{ uri, mimeType: resource!.mimeType, text: content }] });
       }
 
       case 'prompts/list':
-        return {
-          jsonrpc: '2.0',
-          id,
-          result: { prompts: prompts.map(({ name, description }) => ({ name, description })) },
-        };
+        return ok(id, { prompts: prompts.map(({ name, description }) => ({ name, description })) });
 
       case 'prompts/get': {
         const { name } = p as { name?: string };
         const prompt = name ? prompts.find(x => x.name === name) : undefined;
         if (!prompt) {
-          const names = prompts.map(x => x.name);
           const lead = name ? `Unknown prompt "${name}".` : 'Missing "name" in params.';
-          return rpcError(
-            id,
-            -32602,
-            `${lead} This server exposes: ${names.length ? quote(names) : 'no prompts'}.`,
-            { availablePrompts: names },
-          );
+          return notFound(id, lead, 'prompts', prompts.map(x => x.name), 'availablePrompts');
         }
-        return {
-          jsonrpc: '2.0',
-          id,
-          result: {
-            description: prompt.description,
-            messages: [{ role: 'user', content: { type: 'text', text: prompt.text } }],
-          },
-        };
+        return ok(id, {
+          description: prompt.description,
+          messages: [{ role: 'user', content: { type: 'text', text: prompt.text } }],
+        });
       }
 
       case 'tools/call': {
