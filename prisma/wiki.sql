@@ -59,5 +59,10 @@ CREATE INDEX "WikiRevision_authorId_createdAt_idx" ON "WikiRevision"("authorId",
 ALTER TABLE "WikiRevision" ADD CONSTRAINT "WikiRevision_pageId_fkey" FOREIGN KEY ("pageId") REFERENCES "WikiPage"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 
+-- STRUCTURE S7: the Data API gets nothing. Prisma connects as postgres, which
+-- bypasses RLS; with no policies, anon and authenticated read nothing.
+ALTER TABLE "WikiPage" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "WikiRevision" ENABLE ROW LEVEL SECURITY;
+
 -- The full-text column and its index: `npx fts-ddl '"WikiPage"'` after the
 -- rows are in, never a plain tsvector column (it would stay empty).
