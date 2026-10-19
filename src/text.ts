@@ -80,6 +80,20 @@ export const BANNER_LABELS: Record<BannerVariant, string> = {
 };
 
 /**
+ * The sentence under each banner when the block carries none of its own,
+ * naming no wiki, so any wiki may show it. A wiki that words a notice for its
+ * own subject (radix-wiki's names the Radix ecosystem) passes its own.
+ */
+export const BANNER_MESSAGES: Record<BannerVariant, string> = {
+  stub: 'This article is a stub. You can help by expanding it.',
+  unsourced: 'This article needs additional citations for verification. Please add references to reliable sources.',
+  outdated: 'Some information here may be out of date. Please help bring it up to date.',
+  promotional: 'This article may read like an advertisement. Please help rewrite it from a neutral point of view.',
+  cleanup: "This article may require cleanup to meet the wiki's quality standards.",
+  coi: 'This page may have been written by the subject it describes, and may need review for a neutral point of view.',
+};
+
+/**
  * The banner variants as an editor's option list, in the order a writer meets
  * them: the two that describe a gap first, then the three that describe a flaw.
  *

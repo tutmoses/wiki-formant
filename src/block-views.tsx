@@ -24,7 +24,7 @@ import { Anchor } from './react-server.js';
 import type { WikiLinkComponent } from './react-server.js';
 import { safeLinkHref } from './validation.js';
 import { cx } from './html.js';
-import { BANNER_LABELS, bannerVariant } from './text.js';
+import { BANNER_LABELS, BANNER_MESSAGES, bannerVariant } from './text.js';
 
 
 // ---- codeTabs ---------------------------------------------------------------
@@ -322,11 +322,13 @@ export function BannerView({
 }: {
   variant: string;
   text?: string | null;
-  message: string;
+  /** The sentence when the block has none. Defaults to `BANNER_MESSAGES`. */
+  message?: string;
   icon?: ReactNode;
   policy?: string;
 }) {
   const known = bannerVariant(variant);
+  message ??= BANNER_MESSAGES[known];
   const label = BANNER_LABELS[known];
   return (
     <div className={cx('editorial-banner', `editorial-banner-${known}`)} role="note">
