@@ -13,8 +13,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { STATS_FILTERS, type Digest, type StatsFilter } from './analytics.js';
 import type { PasskeyGate } from './passkey.js';
-import { PasskeyButton, PasskeySignOut } from './passkey-button.js';
-import { StatsFigures } from './stats-figures.js';
+import { PasskeyButton, PasskeySignOut, StatsFigures } from './stats-figures.js';
 
 export interface StatsProps {
   /** One window's figures, from `digest` in `wiki-formant/analytics`. */

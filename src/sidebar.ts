@@ -38,9 +38,10 @@ export function resolveSidebarOpen({
 export const SIDEBAR_ATTRIBUTE = 'data-sidebar';
 
 /**
- * The custom property a consumer's stylesheet sets inside its own rail media
- * query — `1` where the rail stops being a column beside the article, `0`
- * elsewhere.
+ * The custom property set inside the rail's media query — `1` where the rail
+ * stops being a column beside the article, unset elsewhere. `base.css` sets it
+ * at the default breakpoint; a stylesheet that lays its own rail out sets it in
+ * its own query.
  *
  * The rail's breakpoint is necessarily known twice: this hook needs it in JS
  * (to close the rail on navigate, and to default a first-ever visit), and the
@@ -49,8 +50,7 @@ export const SIDEBAR_ATTRIBUTE = 'data-sidebar';
  * JS constant cannot read a media query, so the two numbers cannot be merged —
  * but they can be made unable to disagree QUIETLY, which is the actual hazard.
  *
- * All three wikis matched by hand and all three happened to be right; nothing
- * said so. Declaring this property is what opts a stylesheet into the check.
+ * Declaring this property is what opts a stylesheet into the check.
  *
  * @internal
  */

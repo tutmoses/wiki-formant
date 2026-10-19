@@ -65,6 +65,73 @@
 .page-with-infobox > .page-main-content { grid-area: content; min-width: 0; }
 .page-with-infobox > .infobox { grid-area: infobox; min-width: 0; }
 
+/* ---- the wiki rail (RailShell prefix="wiki-sidebar") ------------------------
+   A column beside the article from 1024px; below that, a drawer stacked above
+   it, which the same open/closed choice shows or removes. Three wikis had three
+   answers here (an overlay with no scrim at 768px, this drawer at 900px, the
+   rail moved under the article at 1024px), and an 18rem overlay on a phone hid
+   the page it was the rail of.
+
+   1024 is where the rail stops fitting, rounded up to the gutter tier: 18rem of
+   rail plus a full `--measure` of prose plus the page gutters needs 972px on
+   the widest of the three (63ch of Inter is 636px), and 1024 is the next edge
+   the gutters already step at. It is also the default `breakpoint` of
+   `SidebarProvider` and `sidebarBootScript`; pass none. `--rail-floating` below
+   is how the hook checks the two still agree.
+
+     .wiki-layout > aside.wiki-sidebar > .wiki-sidebar__scroll
+                  > .wiki-layout__main
+
+   The site sets `--rail-top` (what the sticky rail clears, a header's height),
+   `--rail-border` (the rule between rail and article, which becomes the
+   drawer's foot) and the rail's surface, padding and gap. Closed is the class
+   or `html[data-sidebar='closed']`, whichever says so first: the boot script
+   writes the attribute before React can, and React writes the class. */
+.wiki-layout { display: flex; align-items: flex-start; }
+.wiki-layout__main { flex: 1 1 0%; min-width: 0; }
+.wiki-sidebar {
+  position: sticky;
+  top: var(--rail-top, 0px);
+  flex-shrink: 0;
+  width: var(--sidebar-width, 18rem);
+  height: calc(100dvh - var(--rail-top, 0px));
+  overflow: hidden;
+  border-inline-end: var(--rail-border, none);
+  transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* Closed gives the column back; the scroll box keeps its width, so nothing
+   reflows on the way out. */
+.wiki-sidebar--closed,
+html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
+/* Until the hook has read storage: a rail left closed is closed on first paint
+   rather than sliding shut on every load. */
+.wiki-sidebar--instant { transition: none; }
+.wiki-sidebar__scroll {
+  display: flex;
+  flex-direction: column;
+  width: var(--sidebar-width, 18rem);
+  height: 100%;
+  overflow-y: auto;
+}
+@media (max-width: 1023px) {
+  :root { --rail-floating: 1; }
+  .wiki-layout { flex-direction: column; align-items: stretch; }
+  .wiki-sidebar {
+    position: static;
+    width: auto;
+    height: auto;
+    border-inline-end: none;
+    border-block-end: var(--rail-border, none);
+    transition: none;
+  }
+  .wiki-sidebar--closed,
+  html[data-sidebar='closed'] .wiki-sidebar { display: none; }
+  /* The cap is on the scroll box, not the rail: a percentage height inside an
+     auto-height parent is auto, so a capped rail clipped a long table of
+     contents instead of scrolling it. */
+  .wiki-sidebar__scroll { width: auto; height: auto; max-height: 70dvh; }
+}
+
 /* ---- the block views and the infobox ---------------------------------------
    The structure three or four sites had each restated around this markup;
    padding, gaps, radii and colour stay theirs. A stats block is two columns,

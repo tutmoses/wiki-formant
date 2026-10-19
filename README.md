@@ -287,16 +287,18 @@ The default `frame-src` is `DEFAULT_IFRAME_HOSTS`, the same list the sanitiser's
 
 `SidebarProvider` / `useSidebar` hold the rail's collapse state — remembered across loads, defaulted from the viewport only when the reader has never chosen. Pair it with `sidebarBootScript` from `wiki-formant/sidebar` (framework-free, so a server component can stamp it into `<head>`) or a remembered-closed rail paints open and animates shut on every load. `TableOfContents` is the "on this page" list, with scroll-spy, reading either headings you already know or the rendered article.
 
-The rail's breakpoint is necessarily known twice — `matchMedia` here, a media query in your stylesheet — because a media query cannot read a JS constant and a JS constant cannot read a media query. What the two can be stopped from doing is parting in silence, which is the failure that actually happens: all three wikis matched the numbers by hand, all three were right, and nothing said so. Set `--rail-floating: 1` inside the same media query that lays the rail out, and the hook checks the two agree on every breakpoint crossing, in development, naming both sides and the number to change:
+The rail's breakpoint is necessarily known twice — `matchMedia` here, a media query in a stylesheet — because a media query cannot read a JS constant and a JS constant cannot read a media query. `base.css` holds the CSS half: with `RailShell prefix="wiki-sidebar"` inside a `.wiki-layout` beside a `.wiki-layout__main`, the rail is a sticky column from 1024px and, below it, a drawer stacked above the article that the same open/closed choice shows or removes, table of contents included. 1024 is the default `breakpoint` of `SidebarProvider` and `sidebarBootScript`, so a wiki on `base.css`'s rail passes none. It is measured: an 18rem rail, a full `--measure` of prose (63ch of Inter is 636px) and the page gutters need 972px, and 1024 is the gutter tier above that. The site supplies `--rail-top` (what the sticky rail clears), `--rail-border` (the rule beside the column, which becomes the drawer's foot) and the surface, padding and gap.
+
+What the two halves can be stopped from doing is parting in silence. `base.css` sets `--rail-floating: 1` inside its media query, and the hook checks the two agree on every breakpoint crossing, in development, naming both sides and the number to change. A wiki that lays its rail out itself opts in the same way:
 
 ```css
 @media (max-width: 767px) {          /* the edge of breakpoint={768} */
   :root { --rail-floating: 1; }
-  .sidebar { position: fixed; /* … however this wiki floats its rail */ }
+  .sidebar { /* … however this wiki lays its rail out */ }
 }
 ```
 
-Declaring the property is what opts a stylesheet in; without it the check stays quiet, since a package cannot require CSS it does not ship. The mechanism is `railBreakpointMismatch` and `readRailFloating` from `wiki-formant/sidebar`, both exported, the first pure.
+Without the property the check stays quiet, since a package cannot require CSS it does not ship. The mechanism is `railBreakpointMismatch` and `readRailFloating` from `wiki-formant/sidebar`, both exported, the first pure.
 
 `useTypeahead` is the search field's state machine. Five surfaces across the three wikis had three implementations and no two agreed on what a search field does; this is their union, because each had a piece the others lacked:
 
@@ -369,7 +371,7 @@ are unit-tested without a DOM.
 
 `PageNav` is the previous/next pair at the foot of an article — the sequential read the infobox rail's lateral links do not cover. Ordering is the caller's, because it is the one part that is never portable: a wiki's sequence is its section's configured sort, a knowledge base's is a taxonomy walk. Pair it with `adjacentPages` from `wiki-formant/pagination` over a list you already hold — neither wiki needs a query for it, and the two indexed lookups the neighbours used to cost were the reason one of them dropped the control.
 
-`RailShell` stays in `wiki-formant/react`, because it calls `useSidebar` and genuinely is a client component. It renders the rail's landmark, its scroll wrapper and the three collapse states — including the `--instant` class that keeps a remembered-closed rail from animating shut on first paint, and the close-on-tap that a mobile rail needs. Compose your own rail inside it and mark the active link with `isRailLinkActive`; all three wikis do, and the pre-composed component that used to sit here had one consumer and had already lost both of those behaviours.
+`RailShell` stays in `wiki-formant/react`, because it calls `useSidebar` and genuinely is a client component. It renders the rail's landmark, its scroll wrapper and the three collapse states — including the `--instant` class that keeps a remembered-closed rail from animating shut on first paint, and the close-on-navigate that a mobile drawer needs. Only a followed link closes it: a search field or a table-of-contents entry inside the drawer leaves it open. Compose your own rail inside it and mark the active link with `isRailLinkActive`; all three wikis do, and the pre-composed component that used to sit here had one consumer and had already lost both of those behaviours.
 
 `FacetSummary` is the line under the facet bar — how much of the section is showing, and a Clear link when anything is narrowed — with the filtered-empty and empty-section states. `RelatedPages` is the see-also list: a labelled `<aside>` over a `<ul>`, its heading linked to the set `rankRelated` found in common. `InfoboxAside` is the facts panel's named landmark with its "Part of a series on" line, and `InfoboxFacts` renders `metadataRows` as a row-headed table. That table was an HTML string in two wikis, injected as a fake content block; one re-escaped a `"` before each href by hand and the other did not. As React nodes there is nothing to escape. `formatFactValue` is its default cell: a date as its day, a URL or bare domain as an outbound link, `<br>`-separated values as lines.
 
@@ -840,10 +842,8 @@ return (
 );
 ```
 
-`StatsGate` (`wiki-formant/stats`) renders `children` and a sign-out button (`PasskeySignOut`) for a signed-in reader and, for anyone else, the line saying what the prompt will do and the `PasskeyButton` that does it; `classNames` places the text, the button's box, the button and its error.
+`StatsGate` (`wiki-formant/stats`) renders `children` and a sign-out button for a signed-in reader and, for anyone else, the line saying what the prompt will do and the passkey button that does it; `classNames` places the text, the button's box, the button and its error. Those buttons are the browser half of `wiki-formant/passkey`, and they have no subpath of their own.
 
-`PasskeyButton` (`wiki-formant/passkey-button`) is the browser half and has its
-own subpath, because it imports `@simplewebauthn/browser`.
 `Stats` (`wiki-formant/stats`) renders a `digest` as one page: the
 headline figures, each with its change from the window before
 (`.stats-delta[data-better]`, a share or for the bounce rate points, for the

@@ -50,6 +50,7 @@ import {
   type DependencyList,
   type RefObject,
   type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
   type ThHTMLAttributes,
 } from 'react';
@@ -1284,11 +1285,9 @@ export class ErrorBoundary extends Component<
 export interface RailShellProps {
   children: ReactNode;
   /**
-   * Class prefix the stylesheet implements: `"wiki-sidebar"` or `"sidebar"`.
-   *
-   * The one thing genuinely per-repo here. Everything else — which three states
-   * exist, what each means, and that the attribute outranks the class — is a
-   * contract both stylesheets already spell out in near-identical comments.
+   * Class prefix the stylesheet implements. `"wiki-sidebar"` is the one
+   * `wiki-formant/base.css` lays out, column and drawer both; another prefix
+   * leaves the layout to the site's own stylesheet.
    */
   prefix: string;
   /** Accessible name. A rail with none is an unlabelled landmark. */
@@ -1298,7 +1297,7 @@ export interface RailShellProps {
 
 /**
  * The collapsible rail's outer shell: the landmark, its three states, and the
- * scroll container, with a tap inside it closing the rail on mobile.
+ * scroll container, with a followed link closing the rail on mobile.
  *
  * THE THREE STATES ARE NOT TWO. `--open` / `--closed` is the reader's choice;
  * `--instant` suppresses the transition until that choice has been read out of
@@ -1313,16 +1312,24 @@ export interface RailShellProps {
  * paint and the stylesheet lets that attribute win. The class is what keeps
  * React's view in sync afterwards.
  *
- * Closing on navigate is scoped to mobile because that is where the rail
- * OVERLAYS the article — on a desktop it is a column beside it, and collapsing
- * it on every click would be a rail that folds itself away as you use it.
+ * Closing on navigate is scoped to mobile because that is where the rail is a
+ * drawer above the article — on a desktop it is a column beside it, and
+ * collapsing it on every click would be a rail that folds itself away as you
+ * use it. Only a link closes it. Any tap used to, so a search field inside the
+ * rail shut it on focus, and a table-of-contents entry removed the drawer from
+ * above the heading it had just started scrolling to.
+ *
+ * With `prefix="wiki-sidebar"`, `wiki-formant/base.css` lays the rail out.
  */
 export function RailShell({ children, prefix, label, className }: RailShellProps) {
   const { open, setOpen, isMobile, ready } = useSidebar();
 
-  const close = useCallback(() => {
-    if (isMobile) setOpen(false);
-  }, [isMobile, setOpen]);
+  const close = useCallback(
+    (e: ReactMouseEvent<HTMLDivElement>) => {
+      if (isMobile && (e.target as Element).closest('a[href]')) setOpen(false);
+    },
+    [isMobile, setOpen],
+  );
 
   const classes = [
     prefix,
