@@ -7,7 +7,7 @@ Object.assign(globalThis, { window, document: window.document, IS_REACT_ACT_ENVI
 
 const { createElement: h, act, useState } = await import('react');
 const { createRoot } = await import('react-dom/client');
-const { BlockEditor, CodeTabsFields, ColumnsFields, InfoboxFields, LimitField, PageListFields, ReferencesFields } = await import('wiki-formant/block-editor');
+const { BlockEditor, BlockFieldsKit, CodeTabsFields, ColumnsFields, InfoboxFields, LimitField, LinkGridFields, PageListFields, ReferencesFields } = await import('wiki-formant/block-editor');
 
 // A three-type wiki: enough for a container, a single-use type and a leaf.
 let n = 0;
@@ -184,3 +184,19 @@ test('without pages, a page list takes a typed id once', () => {
   unmount();
 });
 
+
+test('a core block\'s fields render outside the editor, in the kit\'s style', async () => {
+  const root = createRoot(document.getElementById('root'));
+  let block = { id: 'g', type: 'linkGrid', groups: [{ id: 'g1', heading: 'Docs', links: [{ label: 'Scrypto', href: '/scrypto' }] }] };
+  const Grid = () => {
+    const [b, set] = useState(block);
+    block = b;
+    return h(BlockFieldsKit, { kit: { ...kit, classNames: { input: 'input', add: 'add' } } }, h(LinkGridFields, { block: b, onUpdate: set }));
+  };
+  await act(async () => root.render(h(Grid)));
+  assert.equal(document.querySelectorAll('input.input').length, 5, 'intro, heading, description, and the link\'s two fields');
+  const addLink = [...document.querySelectorAll('button.add')].find(b => b.textContent.includes('Add link'));
+  await act(async () => addLink.click());
+  assert.equal(block.groups[0].links.length, 2);
+  await act(async () => root.unmount());
+});

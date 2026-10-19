@@ -190,6 +190,27 @@ function useEditorContext(): EditorContext {
   return ctx;
 }
 
+const NO_LIST: BlockSchema<EditableBlock> = {
+  meta: () => undefined,
+  create: () => {
+    throw new Error('ColumnsFields and InfoboxFields hold a block list: render them inside <BlockEditor>.');
+  },
+  duplicate: block => block,
+  renderBody: () => null,
+  types: [],
+  nestedTypes: [],
+};
+
+/**
+ * The core blocks' fields outside a `<BlockEditor>`, in `kit`'s style: for an
+ * editor that draws each block in place and has a list of its own, as miow's
+ * does. The two container fields hold a block list and still need the editor.
+ */
+export function BlockFieldsKit({ kit, children }: { kit: BlockEditorKit; children: ReactNode }) {
+  const value = useMemo(() => ({ kit, schema: NO_LIST }), [kit]);
+  return <Context.Provider value={value}>{children}</Context.Provider>;
+}
+
 // ---- the list ---------------------------------------------------------------
 
 export interface BlockEditorProps<B extends EditableBlock> {
