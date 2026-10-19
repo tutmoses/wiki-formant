@@ -76,6 +76,7 @@ test('a page is created with its first revision, and a save diffs, bumps and rec
   assert.ok(history[2].changes.length > 0, 'what changed is diffed on read');
   assert.equal(history[0].content, undefined, 'entries carry changes, not content');
 
+  assert.equal(history[1].message, '1 block added', 'a save with no message records what the diff found');
   const window = await store.history(made.page.id, { limit: 2 });
   assert.equal(window.length, 2);
   assert.ok(window[1].changes.some(c => c.action === 'added'), 'the oldest shown is diffed against its real predecessor');
@@ -146,13 +147,15 @@ test('search ranks title prefix, title, prose, then full text with a headline', 
   await store.save({ tagPath: 'docs', slug: 'r', title: 'Running validators', content: [para('a', 'How to run one.')] });
   await store.save({ tagPath: 'docs', slug: 's', title: 'Staking', content: [para('a', 'Pick validators carefully.')] });
   await store.save({ tagPath: 'docs', slug: 'u', title: 'Uptime', content: [para('a', 'A validator that misses rounds loses rewards.')] });
+  await store.save({ tagPath: '', slug: '', title: 'Home', content: [para('a', 'All about validators.')] });
+  await store.save({ tagPath: '', slug: 'about', title: 'About', content: [para('a', 'Who runs validators.')] });
 
   const { items, total } = await store.search('validators');
-  assert.equal(total, 4);
-  assert.deepEqual(items.map(i => i.slug), ['v', 'r', 's', 'u']);
-  assert.deepEqual(items.map(i => i.score), [0, 1, 2, 3]);
-  assert.match(items[3].snippet, /validator that misses rounds/, 'a stem match shows where it matched');
-  assert.deepEqual((await store.search('validators', { skip: 1, take: 2 })).items.map(i => i.slug), ['r', 's']);
+  assert.equal(total, 5, 'the home page is never a result; a root-level page is');
+  assert.deepEqual(items.map(i => i.slug), ['v', 'r', 'about', 's', 'u']);
+  assert.deepEqual(items.map(i => i.score), [0, 1, 2, 2, 3]);
+  assert.match(items[4].snippet, /validator that misses rounds/, 'a stem match shows where it matched');
+  assert.deepEqual((await store.search('validators', { skip: 1, take: 2 })).items.map(i => i.slug), ['r', 'about']);
   assert.equal((await store.search('   ')).total, 0);
 });
 

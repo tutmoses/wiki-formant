@@ -104,6 +104,7 @@ export interface SaveInput<B> {
   /** Replaces the page's metadata whole. Omit to keep it. */
   metadata?: PageMetadata;
   authorId?: string | null;
+  /** The history's line for this save. Defaults to what the diff found ("1 block modified"). */
   message?: string | null;
   /**
    * The version the writer opened. A save that finds the page has moved on is
@@ -261,7 +262,7 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
                      ELSE 3 END AS tier,
                 ts_rank_cd(p.search_tsv, q.tsq, ${FTS_RANK_NORMALIZATION}) AS fts
            FROM ${PAGE} p CROSS JOIN q
-          WHERE p."siteId" = $5 AND p."tagPath" <> ''
+          WHERE p."siteId" = $5 AND NOT (p."tagPath" = '' AND p.slug = '')
             AND ($6::text IS NOT NULL OR NOT (p."tagPath" = ANY($4::text[])))
             AND ($6::text IS NULL OR p."tagPath" = $6)
             AND (p.title ILIKE $3
@@ -367,7 +368,7 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
        SELECT * FROM up`,
       existing.id, existing.version, title, slug, JSON.stringify(content),
       input.metadata === undefined ? null : JSON.stringify(input.metadata),
-      version, input.verified === true, changeType, input.message ?? null, input.authorId ?? null,
+      version, input.verified === true, changeType, input.message ?? diff.summary, input.authorId ?? null,
     );
     if (!page) throw conflict('This page was saved by someone else while this edit was being written. Reload it and apply the edit again.');
     return { page, created: false, changeType, summary: diff.summary };
