@@ -145,11 +145,11 @@ export type WikiTree<N extends WikiNode = WikiNode> = ReturnType<typeof createTr
 export const WIKI_MODES = ['edit', 'history'] as const;
 export type WikiMode = (typeof WIKI_MODES)[number];
 
-export interface ParsedWikiPath {
+export interface ParsedWikiPath<M extends string = WikiMode> {
   type: 'home' | 'category' | 'page' | 'invalid';
   tagPath: string;
   slug: string;
-  mode: WikiMode | null;
+  mode: M | null;
 }
 
 /**
@@ -160,16 +160,16 @@ export interface ParsedWikiPath {
  *
  * Static routes are the app's: check them before calling this.
  */
-export function parseWikiPath(
+export function parseWikiPath<M extends string = WikiMode>(
   tree: Pick<WikiTree, 'isValid'>,
   segments: readonly string[] = [],
-  { modes = WIKI_MODES }: { modes?: readonly WikiMode[] } = {},
-): ParsedWikiPath {
+  { modes = WIKI_MODES as unknown as readonly M[] }: { modes?: readonly M[] } = {},
+): ParsedWikiPath<M> {
   const parts = segments.filter(Boolean);
-  const last = parts.at(-1) as WikiMode | undefined;
+  const last = parts.at(-1) as M | undefined;
   const mode = last && modes.includes(last) && !tree.isValid(parts) ? last : null;
   const path = mode ? parts.slice(0, -1) : parts;
-  const invalid: ParsedWikiPath = { type: 'invalid', tagPath: '', slug: '', mode: null };
+  const invalid: ParsedWikiPath<M> = { type: 'invalid', tagPath: '', slug: '', mode: null };
   if (!path.length) return { type: 'home', tagPath: '', slug: '', mode };
   if (tree.isValid(path)) return { type: 'category', tagPath: path.join('/'), slug: '', mode };
   if (path.length < 2 || !tree.isValid(path.slice(0, -1))) return invalid;
@@ -181,8 +181,8 @@ export function parseWikiPath(
  * as something else: a mode, or a child category. Creating a page treats it as
  * taken.
  */
-export function isReservedSlug(tree: Pick<WikiTree, 'isValid'>, tagPath: string, slug: string, modes: readonly WikiMode[] = WIKI_MODES): boolean {
-  return (modes as readonly string[]).includes(slug) || tree.isValid([...segmentsOf(tagPath), slug]);
+export function isReservedSlug(tree: Pick<WikiTree, 'isValid'>, tagPath: string, slug: string, modes: readonly string[] = WIKI_MODES): boolean {
+  return modes.includes(slug) || tree.isValid([...segmentsOf(tagPath), slug]);
 }
 
 /** A page's path: the category for its hub, `/` for the home page. */
