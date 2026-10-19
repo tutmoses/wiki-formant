@@ -41,7 +41,9 @@ await store.save({ tagPath, slug, content, authorId, message, baseVersion: page.
 - **The bump is the diff's.** Added, removed or moved blocks are `major`, changed prose or title `minor`; `change` overrides it for a script that knows better. A metadata-only save moves no version and writes no revision.
 - **History is diffed on read.** A revision stores the page as it was saved, never a diff, so a script's revision and the editor's carry the same history. `history(pageId, { limit })` reads one row more than it returns, so the oldest entry shown is diffed against its real predecessor.
 - **Listings carry a snippet, not the article.** `list`, `recent` and `byIds` drop `content` for one line of it; a category of 200 cards otherwise ships 200 block arrays.
-- **Search is four tiers**: title prefix, title, literal prose, then full text on `search_tsv` with Postgres' own headline as the snippet. Hidden paths are left out unless the search names one.
+- **Search is four tiers**: title prefix, title, literal prose, then full text on `search_tsv` with Postgres' own headline as the snippet. Hidden paths are left out unless the search names one; `content: true` keeps each row's blocks.
+- **A path under a hidden one is hidden too**, in every listing, whether or not the tree names it.
+- **`branch` is an agent's walk**: a path and everything under it, newest first or A–Z, with the total a pager needs and an optional `since`. `counts` is pages per tag path, the back office and the home page left out.
 - Ids and timestamps default in the database, so the store's SQL and a Prisma client write the same rows. Copy the models with `npx prisma-models wiki` (a tenant-keyed app checks its own copy with `--tenant`), then build the full-text column with `npx fts-ddl '"WikiPage"'`.
 
 ## Tree
@@ -60,6 +62,37 @@ parseWikiPath(tree, ['contents', 'tech', 'radix-engine', 'history']);
 - Metadata keys accumulate down the trail; `sort`, `mainArticle` and `hidden` are inherited, the nearest declaration winning. A field only one wiki reads (an XRD threshold, a band) rides on the node, and the app folds it from `trail`.
 - A path that is itself a category wins over a mode suffix, so a category named `history` stays reachable. The empty slug is a category's hub article, and `/<category>/edit` edits it.
 - `crumbs` makes one crumb per URL segment, linked only where the tree knows the segment, so a trail can never be shorter than the address bar.
+
+## Category view
+
+`categoryView` is a category page as radix.wiki browses one, from the tree, the taxonomy and anything that reads like the store: the count, a sort that shows only once the set needs an A–Z index (by a `date` key where the category declares one), the facets its `select` keys give, a letter that exists, and a card per visible section listing its own pages, then its sections.
+
+```ts
+import { categoryView } from 'wiki-formant/category';
+
+const view = await categoryView({ tree, taxonomy, pages: store }, 'ecosystem', searchParams);
+// { sort, total, pages, all, filters, letter, facets, letters, sortable, clearHref, sortHref, sections }
+```
+
+- `pages` is the store, or the app's cached and decorated wrapper over its `list` and `subtree`.
+- A link carries `sort` only when it is not the category's own, so the bare category and its default are one address.
+
+## Wiki read tools
+
+`wikiReadTools` is the read half of a wiki's MCP server over its store and tree: `search_wiki`, `get_page`, `get_pages`, `list_pages`, `get_categories`, `get_recent_changes` and `get_full_corpus`. `searchWiki` is the same rows for an app's plain-GET `?q=` and its search page, so the three never disagree.
+
+```ts
+import { wikiReadTools, searchWiki } from 'wiki-formant/wiki-tools';
+
+const reading = { store, tree, url: (tagPath, slug) => `${SITE}/${tagPath}/${slug}`, text: extractText, noun: 'the Radix Wiki', corpusTitle: 'Radix Wiki' };
+const tools = [...wikiReadTools(reading), ...myOwnTools];
+const { items, total } = await searchWiki(reading, 'validators', { page: 1, size: 20 });
+```
+
+- Every row carries `path`, which every read tool takes back, and `chars` where the page's text was read. A pasted URL resolves, with `pathPrefix` stripped; a category's path reads its hub article; a miss names the nearest pages.
+- `privateHidden` closes the back office to every tool; without it a hidden page is unlisted but readable by path, as its URL is.
+- `metadata`, `label`, `corpus`, `noMatch` and `skills` are the app's: what a row adds, how a category is named, the sections its llms-full.txt is made of, what an empty search says, and the A2A skills.
+- Writes stay with each app, because who may write is the one thing no two of them agree on.
 
 ## Taxonomy
 

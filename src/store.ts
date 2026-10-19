@@ -164,6 +164,12 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
   const rows = async <T>(query: string, ...values: unknown[]) => (await o.sql(query, ...values)) as T[];
   const one = async <T>(query: string, ...values: unknown[]) => (await rows<T>(query, ...values))[0] ?? null;
 
+  /**
+   * `isHidden` in SQL, over a table aliased `p`, `param` holding the list: a
+   * path under a hidden one is back office too, whether or not the tree names it.
+   */
+  const hiddenSql = (param: string) => `EXISTS (SELECT 1 FROM unnest(${param}::text[]) h WHERE p."tagPath" = h OR starts_with(p."tagPath", h || '/'))`;
+
   const isHidden = (tagPath: string) => hidden.some(h => tagPath === h || tagPath.startsWith(`${h}/`));
 
   /** A page with how many revisions it has, which every article's foot states. */
@@ -197,8 +203,8 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
   /** Every page under a category, by title: the card that lists a subcategory's articles. */
   const subtree = (tagPath: string) =>
     rows<WikiPageRef>(
-      `SELECT "tagPath", slug, title FROM ${PAGE}
-        WHERE "siteId" = $1 AND "tagPath" LIKE $2 AND slug <> '' AND NOT ("tagPath" = ANY($3::text[]))
+      `SELECT "tagPath", slug, title FROM ${PAGE} p
+        WHERE "siteId" = $1 AND "tagPath" LIKE $2 AND slug <> '' AND NOT ${hiddenSql('$3')}
         ORDER BY title ASC`,
       site, `${escapeLikeTerm(tagPath)}/%`, hidden,
     );
@@ -211,7 +217,7 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
   const recent = async ({ tagPath, limit = 10 }: { tagPath?: string; limit?: number } = {}) =>
     (await (tagPath !== undefined
       ? rows<WikiPageRow>(`SELECT ${COLUMNS} FROM ${PAGE} WHERE "siteId" = $1 AND "tagPath" = $2 ORDER BY "updatedAt" DESC LIMIT $3::int`, site, tagPath, limit)
-      : rows<WikiPageRow>(`SELECT ${COLUMNS} FROM ${PAGE} WHERE "siteId" = $1 AND NOT ("tagPath" = ANY($2::text[])) ORDER BY "updatedAt" DESC LIMIT $3::int`, site, hidden, limit)
+      : rows<WikiPageRow>(`SELECT ${COLUMNS} FROM ${PAGE} p WHERE "siteId" = $1 AND NOT ${hiddenSql('$2')} ORDER BY "updatedAt" DESC LIMIT $3::int`, site, hidden, limit)
     )).map(listing);
 
   const byIds = async (ids: readonly string[]) =>
@@ -225,7 +231,36 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
 
   /** Every page with its content, for a corpus export. Hidden paths are left out. */
   const corpus = () =>
-    rows<WikiPageRow<B>>(`SELECT ${COLUMNS} FROM ${PAGE} WHERE "siteId" = $1 AND NOT ("tagPath" = ANY($2::text[])) ORDER BY "tagPath", slug`, site, hidden);
+    rows<WikiPageRow<B>>(`SELECT ${COLUMNS} FROM ${PAGE} p WHERE "siteId" = $1 AND NOT ${hiddenSql('$2')} ORDER BY "tagPath", slug`, site, hidden);
+
+  /**
+   * A branch for an agent walking the wiki: the path named and everything
+   * under it, with the total a pager needs. Naming a path gets it even when it
+   * is hidden, and never a hidden path beneath it; naming none gets article
+   * space, the home page excepted. `since` keeps what changed from then on.
+   */
+  const branch = async ({ tagPath, sort = 'recent', limit = 20, offset = 0, since }: { tagPath?: string; sort?: ListSort; limit?: number; offset?: number; since?: Date } = {}) => {
+    const where = `"siteId" = $1
+        AND ($2::text IS NULL OR "tagPath" = $2 OR starts_with("tagPath", $2 || '/'))
+        AND (("tagPath" = $2) IS TRUE OR NOT ${hiddenSql('$3')})
+        AND NOT ("tagPath" = '' AND slug = '')
+        AND ($4::timestamptz IS NULL OR "updatedAt" >= $4)`;
+    const values = [site, tagPath || null, hidden, since ?? null];
+    const [found, count] = await Promise.all([
+      rows<WikiPageRow<B>>(`SELECT ${COLUMNS} FROM ${PAGE} p WHERE ${where} ORDER BY ${ORDER[sort]} LIMIT $5::int OFFSET $6::int`, ...values, limit, offset),
+      one<{ total: number }>(`SELECT count(*)::int AS total FROM ${PAGE} p WHERE ${where}`, ...values),
+    ]);
+    return { items: found.map(row => ({ ...listing(row), content: row.content })), total: count?.total ?? 0 };
+  };
+
+  /** How many pages each tag path holds, back office and the home page left out: a category tree's counts. */
+  const counts = () =>
+    rows<{ tagPath: string; pages: number }>(
+      `SELECT "tagPath", count(*)::int AS pages FROM ${PAGE} p
+        WHERE "siteId" = $1 AND NOT ("tagPath" = '' AND slug = '') AND NOT ${hiddenSql('$2')}
+        GROUP BY "tagPath" ORDER BY "tagPath"`,
+      site, hidden,
+    );
 
   const stats = async () => {
     const row = await one<{ pages: number; updated: Date | null }>(`SELECT count(*)::int AS pages, max("updatedAt") AS updated FROM ${PAGE} WHERE "siteId" = $1`, site);
@@ -248,9 +283,12 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
    * page is never a result. A tier-3 row's snippet is Postgres' own headline,
    * because a stem match has no literal substring to window on.
    */
-  const search = async (query: string, { tagPath = null, skip = 0, take = 25 }: { tagPath?: string | null; skip?: number; take?: number } = {}) => {
+  const search = async (
+    query: string,
+    { tagPath = null, skip = 0, take = 25, content: withContent = false }: { tagPath?: string | null; skip?: number; take?: number; content?: boolean } = {},
+  ) => {
     const term = escapeLikeTerm(query);
-    if (!term) return { items: [] as (WikiPageListing & { score: number })[], total: 0 };
+    if (!term) return { items: [] as (WikiPageListing & { score: number; content?: B[] })[], total: 0 };
     const prose = proseSql('p.content');
     const found = await rows<WikiPageRow & { tier: number; total: number; headline: string | null }>(
       `WITH q AS (SELECT websearch_to_tsquery('english', $1) AS tsq),
@@ -258,15 +296,15 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
          SELECT p.*, q.tsq,
                 CASE WHEN p.title ILIKE $2 THEN 0
                      WHEN p.title ILIKE $3 THEN 1
-                     WHEN NOT (p."tagPath" = ANY($4::text[])) AND ${prose} ILIKE $3 THEN 2
+                     WHEN NOT ${hiddenSql('$4')} AND ${prose} ILIKE $3 THEN 2
                      ELSE 3 END AS tier,
                 ts_rank_cd(p.search_tsv, q.tsq, ${FTS_RANK_NORMALIZATION}) AS fts
            FROM ${PAGE} p CROSS JOIN q
           WHERE p."siteId" = $5 AND NOT (p."tagPath" = '' AND p.slug = '')
-            AND ($6::text IS NOT NULL OR NOT (p."tagPath" = ANY($4::text[])))
+            AND ($6::text IS NOT NULL OR NOT ${hiddenSql('$4')})
             AND ($6::text IS NULL OR p."tagPath" = $6)
             AND (p.title ILIKE $3
-                 OR (NOT (p."tagPath" = ANY($4::text[]))
+                 OR (NOT ${hiddenSql('$4')}
                      AND (${prose} ILIKE $3 OR (q.tsq IS NOT NULL AND p.search_tsv @@ q.tsq))))
        ),
        paged AS (
@@ -282,6 +320,7 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
     );
     const items = found.map(({ tier, total: _, headline, content, ...row }) => ({
       ...row,
+      ...(withContent ? { content: content as B[] } : {}),
       score: tier,
       snippet: (headline ? decodeEntities(headline).replace(/\s+/g, ' ').trim() : '')
         || matchSnippet(content, query, () => opening({ content: content as B[], metadata: row.metadata })),
@@ -396,7 +435,7 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
 
   return {
     siteId: site, hidden, isHidden,
-    get, getById, list, articles, subtree, recent, byIds, refs, corpus, stats, search,
+    get, getById, list, articles, subtree, recent, byIds, refs, corpus, branch, counts, stats, search,
     history, revision, save, restore, remove, verify,
   };
 }

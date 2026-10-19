@@ -180,3 +180,41 @@ test('a rename moves the page and refuses a taken slug', async () => {
   assert.equal(await store.remove('docs', 'c'), true);
   assert.equal(await store.remove('docs', 'c'), false);
 });
+
+test('a branch lists a path and what is under it with its total, and counts leave the back office out', async () => {
+  const { sql } = await db();
+  const store = wikiStore({ sql, hidden: ['meta', 'meta/log'] });
+  for (const [tagPath, slug] of [['', ''], ['tech', ''], ['tech', 'a'], ['tech/core', 'b'], ['meta', 'm'], ['meta/log', 'l'], ['tech/core', 'c']]) {
+    await store.save({ tagPath, slug, title: `${tagPath}/${slug}`, content: [para('x', 'Text.')] });
+  }
+  const all = await store.branch();
+  assert.deepEqual(all.items.map(p => `${p.tagPath}/${p.slug}`).sort(), ['tech/', 'tech/a', 'tech/core/b', 'tech/core/c']);
+  assert.equal(all.total, 4);
+  assert.ok(Array.isArray(all.items[0].content) && typeof all.items[0].snippet === 'string');
+
+  const paged = await store.branch({ tagPath: 'tech', sort: 'title', limit: 2, offset: 2 });
+  assert.equal(paged.total, 4);
+  assert.deepEqual(paged.items.map(p => p.slug), ['b', 'c']);
+
+  const named = await store.branch({ tagPath: 'meta' });
+  assert.deepEqual(named.items.map(p => p.slug), ['m'], 'a hidden path named is listed, its hidden children are not');
+
+  assert.equal((await store.branch({ since: new Date(Date.now() + 60_000) })).total, 0);
+  assert.deepEqual(await store.counts(), [{ tagPath: 'tech', pages: 2 }, { tagPath: 'tech/core', pages: 2 }]);
+
+  const found = await store.search('Text', { content: true, take: 1 });
+  assert.ok(Array.isArray(found.items[0].content));
+  assert.equal((await store.search('Text', { take: 1 })).items[0].content, undefined);
+});
+
+test('a path under a hidden one is hidden from every listing, named in the tree or not', async () => {
+  const { sql } = await db();
+  const store = wikiStore({ sql, hidden: ['ops'] });
+  await store.save({ tagPath: 'ops/runs/2026', slug: 'log', title: 'Run log', content: [para('a', 'Sweep notes.')] });
+  await store.save({ tagPath: 'tech', slug: 'notes', title: 'Notes', content: [para('a', 'Public notes.')] });
+  assert.deepEqual((await store.search('notes')).items.map(p => p.slug), ['notes']);
+  assert.deepEqual((await store.recent()).map(p => p.slug), ['notes']);
+  assert.deepEqual((await store.corpus()).map(p => p.slug), ['notes']);
+  assert.equal(store.isHidden('ops/runs/2026'), true);
+  assert.deepEqual((await store.search('run', { tagPath: 'ops/runs/2026' })).items.map(p => p.slug), ['log']);
+});
