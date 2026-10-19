@@ -18,7 +18,7 @@
 // genuinely differs — the prose of a banner, whether references run through an
 // HTML processor, the router's link — arrives as a prop.
 
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, useState, type ImgHTMLAttributes, type ReactNode } from 'react';
 import type { CodeTab, LinkGridGroup, ReferenceItem, ResolvedPageRef, StatItem } from './blocks.js';
 import { Anchor } from './react-server.js';
 import type { WikiLinkComponent } from './react-server.js';
@@ -296,6 +296,35 @@ export function StatsView({
         </div>
       ))}
     </div>
+  );
+}
+
+// ---- testimonial ------------------------------------------------------------
+
+export interface TestimonialViewProps {
+  quote: string;
+  author: string;
+  role?: string;
+  avatarUrl?: string;
+  /** The photo's `<img>` attributes; a site with an image pipeline passes its sized `srcSet`. Default the bare URL. */
+  picture?: (src: string) => ImgHTMLAttributes<HTMLImageElement>;
+}
+
+/** Someone's words over who said them, with their photo when there is one. */
+export function TestimonialView({ quote, author, role, avatarUrl, picture = src => ({ src }) }: TestimonialViewProps) {
+  if (!quote.trim()) return null;
+  const photo = avatarUrl && safeLinkHref(avatarUrl);
+  return (
+    <figure className="testimonial">
+      <blockquote>{quote}</blockquote>
+      <figcaption>
+        {photo && <img {...picture(photo)} alt="" loading="lazy" />}
+        <span>
+          <strong>{author}</strong>
+          {role && <small>{role}</small>}
+        </span>
+      </figcaption>
+    </figure>
   );
 }
 

@@ -165,6 +165,8 @@ export function coreAtomicValidator(
         return validateReferenceItems(b.items);
       case 'linkGrid':
         return validateLinkGroups(b.groups);
+      case 'testimonial':
+        return typeof b.quote === 'string' && typeof b.author === 'string' && optionalString(b.role) && optionalString(b.avatarUrl);
       default:
         return false;
     }

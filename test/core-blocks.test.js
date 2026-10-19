@@ -95,6 +95,16 @@ test('coreAtomicToMarkdown makes site-relative page links absolute and keeps a s
   assert.equal(coreAtomicToMarkdown({ type: 'content', text: '<p>One</p>' }, opts), 'One');
 });
 
+test('a testimonial reads as its words over who said them, and must name both', () => {
+  const t = { type: 'testimonial', quote: 'Line one\nline two', author: 'Ada', role: 'Engineer' };
+  assert.equal(coreAtomicText(t), '“Line one\nline two” — Ada, Engineer');
+  assert.equal(coreAtomicToMarkdown(t, { siteUrl: 'https://site.test' }), '> Line one\n> line two\n>\n> — Ada, Engineer');
+  const core = coreAtomicValidator();
+  assert.equal(core({ id: 'x', ...t }), true);
+  assert.equal(core({ id: 'x', type: 'testimonial', quote: 'Hi' }), false);
+  assert.equal(core({ id: 'x', ...t, avatarUrl: 3 }), false);
+});
+
 test('coreBlockDefaults makes fresh ids per insert and takes a wiki own labels', () => {
   let n = 0;
   const d = coreBlockDefaults({ newId: () => `id${n++}`, referencesTitle: 'Sources', codeTabs: [{ label: 'SQL', language: 'sql' }] });

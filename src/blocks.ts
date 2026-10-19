@@ -23,6 +23,7 @@ import {
   referencesToText,
   statsToText,
   stripHtml,
+  testimonialToText,
   type BannerVariant,
 } from './text.js';
 
@@ -114,6 +115,8 @@ export interface CodeTabsBlock { id: string; type: 'codeTabs'; tabs: EditableCod
 export interface StatsBlock { id: string; type: 'stats'; items: EditableStatItem[]; columns: 2 | 3 | 4 }
 export interface LinkGridBlock { id: string; type: 'linkGrid'; intro?: string; groups: EditableLinkGridGroup[] }
 export interface ReferencesBlock { id: string; type: 'references'; title?: string; items: EditableReferenceItem[] }
+/** Someone's words, as they said them, and who they are. */
+export interface TestimonialBlock { id: string; type: 'testimonial'; quote: string; author: string; role?: string; avatarUrl?: string }
 /** A Wikipedia-style notice. `text` replaces the variant's standard message. */
 export interface BannerBlock { id: string; type: 'banner'; variant: BannerVariant; text?: string }
 /** `A` is the wiki's atomic union: a container never holds another container. */
@@ -349,6 +352,11 @@ export function statsToMarkdown(items: readonly StatItem[]): string {
   return items.map(s => `- **${s.value}${s.suffix ?? ''}** — ${s.label}`).join('\n');
 }
 
+/** A quotation over its attribution. @internal */
+export function testimonialToMarkdown(quote: string, author: string, role?: string | null): string {
+  return `> ${quote.trim().replace(/\n+/g, '\n> ')}\n>\n> — ${[author, role].filter(Boolean).join(', ')}`;
+}
+
 /** Grouped links under their headings, with an optional lead paragraph. @internal */
 export function linkGridToMarkdown(
   groups: readonly LinkGridGroup[],
@@ -391,6 +399,7 @@ export type CoreAtomicBlock<P = ResolvedPageRef> =
   | { type: 'references'; title?: string | null; items: readonly ReferenceItem[] }
   | { type: 'stats'; items: readonly StatItem[] }
   | { type: 'linkGrid'; intro?: string | null; groups: readonly LinkGridGroup[] }
+  | { type: 'testimonial'; quote: string; author: string; role?: string | null }
   | { type: 'recentPages' | 'pageList'; resolvedPages?: readonly P[] | null };
 
 const bannerLabel = (variant: string): string =>
@@ -408,6 +417,7 @@ export function coreAtomicText(block: CoreAtomicBlock<{ title: string }>): strin
     case 'references': return referencesToText(block.items);
     case 'stats': return statsToText(block.items);
     case 'linkGrid': return linkGridToText(block.groups, block.intro);
+    case 'testimonial': return testimonialToText(block.quote, block.author, block.role);
     case 'recentPages':
     case 'pageList': return pageListToText(block.resolvedPages ?? []);
   }
@@ -432,6 +442,7 @@ export function coreAtomicToMarkdown(block: CoreAtomicBlock, opts: CoreMarkdownO
     case 'references': return referencesToMarkdown(block.items, block.title || opts.referencesTitle || 'References');
     case 'stats': return statsToMarkdown(block.items);
     case 'linkGrid': return linkGridToMarkdown(block.groups, block.intro);
+    case 'testimonial': return testimonialToMarkdown(block.quote, block.author, block.role);
     case 'recentPages':
     case 'pageList':
       return linkList(
@@ -466,6 +477,7 @@ export interface CoreBlockDefaults {
   linkGrid: () => { type: 'linkGrid'; groups: { id: string; heading: string; links: never[] }[] };
   references: () => { type: 'references'; title: string; items: never[] };
   banner: () => { type: 'banner'; variant: 'stub' };
+  testimonial: () => { type: 'testimonial'; quote: string; author: string };
 }
 
 /**
@@ -504,5 +516,6 @@ export function coreBlockDefaults(opts: CoreBlockDefaultsOptions = {}): CoreBloc
     linkGrid: () => ({ type: 'linkGrid', groups: [{ id: newId(), heading: 'Group', links: [] }] }),
     references: () => ({ type: 'references', title: referencesTitle, items: [] }),
     banner: () => ({ type: 'banner', variant: 'stub' }),
+    testimonial: () => ({ type: 'testimonial', quote: '', author: '' }),
   };
 }

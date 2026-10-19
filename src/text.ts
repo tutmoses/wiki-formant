@@ -124,6 +124,11 @@ export function codeTabsToText(tabs: readonly CodeTab[]): string {
   return tabs.map(t => `[${t.label}]\n${t.code}`).join('\n');
 }
 
+/** `“Their words” — Name, role`. @internal */
+export function testimonialToText(quote: string, author: string, role?: string | null): string {
+  return `“${quote.trim()}” — ${[author, role].filter(Boolean).join(', ')}`;
+}
+
 /** Metric cards, one per line: `99% Uptime`. @internal */
 export function statsToText(items: readonly StatItem[]): string {
   return items.map(s => `${s.value}${s.suffix ?? ''} ${s.label}`).join('\n');

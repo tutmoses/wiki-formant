@@ -686,7 +686,7 @@ leafBlocks(blocks, BLOCK_SHAPE.containers);
 
 The dispatch over a repo's own block union stays in that repo; the bodies come from here. `coreAtomicText` has a prose body for every core leaf — the stats, link-grid and page-list bodies joined the originals when two of the three wikis turned out to extract nothing from them, so their MCP `get_page` answered a hub page as nearly empty.
 
-The core leaves — `content`, `codeTabs`, `banner`, `references`, `stats`, `linkGrid`, `recentPages`, `pageList` — had the same case bodies in every wiki's text export, markdown twin, validator and new-block record. A repo's switch hands those cases over and keeps its own, so it stays exhaustive over its union:
+The core leaves — `content`, `codeTabs`, `banner`, `references`, `stats`, `linkGrid`, `testimonial`, `recentPages`, `pageList` — had the same case bodies in every wiki's text export, markdown twin, validator and new-block record. A repo's switch hands those cases over and keeps its own, so it stays exhaustive over its union:
 
 ```ts
 import { coreAtomicText, coreAtomicToMarkdown, coreBlockDefaults } from 'wiki-formant/blocks';
@@ -821,9 +821,11 @@ The dispatch stays a `switch` over the wiki's own union, so a new type is a comp
 
 An editor that draws each block in place, with a list of its own (miow's), hosts the same fields in `<BlockFieldsKit kit={KIT}>`, without `<BlockEditor>`. Only the two container fields need the full editor, since they hold a block list.
 
+A `testimonial` is `{ quote, author, role?, avatarUrl? }`, drawn by `TestimonialView` as `figure.testimonial`: the words in a `blockquote`, then a `figcaption` holding the photo and a `span` of `strong` (who) and `small` (their role). radix-wiki and miow each had one under its own field names; a site with sized images passes `picture`, which turns the photo's URL into its `<img>` attributes.
+
 A banner with no text of its own shows `BANNER_MESSAGES` from `wiki-formant/text`, a sentence per variant that names no wiki; `BannerView` takes it unless `message` overrides it.
 
-The core blocks are `ContentBlock`, `CodeTabsBlock`, `StatsBlock`, `LinkGridBlock`, `ReferencesBlock`, `BannerBlock`, `ColumnsBlock<A>` and `InfoboxBlock<A>`, `A` being the wiki's atomic union. A wiki builds its union from them beside its own `recentPages` and `pageList`, which hold its own page rows or a section, and its native types.
+The core blocks are `ContentBlock`, `CodeTabsBlock`, `StatsBlock`, `LinkGridBlock`, `ReferencesBlock`, `BannerBlock`, `TestimonialBlock`, `ColumnsBlock<A>` and `InfoboxBlock<A>`, `A` being the wiki's atomic union. A wiki builds its union from them beside its own `recentPages` and `pageList`, which hold its own page rows or a section, and its native types.
 
 ## Analytics
 
