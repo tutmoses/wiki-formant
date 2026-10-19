@@ -61,9 +61,7 @@ export interface ComboboxAria {
   optionProps: (index: number) => ComboboxOptionProps;
 }
 
-/** The id of one option row. Exported because a caller that scrolls the
- *  highlighted row into view has to find it by the same id the input points at. */
-/** @internal */
+/** The id of one option row, which `aria-activedescendant` names. @internal */
 export function optionId(baseId: string, listKey: string | undefined, index: number): string {
   return `${listId(baseId, listKey)}-opt-${index}`;
 }

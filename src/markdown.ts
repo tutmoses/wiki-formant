@@ -41,13 +41,17 @@ const NAMED_ENTITIES: Record<string, string> = {
   Delta: 'Δ', Sigma: 'Σ', Omega: 'Ω', Lambda: 'Λ', Phi: 'Φ', Pi: 'Π',
 };
 
+/**
+ * One pass, so a decoded `&` never starts a second entity (`&#38;lt;` is the
+ * text `&lt;`), and a numeric reference past U+10FFFF stays as written rather
+ * than throwing out of the twin's route.
+ */
 export function decodeEntities(s: string): string {
-  return s
-    .replace(/&#x([0-9a-fA-F]{1,6});/g, (_m, hex: string) =>
-      String.fromCodePoint(parseInt(hex, 16)),
-    )
-    .replace(/&#(\d{1,7});/g, (_m, dec: string) => String.fromCodePoint(Number(dec)))
-    .replace(/&([a-zA-Z][a-zA-Z0-9]{1,9});/g, (m, name: string) => NAMED_ENTITIES[name] ?? m);
+  return s.replace(/&(?:#x([0-9a-fA-F]{1,6})|#(\d{1,7})|([a-zA-Z][a-zA-Z0-9]{1,9}));/g, (m, hex?: string, dec?: string, name?: string) => {
+    if (name) return NAMED_ENTITIES[name] ?? m;
+    const code = hex ? parseInt(hex, 16) : Number(dec);
+    return code <= 0x10ffff ? String.fromCodePoint(code) : m;
+  });
 }
 
 
@@ -85,7 +89,7 @@ export function tableToMarkdown(html: string): string {
   const pad = (r: string[]) => [...r, ...Array(width - r.length).fill('')];
   // A table whose first row is all <th> has a header; otherwise synthesise an
   // empty one, since GFM has no headerless table form.
-  const headed = /<th\b/i.test(html.slice(0, html.indexOf('</tr>') + 1));
+  const headed = /<th\b/i.test(html.slice(0, html.search(/<\/tr>/i) + 1));
   const [head, ...body] = headed
     ? [pad(rows[0]!), ...rows.slice(1).map(pad)]
     : [Array(width).fill(''), ...rows.map(pad)];
@@ -98,6 +102,9 @@ export function tableToMarkdown(html: string): string {
 
 // The spaces either side go with it: at a block boundary they are not text.
 const BLOCK_TOKEN = /[ \t]*\u0000(\d+)\u0000[ \t]*/g;
+
+/** A list that holds no other list. */
+const LIST = /<(ul|ol)\b[^>]*>((?:(?!<(?:ul|ol)\b)[\s\S])*?)<\/\1>/gi;
 
 /** Block-level HTML → markdown. */
 export function htmlToMarkdown(html: string): string {
@@ -122,18 +129,22 @@ export function htmlToMarkdown(html: string): string {
   // Tables first — their inner markup must not be eaten by the generic rules.
   out = out.replace(/<table\b[^>]*>[\s\S]*?<\/table>/gi, m => block(tableToMarkdown(m)));
 
-  // Lists. `<ol>` numbering is computed per-list, which is why this cannot be a
-  // single regex with a `$1` backreference — inside a replace callback `$1` is
-  // a literal, not a substitution. (That exact bug shipped once and rendered
-  // every ordered list as a column of `1. $1`.)
-  out = out.replace(/<ul\b[^>]*>([\s\S]*?)<\/ul>/gi, (_m, body: string) => {
-    const items = [...body.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)].map(i => listItem('-', i[1]!));
-    return block(items.join('\n'));
-  });
-  out = out.replace(/<ol\b[^>]*>([\s\S]*?)<\/ol>/gi, (_m, body: string) => {
-    const items = [...body.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)].map((i, n) => listItem(`${n + 1}.`, i[1]!));
-    return block(items.join('\n'));
-  });
+  // Lists, innermost first: a list holding no other list converts, and the
+  // pass repeats until none is left, so a list nested in one of its own kind
+  // is a block before its parent reads it. A lazy match from the outer `<ul>`
+  // ended at the inner `</ul>` and ran both lists onto one line. `<ol>`
+  // numbering is computed per-list, which is why this cannot be a single regex
+  // with a `$1` backreference — inside a replace callback `$1` is a literal,
+  // not a substitution. (That exact bug shipped once and rendered every
+  // ordered list as a column of `1. $1`.)
+  for (let prev = ''; prev !== out; ) {
+    prev = out;
+    out = out.replace(LIST, (_m, tag: string, body: string) => {
+      const ordered = tag.toLowerCase() === 'ol';
+      const items = [...body.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)].map((i, n) => listItem(ordered ? `${n + 1}.` : '-', i[1]!));
+      return block(items.join('\n'));
+    });
+  }
 
   out = out
     .replace(

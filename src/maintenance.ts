@@ -24,14 +24,14 @@
 import { escXml } from './feed.js';
 
 export type SourceListItem = string | { handle?: string; name?: string; url?: string };
-export interface SourceEntry {
+interface SourceEntry {
   lastChecked?: string | null;
   note?: string;
   list?: SourceListItem[];
 }
 export type BacklogEntry = string | { date?: string; item: string; status?: string };
-export type FeedbackEntry = string | { date?: string; note: string };
-export interface RunEntry {
+type FeedbackEntry = string | { date?: string; note: string };
+interface RunEntry {
   date?: string;
   category?: string;
   summary?: string;

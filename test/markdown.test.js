@@ -137,3 +137,19 @@ test('a list inside a numbered item is nested under it, not run onto its line', 
     '1. Felix\n   - founder\n   - maxi\n2. Haseeb',
   );
 });
+
+test('a list nested in a list of its own kind stays nested', () => {
+  assert.equal(htmlToMarkdown('<ul><li>a<ul><li>b</li></ul></li><li>c</li></ul>'), '- a\n   - b\n- c');
+  assert.equal(htmlToMarkdown('<ol><li>a<ol><li>b</li><li>c</li></ol></li><li>d</li></ol>'), '1. a\n   1. b\n   2. c\n2. d');
+  assert.equal(htmlToMarkdown('<ul><li>a<ol><li>b</li></ol></li></ul>'), '- a\n   1. b');
+});
+
+test('entities decode once, and an out-of-range reference stays as written', () => {
+  assert.equal(decodeEntities('&#38;lt;'), '&lt;');
+  assert.equal(decodeEntities('&#x110000; &#9999999;'), '&#x110000; &#9999999;');
+  assert.equal(decodeEntities('&#x1F600;&mdash;&#65;'), '😀—A');
+});
+
+test('an upper-case header row is still a header', () => {
+  assert.equal(tableToMarkdown('<TABLE><TR><TH>A</TH></TR><TR><TD>1</TD></TR></TABLE>'), '| A |\n| --- |\n| 1 |');
+});

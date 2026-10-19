@@ -82,3 +82,10 @@ test('the route refuses the unsigned and the unrecognised before fetching', asyn
     open(new Request('https://w.test/api/resolve-map?url=https%3A%2F%2Fmaps.app.goo.gl%2Fa')));
   assert.deepEqual(await res.json(), { resolved: 'https://www.google.co.uk/maps/@1,2,3z' });
 });
+
+test('a place name with a stray percent sign does not throw', () => {
+  assert.equal(
+    toMapEmbedUrl('https://www.google.com/maps/place/100%+Pure'),
+    'https://maps.google.com/maps?q=100%25%20Pure&output=embed',
+  );
+});

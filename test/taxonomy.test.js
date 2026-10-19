@@ -254,3 +254,9 @@ test('controls survive destructuring off the taxonomy', () => {
   assert.ok(alphaControls('ecosystem', many, {}).length);
   assert.equal(resolveLetter(many, {}, 'B'), 'B');
 });
+
+test('a number or a list stored under a key reads as text or not at all, never a throw', () => {
+  const page = { title: 'A', metadata: { category: 3, status: ['Active'], website: 'https://a.example' } };
+  assert.deepEqual(tx.metadataRows('ecosystem', page).map(r => r.value), ['3', 'https://a.example']);
+  assert.deepEqual(tx.filterPages([page], { category: '3' }), [page]);
+});

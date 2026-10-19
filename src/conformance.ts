@@ -536,16 +536,6 @@ export async function conditionalGetChecks(t: Tester, paths: readonly string[]):
   }
 }
 
-/**
- * A JSON descriptor is revalidatable — an agent card, an OpenAPI document, a
- * registry manifest, a server card.
- *
- * Separate from `conditionalGetChecks` because the contract genuinely differs:
- * a descriptor is built from code, not from rows, so it has no honest
- * `Last-Modified` to offer. A stamp taken at cold start would move without the
- * document moving, which is worse than none. The body-derived ETag is the whole
- * validator, and it is enough.
- */
 /** The JSON descriptors every S10 origin serves: the two agent-card paths, the OpenAPI pair, the MCP manifest and the server card. */
 export const S10_DESCRIPTORS: readonly string[] = [
   '.well-known/agent-card.json',
@@ -556,6 +546,16 @@ export const S10_DESCRIPTORS: readonly string[] = [
   'api/mcp/server-card',
 ];
 
+/**
+ * A JSON descriptor is revalidatable — an agent card, an OpenAPI document, a
+ * registry manifest, a server card.
+ *
+ * Separate from `conditionalGetChecks` because the contract genuinely differs:
+ * a descriptor is built from code, not from rows, so it has no honest
+ * `Last-Modified` to offer. A stamp taken at cold start would move without the
+ * document moving, which is worse than none. The body-derived ETag is the whole
+ * validator, and it is enough.
+ */
 export async function descriptorChecks(t: Tester, paths: readonly string[] = S10_DESCRIPTORS): Promise<void> {
   for (const path of paths) {
     const url = path.startsWith('http') ? path : `${t.base}/${path.replace(/^\//, '')}`;

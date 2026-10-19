@@ -25,8 +25,6 @@ import { cx } from './html.js';
 import { slugifyHeading, uniqueHeadingId } from './headings.js';
 import { CODE_LANGS, DEFAULT_LANG } from './blocks.js';
 
-/** Local `cn`. Both wikis import one; the package will not depend on one. */
-
 // ---- iframe -----------------------------------------------------------------
 
 /**

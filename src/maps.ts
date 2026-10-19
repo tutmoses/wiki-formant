@@ -60,7 +60,12 @@ export function toMapEmbedUrl(url: string): string | null {
   if (/google\.[a-z.]+\/maps/.test(url)) {
     const place = url.match(/\/place\/([^/@]+)/);
     if (place) {
-      const q = encodeURIComponent(decodeURIComponent(place[1]!).replace(/\+/g, ' '));
+      // A stray `%` makes decodeURIComponent throw; the segment is then used as pasted.
+      let name = place[1]!;
+      try {
+        name = decodeURIComponent(name);
+      } catch {}
+      const q = encodeURIComponent(name.replace(/\+/g, ' '));
       return `https://maps.google.com/maps?q=${q}&output=embed`;
     }
   }

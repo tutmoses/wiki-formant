@@ -70,7 +70,7 @@ export function validateLinkGroups(groups: unknown): boolean {
   );
 }
 
-/** `[{ label, language?, code }]` — a code-tabs block's tabs. `code` renders as HTML. @internal */
+/** `[{ label, language?, code }]` — a code-tabs block's tabs. `code` is source text, escaped when it renders. @internal */
 export function validateCodeTabs(tabs: unknown): boolean {
   return (
     Array.isArray(tabs) &&

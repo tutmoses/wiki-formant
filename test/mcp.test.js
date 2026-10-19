@@ -578,3 +578,18 @@ test('a legacy request carrying other _meta stays legacy', async () => {
   // 2025-11-25 is legacy and still forbids batching.
   assert.equal((await postAt([rpc('ping')], '2025-11-25')).status, 400);
 });
+
+test('an entry that is not a JSON-RPC object is -32600, never a thrown 500', async () => {
+  const one = await post(null);
+  assert.equal(one.status, 200);
+  assert.equal((await one.json()).error.code, -32600);
+  const keyed = await (await post({ jsonrpc: '2.0', id: 7 })).json();
+  assert.deepEqual([keyed.id, keyed.error.code], [7, -32600]);
+  const batch = await mcpResponse(
+    new Request('https://x/api/mcp', { method: 'POST', body: JSON.stringify([null, rpc('ping')]), headers: { 'mcp-protocol-version': '2025-03-26' } }),
+    config,
+  );
+  const [bad, pong] = await batch.json();
+  assert.equal(bad.error.code, -32600);
+  assert.deepEqual(pong.result, {});
+});

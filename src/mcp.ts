@@ -506,6 +506,13 @@ async function handleRpc(
   config: McpServerConfig,
   dispatch: Dispatch,
 ): Promise<object | null> {
+  // The body is the caller's JSON, typed or not: a `null` in a batch would
+  // throw here and take the whole response with it, CORS headers included.
+  const entry: unknown = req;
+  if (!entry || typeof entry !== 'object' || typeof (entry as RpcRequest).method !== 'string') {
+    const id = (entry as RpcRequest | null)?.id;
+    return rpcError(typeof id === 'string' || typeof id === 'number' ? id : null, -32600, 'Invalid Request: expected a JSON-RPC object with a string "method".');
+  }
   const { id, method, params } = req;
   const p = (params ?? {}) as Record<string, unknown>;
   const resources = config.resources ?? [];

@@ -159,8 +159,11 @@ export const defaultHref = hrefBuilder();
 
 const DEFAULT_ALPHA_INDEX_MIN_PAGES = 40;
 
-const metaValue = (page: FacetablePage, key: string): string =>
-  ((page.metadata as Record<string, string> | null | undefined)?.[key] ?? '').trim();
+/** A key's value as text. Metadata is untyped JSON, and a number or a list stored under a key must not throw. */
+const metaValue = (page: FacetablePage, key: string): string => {
+  const value = (page.metadata as Record<string, unknown> | null | undefined)?.[key];
+  return typeof value === 'string' ? value.trim() : typeof value === 'number' ? String(value) : '';
+};
 
 /** Bucket for titles that don't start with a letter (numerals, `$CAPER`). @internal */
 export function firstLetter(title: string): string {
