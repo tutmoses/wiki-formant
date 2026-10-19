@@ -7,7 +7,7 @@
 
 -- CreateTable
 CREATE TABLE "WikiPage" (
-    "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+    "id" TEXT NOT NULL DEFAULT (gen_random_uuid())::text,
     "siteId" TEXT NOT NULL DEFAULT '',
     "tagPath" TEXT NOT NULL DEFAULT '',
     "slug" TEXT NOT NULL,
@@ -25,7 +25,7 @@ CREATE TABLE "WikiPage" (
 
 -- CreateTable
 CREATE TABLE "WikiRevision" (
-    "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+    "id" TEXT NOT NULL DEFAULT (gen_random_uuid())::text,
     "pageId" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "content" JSONB NOT NULL,

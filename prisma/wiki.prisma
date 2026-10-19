@@ -16,7 +16,7 @@
 // text; it has no relation because no two apps key their users alike.
 
 model WikiPage {
-  id             String         @id @default(dbgenerated("gen_random_uuid()::text"))
+  id             String         @id @default(dbgenerated("(gen_random_uuid())::text"))
   siteId         String         @default("")
   tagPath        String         @default("")
   slug           String
@@ -46,7 +46,7 @@ model WikiPage {
 // it was saved; what changed is diffed from consecutive rows when it is read,
 // so a script's revision and the editor's carry the same history.
 model WikiRevision {
-  id         String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   pageId     String
   title      String
   content    Json
