@@ -89,7 +89,7 @@ export type ToolParam = {
   type: 'string' | 'number' | 'boolean' | 'array' | 'object';
   description: string;
   enum?: string[];
-  items?: { type: 'string' | 'number' | 'object' };
+  items?: { type?: 'string' | 'number' | 'object' };
 };
 
 export type ToolSchema = {
@@ -418,12 +418,15 @@ function validateArgs(tool: McpTool, args: Record<string, unknown>): string | nu
         );
       }
     } else if (spec.type === 'array') {
-      const itemType = spec.items?.type ?? 'string';
+      // No `items` means strings. Items with no one type (a `oneOf` of shapes,
+      // as a zod union emits) are the tool's own to check: read as strings, every
+      // well-formed call was refused.
+      const itemType = spec.items ? spec.items.type : 'string';
       if (actual !== 'array') {
         problems.push(
-          `Parameter "${key}" must be an array of ${itemType}s; received ${actual} (${JSON.stringify(value)}).`,
+          `Parameter "${key}" must be an array${itemType ? ` of ${itemType}s` : ''}; received ${actual} (${JSON.stringify(value)}).`,
         );
-      } else if ((value as unknown[]).some(item => typeOf(item) !== itemType)) {
+      } else if (itemType && (value as unknown[]).some(item => typeOf(item) !== itemType)) {
         problems.push(`Parameter "${key}" must contain only ${itemType}s.`);
       }
     } else if (actual !== spec.type) {

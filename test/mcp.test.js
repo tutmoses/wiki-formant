@@ -233,6 +233,30 @@ test('object params and arrays of objects validate', async () => {
   assert.match(text, /"metadata" must be a object; received array/);
 });
 
+test('array items with no one type, a zod union, are left to the tool', async () => {
+  const cfg = {
+    serverInfo: { name: 't', version: '1' },
+    tools: [{
+      name: 'save',
+      description: 'Save blocks.',
+      inputSchema: {
+        type: 'object',
+        properties: { content: { type: 'array', items: { oneOf: [{ type: 'object' }, { type: 'object' }] } } },
+        required: ['content'],
+      },
+      handler: async args => ({ blocks: args.content.length }),
+    }],
+  };
+  const send = args => mcpResponse(
+    new Request('https://x', { method: 'POST', body: JSON.stringify(rpc('tools/call', { name: 'save', arguments: args })) }),
+    cfg,
+  );
+  const ok = await (await send({ content: [{ type: 'content', text: '<p>a</p>' }] })).json();
+  assert.equal(ok.result.isError, undefined, 'a well-formed union item is not read as a string');
+  const bad = await (await send({ content: 'nope' })).json();
+  assert.match(bad.result.content[0].text, /"content" must be an array; received string/);
+});
+
 // --- protocol negotiation ----------------------------------------------------
 
 test('initialize echoes a version we speak, and offers the newest otherwise', async () => {
