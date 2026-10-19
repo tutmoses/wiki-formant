@@ -86,8 +86,14 @@ export interface WikiStoreOptions<B extends DiffBlock> {
    * page keeps its URL, its twin and its history; it never arrives unasked.
    */
   hidden?: readonly string[];
-  /** The block tree's containers, for diffs. Defaults to the core model's. */
+  /** The block tree's containers, for diffs. Defaults to the core model's (`coreBlockGroups`). */
   containers?: (block: B) => BlockGroup<B>[] | null;
+  /**
+   * A listing's line for a page when nothing better is found: a search hit
+   * whose match is in the title alone, and every card. Defaults to the
+   * article's opening; a wiki that keeps a written summary in metadata says so.
+   */
+  snippet?: (page: Pick<WikiPageRow<B>, 'content' | 'metadata'>) => string;
 }
 
 export interface SaveInput<B> {
@@ -137,7 +143,6 @@ export function toListing<R extends { content?: unknown }>(row: R): Omit<R, 'con
   return { ...rest, snippet: describe(openingText(content)) };
 }
 
-const listing = (row: WikiPageRow): WikiPageListing => toListing(row);
 
 const conflict = (message: string) => new HttpError(409, message);
 
@@ -149,6 +154,11 @@ export function orderByIds<T extends { id: string }>(rows: readonly T[], ids: re
 
 export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B>) {
   const site = o.siteId ?? '';
+  const opening = o.snippet ?? ((page: Pick<WikiPageRow<B>, 'content'>) => describe(openingText(page.content)));
+  const listing = (row: WikiPageRow): WikiPageListing => {
+    const { content: _, ...rest } = row;
+    return { ...rest, snippet: opening(row as WikiPageRow<B>) };
+  };
   const hidden = [...(o.hidden ?? [])];
   const rows = async <T>(query: string, ...values: unknown[]) => (await o.sql(query, ...values)) as T[];
   const one = async <T>(query: string, ...values: unknown[]) => (await rows<T>(query, ...values))[0] ?? null;
@@ -175,6 +185,13 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
       `SELECT ${COLUMNS} FROM ${PAGE} WHERE "siteId" = $1 AND "tagPath" = $2 AND slug <> '' ORDER BY ${ORDER[sort]} LIMIT $3::int OFFSET $4::int`,
       site, tagPath, limit, offset,
     )).map(listing);
+
+  /** A category's pages with their content, for a listing that reads the bodies (a reading time, a word count). */
+  const articles = (tagPath: string, { sort = 'title', limit = 200, offset = 0 }: { sort?: ListSort; limit?: number; offset?: number } = {}) =>
+    rows<WikiPageRow<B>>(
+      `SELECT ${COLUMNS} FROM ${PAGE} WHERE "siteId" = $1 AND "tagPath" = $2 AND slug <> '' ORDER BY ${ORDER[sort]} LIMIT $3::int OFFSET $4::int`,
+      site, tagPath, limit, offset,
+    );
 
   /** Every page under a category, by title: the card that lists a subcategory's articles. */
   const subtree = (tagPath: string) =>
@@ -265,8 +282,8 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
     const items = found.map(({ tier, total: _, headline, content, ...row }) => ({
       ...row,
       score: tier,
-      snippet: (headline ? decodeEntities(headline).trim() : '')
-        || matchSnippet(content, query, () => describe(openingText(content))),
+      snippet: (headline ? decodeEntities(headline).replace(/\s+/g, ' ').trim() : '')
+        || matchSnippet(content, query, () => opening({ content: content as B[], metadata: row.metadata })),
     }));
     return { items, total: found[0]?.total ?? 0 };
   };
@@ -378,7 +395,7 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
 
   return {
     siteId: site, hidden, isHidden,
-    get, getById, list, subtree, recent, byIds, refs, corpus, stats, search,
+    get, getById, list, articles, subtree, recent, byIds, refs, corpus, stats, search,
     history, revision, save, restore, remove, verify,
   };
 }

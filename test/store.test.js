@@ -156,6 +156,15 @@ test('search ranks title prefix, title, prose, then full text with a headline', 
   assert.equal((await store.search('   ')).total, 0);
 });
 
+test('a written summary can stand in for the opening, and articles carry their bodies', async () => {
+  const { sql } = await db();
+  const store = wikiStore({ sql, snippet: p => String(p.metadata.description ?? '') });
+  await store.save({ tagPath: 'docs', slug: 'a', title: 'Needling', content: [para('a', 'Long body.')], metadata: { description: 'The summary.' } });
+  assert.equal((await store.list('docs'))[0].snippet, 'The summary.');
+  assert.equal((await store.search('needling')).items[0].snippet, 'The summary.', 'a title-only hit falls back to the summary');
+  assert.equal((await store.articles('docs'))[0].content[0].text, '<p>Long body.</p>');
+});
+
 test('a rename moves the page and refuses a taken slug', async () => {
   const { sql } = await db();
   const store = wikiStore({ sql });
