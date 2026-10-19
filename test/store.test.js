@@ -65,6 +65,7 @@ test('a page is created with its first revision, and a save diffs, bumps and rec
   assert.equal(meta.page.version, '2.0.0');
   assert.deepEqual(meta.page.metadata, { excerpt: 'The VM.' });
 
+  assert.equal((await store.get('tech', 'radix-engine')).revisionCount, 3);
   const history = await store.history(made.page.id);
   assert.deepEqual(history.map(r => r.version), ['2.0.0', '1.1.0', '1.0.0']);
   assert.equal(history[1].authorId, 'u2');

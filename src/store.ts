@@ -124,6 +124,7 @@ const PAGE = '"WikiPage"';
 const REVISION = '"WikiRevision"';
 const COLUMNS = `id, "siteId", "tagPath", slug, title, content, metadata, version, "authorId", "lastVerifiedAt", "createdAt", "updatedAt"`;
 const REVISION_COLUMNS = `id, "pageId", title, content, version, "changeType", message, "authorId", "createdAt"`;
+const REVISION_COUNT = `(SELECT count(*)::int FROM ${REVISION} r WHERE r."pageId" = p.id) AS "revisionCount"`;
 const INITIAL_VERSION = '1.0.0';
 
 const listing = (row: WikiPageRow): WikiPageListing => {
@@ -147,11 +148,12 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
 
   const isHidden = (tagPath: string) => hidden.some(h => tagPath === h || tagPath.startsWith(`${h}/`));
 
+  /** A page with how many revisions it has, which every article's foot states. */
   const get = (tagPath: string, slug: string) =>
-    one<WikiPageRow<B>>(`SELECT ${COLUMNS} FROM ${PAGE} WHERE "siteId" = $1 AND "tagPath" = $2 AND slug = $3`, site, tagPath, slug);
+    one<WikiPageRow<B> & { revisionCount: number }>(`SELECT ${COLUMNS}, ${REVISION_COUNT} FROM ${PAGE} p WHERE "siteId" = $1 AND "tagPath" = $2 AND slug = $3`, site, tagPath, slug);
 
   const getById = (id: string) =>
-    one<WikiPageRow<B>>(`SELECT ${COLUMNS} FROM ${PAGE} WHERE "siteId" = $1 AND id = $2`, site, id);
+    one<WikiPageRow<B> & { revisionCount: number }>(`SELECT ${COLUMNS}, ${REVISION_COUNT} FROM ${PAGE} p WHERE "siteId" = $1 AND id = $2`, site, id);
 
   const ORDER: Record<ListSort, string> = {
     title: 'title ASC',
