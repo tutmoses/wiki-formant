@@ -306,19 +306,22 @@ export interface TestimonialViewProps {
   author: string;
   role?: string;
   avatarUrl?: string;
-  /** The photo's `<img>` attributes; a site with an image pipeline passes its sized `srcSet`. Default the bare URL. */
-  picture?: (src: string) => ImgHTMLAttributes<HTMLImageElement>;
+  /**
+   * The photo's sized `<img>` attributes, for a site with an image pipeline.
+   * Data, not a function: a server component renders this client view.
+   */
+  photo?: Pick<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'srcSet' | 'sizes'>;
 }
 
 /** Someone's words over who said them, with their photo when there is one. */
-export function TestimonialView({ quote, author, role, avatarUrl, picture = src => ({ src }) }: TestimonialViewProps) {
+export function TestimonialView({ quote, author, role, avatarUrl, photo }: TestimonialViewProps) {
   if (!quote.trim()) return null;
-  const photo = avatarUrl && safeLinkHref(avatarUrl);
+  const src = avatarUrl && safeLinkHref(avatarUrl);
   return (
     <figure className="testimonial">
       <blockquote>{quote}</blockquote>
       <figcaption>
-        {photo && <img {...picture(photo)} alt="" loading="lazy" />}
+        {src && <img src={src} {...photo} alt="" loading="lazy" />}
         <span>
           <strong>{author}</strong>
           {role && <small>{role}</small>}

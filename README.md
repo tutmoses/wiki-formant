@@ -821,7 +821,7 @@ The dispatch stays a `switch` over the wiki's own union, so a new type is a comp
 
 An editor that draws each block in place, with a list of its own (miow's), hosts the same fields in `<BlockFieldsKit kit={KIT}>`, without `<BlockEditor>`. Only the two container fields need the full editor, since they hold a block list.
 
-A `testimonial` is `{ quote, author, role?, avatarUrl? }`, drawn by `TestimonialView` as `figure.testimonial`: the words in a `blockquote`, then a `figcaption` holding the photo and a `span` of `strong` (who) and `small` (their role). radix-wiki and miow each had one under its own field names; a site with sized images passes `picture`, which turns the photo's URL into its `<img>` attributes.
+A `testimonial` is `{ quote, author, role?, avatarUrl? }`, drawn by `TestimonialView` as `figure.testimonial`: the words in a `blockquote`, then a `figcaption` holding the photo and a `span` of `strong` (who) and `small` (their role). radix-wiki and miow each had one under its own field names; a site with sized images passes `photo`, the `<img>` attributes (`src`, `srcSet`, `sizes`) it made from `avatarUrl`. They are data, because a server component renders the view.
 
 A banner with no text of its own shows `BANNER_MESSAGES` from `wiki-formant/text`, a sentence per variant that names no wiki; `BannerView` takes it unless `message` overrides it.
 
