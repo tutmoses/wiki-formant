@@ -1,6 +1,6 @@
 {
   "name": "wiki-formant",
-  "version": "0.60.0",
+  "version": "0.61.0",
   "description": "The portable half of a wiki: derived taxonomy and facet controls, a version-negotiating MCP transport, markdown twins, block rendering, a rich-text editor engine, conditional-GET plumbing, and the headers and CSP every origin sends.",
   "type": "module",
   "license": "MIT",
@@ -116,6 +116,16 @@
       "types": "./dist/search.d.ts",
       "import": "./dist/search.js",
       "default": "./dist/search.js"
+    },
+    "./store": {
+      "types": "./dist/store.d.ts",
+      "import": "./dist/store.js",
+      "default": "./dist/store.js"
+    },
+    "./tree": {
+      "types": "./dist/tree.d.ts",
+      "import": "./dist/tree.js",
+      "default": "./dist/tree.js"
     },
     "./feed": {
       "types": "./dist/feed.d.ts",
@@ -296,6 +306,7 @@
     "sanitize-html": "^2.17.7"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.9",
     "@radixdlt/rola": "^2.1.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
@@ -308,12 +319,12 @@
     "typescript": "^5.9.0"
   },
   "peerDependencies": {
+    "@radixdlt/rola": ">=2",
+    "@vercel/blob": ">=2",
+    "jose": ">=6",
     "pg": ">=8",
     "react": ">=18",
-    "jose": ">=6",
-    "@radixdlt/rola": ">=2",
-    "sharp": ">=0.33",
-    "@vercel/blob": ">=2"
+    "sharp": ">=0.33"
   },
   "peerDependenciesMeta": {
     "react": {

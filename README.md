@@ -10,11 +10,56 @@ npm install wiki-formant
 
 ## What this is, and what it deliberately is not
 
-Every wiki needs a page store, a design system and a set of block types. Those are the parts you must own — they encode your schema, your brand and your content model, and a package that tried to own them would fight you.
+Every wiki needs a design system and a set of block types beyond the core. Those are the parts you must own: they encode your brand and your content model, and a package that tried to own them would fight you.
+
+The page store is no longer one of them. Three wikis kept their own pages and revisions on three schemas that had drifted apart (cuid ids against int ids, a version column on one, no author on another, a tenant key on the third), and each wrote its page and its revision its own way. The tables are now the package's (`prisma/wiki.prisma`), and so is the SQL that reads and writes them (`wiki-formant/store`), so one wiki engine serves a standalone wiki and a multi-tenant host alike. The connection, the cache and the auth stay the app's.
 
 What every wiki *also* needs, rebuilds by hand, and then lets drift, is the layer above: the second browsing axis derived from metadata you are already storing, the HTML→markdown converter behind every `.md` twin, the JSON-RPC edges that decide whether an MCP client can talk to you at all, and the ETag arithmetic that turns a recrawl into a 304.
 
 This package was extracted from three production wikis that had each grown their own copy. By the time it was lifted, the copies had already diverged — one had lost the alphabetical index and the related-page ranking; one had `ToolAnnotations` the others lacked; one had MCP prompts the others lacked. Everything here is the union, with tests pinning the specific bugs that shipped.
+
+## Store
+
+`wikiStore` reads and writes `WikiPage` and `WikiRevision` through one `Sql` function the app binds to its own client, scoped to one site.
+
+```ts
+import { wikiStore } from 'wiki-formant/store';
+
+const store = wikiStore({
+  sql: (query, ...values) => prisma.$queryRawUnsafe(query, ...values),
+  siteId: '',                 // a multi-tenant app passes the site's key
+  hidden: tree.hiddenPaths,   // back office: never listed unasked
+});
+
+const page = await store.get('contents/tech', 'radix-engine');
+const cards = await store.list('contents/tech', { sort: 'recent' });
+const { items, total } = await store.search('validators', { take: 20 });
+await store.save({ tagPath, slug, content, authorId, message, baseVersion: page.version });
+```
+
+- **A save is one statement.** The page update and its revision are a data-modifying CTE guarded on the version the save read. A save that lost a race writes nothing and throws a 409 `HttpError`; pass `baseVersion` and a save opened on an old version is refused the same way, instead of erasing the edit in between.
+- **The bump is the diff's.** Added, removed or moved blocks are `major`, changed prose or title `minor`; `change` overrides it for a script that knows better. A metadata-only save moves no version and writes no revision.
+- **History is diffed on read.** A revision stores the page as it was saved, never a diff, so a script's revision and the editor's carry the same history. `history(pageId, { limit })` reads one row more than it returns, so the oldest entry shown is diffed against its real predecessor.
+- **Listings carry a snippet, not the article.** `list`, `recent` and `byIds` drop `content` for one line of it; a category of 200 cards otherwise ships 200 block arrays.
+- **Search is four tiers**: title prefix, title, literal prose, then full text on `search_tsv` with Postgres' own headline as the snippet. Hidden paths are left out unless the search names one.
+- Ids and timestamps default in the database, so the store's SQL and a Prisma client write the same rows. Copy the models with `npx prisma-models wiki` (a tenant-keyed app checks its own copy with `--tenant`), then build the full-text column with `npx fts-ddl '"WikiPage"'`.
+
+## Tree
+
+`createTree` is the category tree every wiki declares, and the walks each had written by hand.
+
+```ts
+import { createTree, parseWikiPath } from 'wiki-formant/tree';
+
+const tree = createTree(NODES, { globalKeys: [QUALITY] });
+tree.resolve('contents/tech');   // { node, trail, valid, hidden, sort, mainArticle, metadataKeys }
+parseWikiPath(tree, ['contents', 'tech', 'radix-engine', 'history']);
+// { type: 'page', tagPath: 'contents/tech', slug: 'radix-engine', mode: 'history' }
+```
+
+- Metadata keys accumulate down the trail; `sort`, `mainArticle` and `hidden` are inherited, the nearest declaration winning. A field only one wiki reads (an XRD threshold, a band) rides on the node, and the app folds it from `trail`.
+- A path that is itself a category wins over a mode suffix, so a category named `history` stays reachable. The empty slug is a category's hub article, and `/<category>/edit` edits it.
+- `crumbs` makes one crumb per URL segment, linked only where the tree knows the segment, so a trail can never be shorter than the address bar.
 
 ## Taxonomy
 

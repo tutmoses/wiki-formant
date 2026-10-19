@@ -2,18 +2,18 @@
 // bin/prisma-models.mjs – copy the Prisma models wiki-formant's SQL reads into an
 // app's schema folder, or check that the copies there have not drifted.
 //
-// `wiki-formant/analytics` and `wiki-formant/passkey` own their SQL and name
+// `wiki-formant/analytics`, `wiki-formant/passkey` and `wiki-formant/store` own their SQL and name
 // their tables as written, so the models are the package's. Three apps carried
 // them byte for byte, and the package kept a fourth copy as a comment.
 //
 // Prisma reads a schema split across the .prisma files of one folder. The app
 // points prisma.config.ts at the folder (`schema: 'prisma/schema'`), keeps its
 // generator, datasource and own models in prisma/schema/schema.prisma, and this
-// writes analytics.prisma and passkey.prisma beside them. Run it from the app's
+// writes analytics.prisma, passkey.prisma and wiki.prisma beside them. Run it from the app's
 // root:
 //
-//   npx prisma-models                   # write both into prisma/schema
-//   npx prisma-models --check           # exit 1 if either is missing or differs
+//   npx prisma-models                   # write all three into prisma/schema
+//   npx prisma-models --check           # exit 1 if any is missing or differs
 //   npx prisma-models analytics         # only the ones named
 //   npx prisma-models --dir db/schema   # another folder
 //
@@ -26,7 +26,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { arg } from './_cli.mjs';
 
-const MODELS = ['analytics', 'passkey'];
+const MODELS = ['analytics', 'passkey', 'wiki'];
 const args = process.argv.slice(2);
 const check = args.includes('--check');
 const dir = arg('--dir') ?? 'prisma/schema';

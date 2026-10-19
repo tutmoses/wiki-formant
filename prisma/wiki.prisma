@@ -1,0 +1,62 @@
+// Shipped by wiki-formant (`npx prisma-models`). Edit it there, not here:
+// `prisma-models --check` fails on a copy that has drifted.
+//
+// A wiki's pages and their revisions, read and written by wiki-formant/store.
+// Its SQL names these tables and columns as written, so they carry no @@map.
+// `siteId` is "" in an app that serves one wiki; a multi-tenant app keys every
+// row to its site, and caper keys a DAO's own layer to the DAO.
+//
+// A page lives at `tagPath` + `slug`. The empty slug is the category's own hub
+// article, and `''/''` the home page. Everything a page says beyond its blocks
+// and title is `metadata`: facet keys, an excerpt, a banner, a subtitle. Which
+// keys a listing may carry is the tree's answer, not the column's.
+//
+// Ids and timestamps default in the database, so the store's raw SQL and a
+// Prisma client write the same rows. `authorId` is the app's own user key, as
+// text; it has no relation because no two apps key their users alike.
+
+model WikiPage {
+  id             String         @id @default(dbgenerated("gen_random_uuid()::text"))
+  siteId         String         @default("")
+  tagPath        String         @default("")
+  slug           String
+  title          String
+  content        Json           @default("[]")
+  metadata       Json           @default("{}")
+  version        String         @default("1.0.0")
+  authorId       String?
+  lastVerifiedAt DateTime?      @db.Timestamptz(3)
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime       @default(now()) @db.Timestamptz(3)
+  // Title at weight A, block prose at B, GENERATED ALWAYS ... STORED by
+  // `npx fts-ddl '"WikiPage"'`. Declared only so `db push` leaves it alone:
+  // push must never create it, since Prisma would write a plain column that
+  // stays empty. Read only through raw SQL.
+  searchTsv      Unsupported("tsvector")? @map("search_tsv")
+  revisions      WikiRevision[]
+
+  @@unique([siteId, tagPath, slug])
+  @@index([siteId, tagPath, updatedAt])
+  @@index([siteId, updatedAt])
+  // Declared for the same reason: undeclared, push drops it.
+  @@index([searchTsv], type: Gin, map: "WikiPage_search_tsv_idx")
+}
+
+// One row per saved version, newest last. A revision holds the whole page as
+// it was saved; what changed is diffed from consecutive rows when it is read,
+// so a script's revision and the editor's carry the same history.
+model WikiRevision {
+  id         String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  pageId     String
+  title      String
+  content    Json
+  version    String
+  changeType String
+  message    String?
+  authorId   String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  page       WikiPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([pageId, createdAt])
+  @@index([authorId, createdAt])
+}
