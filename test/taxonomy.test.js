@@ -238,6 +238,15 @@ test('resolveLetter drops a letter with no bucket, so the grid is never blank', 
   assert.equal(tx.resolveLetter(many, {}, undefined), undefined);
 });
 
+test('alphaControls offers an index exactly when needsAlphaIndex says so', () => {
+  // The one rule a sort control reads too, so the two cannot disagree.
+  const small = createTaxonomy({ getMetadataKeys: () => [], alphaIndexMinPages: 3 });
+  for (const n of [2, 3, 4]) {
+    const pages = PAGES.slice(0, n);
+    assert.equal(small.alphaControls('flat', pages, {}).length > 0, small.needsAlphaIndex(pages.length));
+  }
+});
+
 test('controls survive destructuring off the taxonomy', () => {
   // caper does exactly this. A method that leaned on `this` would throw here.
   const { facetControls, alphaControls, resolveLetter } = tx;

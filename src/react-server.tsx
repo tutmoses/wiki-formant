@@ -52,8 +52,7 @@ export type WikiLinkComponent = ComponentType<WikiLinkProps>;
  * Exported because `block-views` renders links too and had declared the same
  * three lines; a default that exists twice is a default that can diverge.
  */
-export const Anchor: WikiLinkComponent = ({ href, className, children }) =>
-  <a href={href} className={className}>{children}</a>;
+export const Anchor: WikiLinkComponent = (props) => <a {...props} />;
 
 // ---- facet bar --------------------------------------------------------------
 
@@ -62,15 +61,35 @@ export const Anchor: WikiLinkComponent = ({ href, className, children }) =>
  * tree, which is a shared convention, these are each design system's own words
  * for a chip and a row. Defaults are given so a consumer that shares them writes
  * nothing.
+ *
+ * Whether the bar is a chip row above the grid or a panel beside it is decided
+ * here and nowhere else: the markup is the same, the stylesheet behind these
+ * names lays it out.
  */
 export interface FacetBarClassNames {
   root?: string;
+  /** Each facet's row, and the A–Z row unless `letterRow` is set. */
   row?: string;
+  /** A row's heading: the facet's label, or `alphaLabel`. */
   label?: string;
+  /** A facet option, and a letter unless `letterControl` is set. */
   control?: string;
   controlActive?: string;
   /** Set it and each count is its own `<span>` with this class, not ` (n)` text. */
   count?: string;
+  /**
+   * Set it and each control's text is its own `<span>` with this class, and a
+   * facet option carries its value as `title`: the hook for truncating a long
+   * value while its count stays in view, with the full value one hover away.
+   */
+  text?: string;
+  /**
+   * The A–Z row and its letters, which a panel draws as a block of glyphs
+   * while its facet options run full width. Each falls back to its shared key.
+   */
+  letterRow?: string;
+  letterControl?: string;
+  letterControlActive?: string;
 }
 
 export interface FacetBarProps {
@@ -81,10 +100,17 @@ export interface FacetBarProps {
   alphaLabel?: string;
   /** Lead with the A–Z row: two lines against a facet block's twenty. */
   alphaFirst?: boolean;
+  /**
+   * Where a letter's count goes. `'inline'` prints it like an option's;
+   * `'title'` keeps the letter a bare glyph and puts its count in the tooltip.
+   */
+  letterCounts?: 'inline' | 'title';
   classNames?: FacetBarClassNames;
   /** The landmark's accessible name. */
   label?: string;
 }
+
+const pagesPhrase = (n: number) => `${n} page${n === 1 ? '' : 's'}`;
 
 /**
  * The section's second axis, as pressable chips.
@@ -102,6 +128,7 @@ export function FacetBar({
   letters,
   alphaLabel = 'A–Z',
   alphaFirst = false,
+  letterCounts = 'inline',
   classNames = {},
   label: navLabel = 'Filter pages',
 }: FacetBarProps) {
@@ -114,41 +141,51 @@ export function FacetBar({
     control = 'tag',
     controlActive = 'tag tag-removable',
     count,
+    text,
+    letterRow = row,
+    letterControl = control,
+    letterControlActive = controlActive,
   } = classNames;
 
-  const chip = (c: { key: string; href: string; active: boolean; text: string; n: number; title?: string }) => (
+  const chip = (
+    c: Control,
+    classes: { idle: string; active: string },
+    opts: { title?: string; showCount: boolean },
+  ) => (
     <Link
-      key={c.key}
+      key={c.value || 'all'}
       href={c.href}
-      className={c.active ? controlActive : control}
+      className={c.active ? classes.active : classes.idle}
       aria-current={c.active ? 'true' : undefined}
-      {...(c.title ? { title: c.title } : {})}
+      {...(opts.title ? { title: opts.title } : {})}
     >
-      {c.text}
-      {count ? <span className={count}>{c.n}</span> : ` (${c.n})`}
+      {text ? <span className={text}>{c.label}</span> : c.label}
+      {opts.showCount && (count ? <span className={count}>{c.count}</span> : ` (${c.count})`)}
     </Link>
   );
 
   const facetRows = facets.map(facet => (
     <div key={facet.key} className={row}>
       <span className={label}>{facet.label}</span>
-      {facet.options.map(o => chip({ key: o.value, href: o.href, active: o.active, text: o.value, n: o.count }))}
+      {facet.options.map(o =>
+        chip(o, { idle: control, active: controlActive }, { title: text ? o.label : undefined, showCount: true }),
+      )}
     </div>
   ));
 
   // The reset control leads the letters and says what it resets to.
   const alphaRow = letters.length > 0 && (
-    <div key="alpha" className={row}>
+    <div key="alpha" className={letterRow}>
       <span className={label}>{alphaLabel}</span>
       {letters.map(l =>
-        chip({
-          key: l.value || 'all',
-          href: l.href,
-          active: l.active,
-          text: l.label,
-          n: l.count,
-          ...(l.reset ? { title: `All ${l.count} pages` } : {}),
-        }),
+        chip(
+          l,
+          { idle: letterControl, active: letterControlActive },
+          {
+            title: l.reset ? `All ${l.count} pages` : letterCounts === 'title' ? pagesPhrase(l.count) : undefined,
+            showCount: letterCounts === 'inline',
+          },
+        ),
       )}
     </div>
   );

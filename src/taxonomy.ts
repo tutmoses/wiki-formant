@@ -225,7 +225,11 @@ export interface Taxonomy {
   ) => string | undefined;
   /** A page's populated metadata keys as facts-panel rows, facet values linked. */
   metadataRows: (tagPath: string, page: { metadata?: unknown }) => MetadataRow[];
-  /** Whether a set has outgrown a grid and needs the A–Z index. */
+  /**
+   * Whether a set has outgrown a grid: the one size rule a hub's browsing
+   * controls read. `alphaControls` applies it; a sort toggle reads it too, with
+   * the same unfiltered count, so the two appear and vanish together.
+   */
   needsAlphaIndex: (pageCount: number) => boolean;
   href: (tagPath: string, state: CategoryState) => string;
   rankRelated: <T extends FacetablePage>(
