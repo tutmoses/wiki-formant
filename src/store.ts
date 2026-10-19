@@ -127,10 +127,13 @@ const REVISION_COLUMNS = `id, "pageId", title, content, version, "changeType", m
 const REVISION_COUNT = `(SELECT count(*)::int FROM ${REVISION} r WHERE r."pageId" = p.id) AS "revisionCount"`;
 const INITIAL_VERSION = '1.0.0';
 
-const listing = (row: WikiPageRow): WikiPageListing => {
+/** A row as a listing carries it, for an app that runs a listing query of its own. */
+export function toListing<R extends { content?: unknown }>(row: R): Omit<R, 'content'> & { snippet: string } {
   const { content, ...rest } = row;
   return { ...rest, snippet: describe(openingText(content)) };
-};
+}
+
+const listing = (row: WikiPageRow): WikiPageListing => toListing(row);
 
 const conflict = (message: string) => new HttpError(409, message);
 
