@@ -104,7 +104,11 @@ export interface SaveInput<B> {
    * refused with 409 rather than quietly overwriting the edit in between.
    */
   baseVersion?: string;
-  /** The bump to record instead of the one the diff picks, for a script that knows. */
+  /**
+   * The bump to record instead of the one the diff picks, for a writer that
+   * knows. Stated, it always writes a revision, even for a save the diff finds
+   * empty: a routine recording a reading in metadata wants it in the history.
+   */
   change?: Exclude<ChangeType, 'none'>;
   /** The writer's word that the page's facts were checked: stamps `lastVerifiedAt`. */
   verified?: boolean;
@@ -307,8 +311,8 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
   /**
    * Create or update a page, writing a revision whenever its title or blocks
    * changed. The bump is the diff's (`major` for structure, `minor` for prose)
-   * unless `change` overrides it; a metadata-only save moves no version and
-   * writes no revision, the way an infobox fix has always behaved.
+   * unless `change` overrides it; a metadata-only save with no `change` moves no
+   * version and writes no revision, the way an infobox fix has always behaved.
    */
   const save = async (input: SaveInput<B>): Promise<SaveResult<B>> => {
     const existing = await get(input.tagPath, input.slug);
@@ -329,7 +333,7 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
       newTitle: title,
       containers: o.containers,
     });
-    const changeType: ChangeType = diff.changeType === 'none' ? 'none' : (input.change ?? diff.changeType);
+    const changeType: ChangeType = input.change ?? diff.changeType;
     const version = changeType === 'none' ? existing.version : bump(existing.version, changeType);
 
     const page = await one<WikiPageRow<B>>(

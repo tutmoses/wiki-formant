@@ -65,17 +65,20 @@ test('a page is created with its first revision, and a save diffs, bumps and rec
   assert.equal(meta.page.version, '2.0.0');
   assert.deepEqual(meta.page.metadata, { excerpt: 'The VM.' });
 
-  assert.equal((await store.get('tech', 'radix-engine')).revisionCount, 3);
+  const stated = await store.save({ tagPath: 'tech', slug: 'radix-engine', metadata: { excerpt: 'The VM.', state: 1 }, change: 'patch' });
+  assert.equal(stated.page.version, '2.0.1', 'a stated change always writes its revision');
+
+  assert.equal((await store.get('tech', 'radix-engine')).revisionCount, 4);
   const history = await store.history(made.page.id);
-  assert.deepEqual(history.map(r => r.version), ['2.0.0', '1.1.0', '1.0.0']);
-  assert.equal(history[1].authorId, 'u2');
-  assert.equal(history[1].message, 'wording');
-  assert.ok(history[1].changes.length > 0, 'what changed is diffed on read');
+  assert.deepEqual(history.map(r => r.version), ['2.0.1', '2.0.0', '1.1.0', '1.0.0']);
+  assert.equal(history[2].authorId, 'u2');
+  assert.equal(history[2].message, 'wording');
+  assert.ok(history[2].changes.length > 0, 'what changed is diffed on read');
   assert.equal(history[0].content, undefined, 'entries carry changes, not content');
 
-  const window = await store.history(made.page.id, { limit: 1 });
-  assert.equal(window.length, 1);
-  assert.ok(window[0].changes.some(c => c.action === 'added'), 'the oldest shown is diffed against its real predecessor');
+  const window = await store.history(made.page.id, { limit: 2 });
+  assert.equal(window.length, 2);
+  assert.ok(window[1].changes.some(c => c.action === 'added'), 'the oldest shown is diffed against its real predecessor');
 });
 
 test('a save that lost a race, or opened an old version, writes nothing', async () => {
