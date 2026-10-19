@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { compact, addBacklog, render, ident, scopeSql, staleWrite } from '../dist/maintenance.js';
+import { compact, addBacklog, render, staleWrite } from '../dist/maintenance.js';
 
 test('compact keeps open work items, pinned flags first, newest next, and caps the rest', () => {
   const backlog = [
@@ -70,15 +70,6 @@ test('render escapes state, names the routine, links a tweet URL and says what i
   assert.match(html, /5 older open items held in state/);
   assert.match(html, /watching: @a, @b/);
   assert.match(html, /<a href="https:\/\/x\.com\/i\/1">link<\/a>/);
-});
-
-test('table and column names are identifiers or nothing', () => {
-  assert.equal(ident('wiki_pages', 't'), '"wiki_pages"');
-  assert.throws(() => ident('pages; drop table x', '--table'), /--table/);
-  assert.throws(() => ident(undefined, '--pages'), /--pages/);
-  assert.deepEqual(scopeSql(undefined, 3), { sql: 'TRUE', values: [] });
-  assert.deepEqual(scopeSql('caper_id', 3), { sql: '"caper_id" IS NULL', values: [] });
-  assert.deepEqual(scopeSql('caper_id=12', 3), { sql: '"caper_id" = $3', values: ['12'] });
 });
 
 test('the bins refuse an incomplete command before touching a database', () => {

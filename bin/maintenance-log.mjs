@@ -4,23 +4,21 @@
 // The routine's memory between runs lives in one wiki page's metadata.state,
 // and the page shows it, re-rendered and capped on every write (the rules are
 // `src/maintenance.ts`). radix-wiki and caper each carried this script with the
-// same rules against a different table, so the tables are arguments. Run it
-// from the app's root, where `pg` is installed and `.env` holds DATABASE_URL.
+// same rules against a different table; the tables are now the package's own
+// (`prisma/wiki.prisma`). Run it from the app's root, where `pg` is installed
+// and `.env` holds DATABASE_URL.
 //
 //   npx maintenance-log read                    # print the state as JSON
 //   npx maintenance-log write '<json>'          # replace it (or `write -` from stdin)
 //   npx maintenance-log compact [--dry-run]     # re-apply the caps to what is stored
 //   npx maintenance-log backlog-add '<json>'    # append items under a row lock
 //
-// with the page and its tables named every time:
+// with the page named every time:
 //
 //   --at <tagPath>/<slug>      the log page, e.g. contents/tech/operations/wiki-maintenance-log
 //   --routine <name>           named on the page and in the revision message
-//   --pages <table>            default pages
-//   --revisions <table>        default revisions
-//   --page-key <column>        the revisions column naming the page, default page_id
-//   --scope <column>[=<value>] only rows where the column is NULL, or equals the value
-//   --author <id>              revisions.author_id, default NULL
+//   --site <siteId>            the wiki the page belongs to, default "" (a one-wiki app)
+//   --author <id>              the revision's authorId, default NULL
 //   --invalidate <tag>         `vercel cache invalidate --tag` after a write
 //
 // `write` takes the whole new state: read, change, write back. A revision is
@@ -30,11 +28,9 @@
 // below the stored one: that state was read before another run wrote.
 // `backlog-add` is how another routine files an
 // item: `write` replaces the whole state, so an append through it could lose a
-// concurrent run's, and the row lock serialises the two. A revision's version
-// is the page's `version` column bumped a minor where the table has one, else
-// the latest revision's.
-import { randomUUID } from 'node:crypto';
-import { PINNED, addBacklog, compact, ident, render, scopeSql, staleWrite } from '../dist/maintenance.js';
+// concurrent run's, and the row lock serialises the two. A revision bumps the
+// page's version a minor.
+import { PINNED, addBacklog, compact, render, staleWrite } from '../dist/maintenance.js';
 import { bump } from '../dist/versioning.js';
 import { arg, connect, invalidate } from './_cli.mjs';
 
@@ -46,15 +42,13 @@ const routine = arg('--routine');
 const slugAt = at.lastIndexOf('/');
 
 if (!['read', 'write', 'compact', 'backlog-add'].includes(mode) || slugAt < 1 || !routine) {
-  console.error('usage: maintenance-log <read|write|compact|backlog-add> [json|-] --at <tagPath>/<slug> --routine <name> [--pages t] [--revisions t] [--page-key c] [--scope c[=v]] [--author id] [--invalidate tag] [--dry-run]');
+  console.error('usage: maintenance-log <read|write|compact|backlog-add> [json|-] --at <tagPath>/<slug> --routine <name> [--site id] [--author id] [--invalidate tag] [--dry-run]');
   process.exit(2);
 }
-const pages = ident(arg('--pages') ?? 'pages', '--pages');
-const revisions = ident(arg('--revisions') ?? 'revisions', '--revisions');
-const pageKey = ident(arg('--page-key') ?? 'page_id', '--page-key');
-const scope = scopeSql(arg('--scope'), 3);
-const where = `tag_path = $1 AND slug = $2 AND ${scope.sql}`;
-const address = [at.slice(0, slugAt), at.slice(slugAt + 1), ...scope.values];
+const pages = '"WikiPage"';
+const revisions = '"WikiRevision"';
+const where = `"tagPath" = $1 AND slug = $2 AND "siteId" = $3`;
+const address = [at.slice(0, slugAt), at.slice(slugAt + 1), arg('--site') ?? ''];
 
 const readStdin = async () => {
   let data = '';
@@ -90,7 +84,7 @@ try {
       for (const a of added) console.log(`     ${a.item}`);
       if (dry) await q('ROLLBACK');
       else {
-        await q(`UPDATE ${pages} SET content = $1, metadata = $2, updated_at = now() WHERE id = $3`, [
+        await q(`UPDATE ${pages} SET content = $1, metadata = $2, "updatedAt" = now() WHERE id = $3`, [
           JSON.stringify(render(next, routine)),
           JSON.stringify({ state: next, lastVerified: today }),
           page.id,
@@ -114,12 +108,11 @@ try {
     const content = render(state, routine);
 
     const [last] = await q(
-      `SELECT version, created_at FROM ${revisions} WHERE ${pageKey} = $1 ORDER BY created_at DESC LIMIT 1`,
+      `SELECT "createdAt" FROM ${revisions} WHERE "pageId" = $1 ORDER BY "createdAt" DESC LIMIT 1`,
       [page.id],
     );
-    const revise = mode === 'compact' || !last || last.created_at.toISOString().slice(0, 10) !== today;
-    const was = 'version' in page ? page.version : last?.version;
-    const version = revise ? bump(was, 'minor') : was;
+    const revise = mode === 'compact' || !last || last.createdAt.toISOString().slice(0, 10) !== today;
+    const version = revise ? bump(page.version, 'minor') : page.version;
 
     for (const key of ['backlog', 'runHistory', 'feedback']) {
       const [before, after] = [(input[key] ?? []).length, state[key].length];
@@ -140,32 +133,18 @@ try {
     if (!dry) {
       await q('BEGIN');
       await q(
-        `UPDATE ${pages} SET content = $1, metadata = $2, updated_at = now()${'version' in page ? ', version = $4' : ''} WHERE id = $3`,
-        [JSON.stringify(content), JSON.stringify({ state, lastVerified: today }), page.id, ...('version' in page ? [version] : [])],
+        `UPDATE ${pages} SET content = $1, metadata = $2, "updatedAt" = now(), version = $4 WHERE id = $3`,
+        [JSON.stringify(content), JSON.stringify({ state, lastVerified: today }), page.id, version],
       );
       if (revise) {
-        // An id with no database default (a Prisma cuid) is supplied here.
-        const [{ has_default }] = await q(
-          `SELECT column_default IS NOT NULL AS has_default FROM information_schema.columns
-           WHERE table_schema = current_schema() AND table_name = $1 AND column_name = 'id'`,
-          [revisions.slice(1, -1)],
-        );
-        const row = {
-          ...(has_default ? {} : { id: randomUUID() }),
-          [pageKey.slice(1, -1)]: page.id,
-          title: page.title,
-          content: JSON.stringify(content),
-          version,
-          change_type: 'minor',
-          author_id: arg('--author') ?? null,
-          message: mode === 'compact'
-            ? 'Compact the log: drop closed and duplicated backlog items, cap the append-only lists'
-            : `${routine} run ${state.lastRun ?? today}`,
-        };
-        const columns = Object.keys(row);
         await q(
-          `INSERT INTO ${revisions} (${columns.map(c => `"${c}"`).join(', ')}) VALUES (${columns.map((_, i) => `$${i + 1}`).join(', ')})`,
-          Object.values(row),
+          `INSERT INTO ${revisions} ("pageId", title, content, version, "changeType", "authorId", message) VALUES ($1, $2, $3, $4, 'minor', $5, $6)`,
+          [
+            page.id, page.title, JSON.stringify(content), version, arg('--author') ?? null,
+            mode === 'compact'
+              ? 'Compact the log: drop closed and duplicated backlog items, cap the append-only lists'
+              : `${routine} run ${state.lastRun ?? today}`,
+          ],
         );
       }
       await q('COMMIT');

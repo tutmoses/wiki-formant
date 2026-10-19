@@ -186,24 +186,3 @@ export function render(state: LogState, routine: string, newId: () => string = (
     block(`<h2>Recent runs</h2>${table(['Date', 'Category', 'Summary', 'Tweet'], runRows)}`),
   ];
 }
-
-const IDENT = /^[a-z_][a-z0-9_]*$/;
-
-/** A table or column name from the command line, quoted, or a thrown usage error. */
-export function ident(name: string | undefined, what: string): string {
-  if (!name || !IDENT.test(name)) throw new Error(`${what} must be a lower-case SQL identifier, got ${JSON.stringify(name)}`);
-  return `"${name}"`;
-}
-
-/**
- * `--scope column` limits a bin to rows whose column is NULL, `--scope
- * column=value` to rows where it equals the value: caper's platform pages
- * have no caper, and its company pages share their tag paths.
- */
-export function scopeSql(scope: string | undefined, param: number): { sql: string; values: unknown[] } {
-  if (!scope) return { sql: 'TRUE', values: [] };
-  const [column, value] = scope.split('=');
-  return value === undefined
-    ? { sql: `${ident(column, '--scope')} IS NULL`, values: [] }
-    : { sql: `${ident(column, '--scope')} = $${param}`, values: [value] };
-}

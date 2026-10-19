@@ -1082,17 +1082,16 @@ npx fts-ddl pages
 npx fts-ddl '"WikiPage"'
 ```
 
-`mark-verified` stamps `last_verified_at` on pages a sweep checked and found current, so `freshnessBanner` stops calling them outdated, and `maintenance-log` is the state I/O of a wiki-sweep routine whose memory lives in one page's `metadata.state`: `read`, `write` (the whole state, or `-` for stdin), `compact` and `backlog-add`, which appends under a row lock so another routine's item cannot be lost to a concurrent `write`. Every write compacts and re-renders the page, holding at most as many FLAG FOR A HUMAN items as the page shows; a revision is written at most once a day. `write` refuses a state whose `totalRuns` is below the stored one, which is a state read before another run wrote. Two wikis carried both scripts against their own tables, so the tables are arguments. Run them from the app's root, like `passkey-invite`:
+`mark-verified` stamps `lastVerifiedAt` on pages a sweep checked and found current, so `freshnessBanner` stops calling them outdated, and `maintenance-log` is the state I/O of a wiki-sweep routine whose memory lives in one page's `metadata.state`: `read`, `write` (the whole state, or `-` for stdin), `compact` and `backlog-add`, which appends under a row lock so another routine's item cannot be lost to a concurrent `write`. Every write compacts and re-renders the page, holding at most as many FLAG FOR A HUMAN items as the page shows; a revision is written at most once a day. `write` refuses a state whose `totalRuns` is below the stored one, which is a state read before another run wrote. Both work on the package's own `WikiPage` and `WikiRevision`. Run them from the app's root, like `passkey-invite`:
 
 ```sh
 npx mark-verified contents/tech/radix-engine scrypto       # one page
 npx mark-verified --all ecosystem --invalidate wiki        # a tag path, then the cache tag
 npx maintenance-log read --at contents/tech/operations/wiki-maintenance-log --routine wiki-sweep --author <id>
-npx maintenance-log backlog-add '[{"item": "…"}]' --at operations/wiki-maintenance-log --routine caper-wiki-sweep \
-  --pages wiki_pages --revisions wiki_revisions --page-key wiki_page_id --scope caper_id
+npx maintenance-log backlog-add '[{"item": "…"}]' --at operations/wiki-maintenance-log --routine caper-wiki-sweep
 ```
 
-`--scope column` keeps to rows where the column is NULL (`=value` for one value), `--table`/`--pages`/`--revisions` default to `pages` and `revisions`, and `--invalidate <tag>` runs `vercel cache invalidate` after a write.
+`--site <siteId>` names the wiki in a multi-tenant app (default `""`), and `--invalidate <tag>` runs `vercel cache invalidate` after a write.
 
 ## A reusable workflow
 
