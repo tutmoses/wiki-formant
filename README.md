@@ -884,7 +884,8 @@ referring host), top and entry pages, countries, devices, visitors and agents by
 day, the agents by name, MCP tool calls, and the searches that found nothing.
 An agent is counted as a visitor is, one address and user agent a day, from its
 `AI Bot Visit` and `MCP Call` events; it runs no page script, so it is never
-among the visitors. `ownAgents` leaves the site's own out. A visit is a run of one
+among the visitors, and `visitors_incl_agents` counts the two at once.
+`ownAgents` leaves the site's own out of both. A visit is a run of one
 visitor's views with no gap over 30 minutes. A multi-tenant app passes a `site`
 key to every call and a `site` resolver to `collect`.
 
@@ -918,7 +919,7 @@ export const POST = gate.route;
 export const DELETE = gate.signOut;
 
 // src/app/stats/page.tsx
-const q = statsQuery(params); // ?days= (1, 7, 30, 90, 365 or all, else 30) and the filters
+const q = statsQuery(params); // ?days= (1, 7, 30, 90, 365 or all, else 30), ?agents=apart and the filters
 return (
   <StatsGate gate={gate} session={(await cookies()).get(gate.cookie)?.value} invite={params.invite} host="caper.network">
     {async () => <Stats digest={await digest(sql, q)} {...q} />}
@@ -935,8 +936,10 @@ site's stylesheet to colour), one of them by day, week or month (a count's
 total, a rate's mean), every non-empty
 ranked list, and `?days=` links between windows, all time among them, pinned in
 the chart's frame as its own buttons are (`TimeChart`'s `controls`). Each
-figure is a button that charts it: visitors, agents, page views, bounce rate,
-visit length and clicks to X. `digest`'s `by_day` carries every
+figure is a button that charts it: visitors, page views, bounce rate,
+visit length and clicks to X. Visitors count agents; `?agents=apart`, a pair
+of links beside the windows, splits them into people and agents, and every
+other link on the page keeps the choice. `digest`'s `by_day` carries every
 one of those per UTC day, a visit on the day it began, so the days add up to the
 totals. A day with no visits has no bounce rate or visit length and is left out
 of those charts rather than drawn as zero. Everything but the figures and the

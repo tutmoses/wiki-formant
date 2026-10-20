@@ -221,6 +221,9 @@ test('agents are named and counted apart from visitors, the site\'s own left out
   const { query, values } = calls.at(-1);
   assert.match(query, /ag AS \(\s*SELECT visitor, at, coalesce\(props->>'bot', .* FROM e\s+WHERE name IN \('AI Bot Visit', 'MCP Call'\) AND visitor IS NOT NULL AND NOT coalesce\(props->>'ua', ''\) ILIKE ANY\(\$\d+::text\[\]\)/);
   assert.match(query, /'agents', \(SELECT count\(DISTINCT visitor\) FROM ag\)/);
+  // Visitors with agents are the two counts at once, so the site's own stay out of it too.
+  assert.match(query, /'visitors_incl_agents', \(SELECT count\(DISTINCT visitor\) FROM \(SELECT visitor FROM v UNION SELECT visitor FROM ag\) u\)/);
+  assert.match(query, /FROM \(SELECT at, visitor FROM v UNION ALL SELECT at, visitor FROM ag\) u GROUP BY 1/);
   assert.match(query, /'previous', json_build_object\(.*'agents', \(SELECT count\(DISTINCT visitor\) FROM ag_p\)/s);
   assert.match(query, /'top_agents', \(SELECT coalesce\(json_agg\(t\), '\[\]'\) FROM \(SELECT agent, count\(DISTINCT visitor\) AS visitors FROM ag GROUP BY 1/);
   assert.equal(values.filter(v => Array.isArray(v) && v[0] === '%-mcp-test%').length, 1);

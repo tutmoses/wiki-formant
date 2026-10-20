@@ -6,9 +6,11 @@
 // not have to install it. The figures and the chart are `StatsFigures`, the
 // one part that holds state.
 //
-// The page's state is its query: `?days=` picks the window, and `?page=`,
-// `?entry=`, `?source=`, `?country=` and `?device=` narrow it. Every row in a
-// list is a link that adds its own, and every narrowing a link that drops it.
+// The page's state is its query: `?days=` picks the window, `?agents=apart`
+// counts people and agents apart where visitors otherwise count both, and
+// `?page=`, `?entry=`, `?source=`, `?country=` and `?device=` narrow it. Every
+// row in a list is a link that adds its own, and every narrowing a link that
+// drops it.
 
 import type { CSSProperties, ReactNode } from 'react';
 import { STATS_FILTERS, count, type Digest, type StatsFilter } from './analytics.js';
@@ -22,6 +24,8 @@ export interface StatsProps {
   days: number;
   /** What the digest was narrowed to, as `digest` was given it. */
   filter?: StatsFilter;
+  /** Visitors as people and agents, two figures, rather than one that counts both. */
+  apart?: boolean;
   /** The windows offered as `?days=` links on the same page. */
   ranges?: readonly number[];
 }
@@ -49,12 +53,13 @@ export function statsQuery(params: Record<string, string | string[] | undefined>
     const v = params[k];
     if (typeof v === 'string' && v) filter[k] = v.slice(0, 500);
   }
-  return { days: statsDays(params.days, ranges), filter };
+  return { days: statsDays(params.days, ranges), filter, apart: params.agents === 'apart' };
 }
 
-/** The page at a window and a filter, as a query string. */
-const href = (days: number, filter: StatsFilter) => {
+/** The page at a window, a filter and a count of agents, as a query string. */
+const href = (days: number, filter: StatsFilter, apart: boolean) => {
   const q = new URLSearchParams({ days: daysParam(days) });
+  if (apart) q.set('agents', 'apart');
   for (const k of STATS_FILTERS) if (filter[k]) q.set(k, filter[k]);
   return `?${q}`;
 };
@@ -101,12 +106,12 @@ function StatsList({
 
 /**
  * A site's own analytics on one page: the headline figures against the window
- * before, whichever of them is chosen per day, and every ranked list the
+ * before, visitors counting agents unless `apart`, whichever of them is chosen per day, and every ranked list the
  * digest carries, each row a link that narrows the page to it. Lists with
  * nothing in them are left out. The chart and the bars are `currentColor`
  * until the importing stylesheet gives them a colour.
  */
-export function Stats({ digest: d, days, filter = {}, ranges = STATS_RANGES }: StatsProps) {
+export function Stats({ digest: d, days, filter = {}, apart = false, ranges = STATS_RANGES }: StatsProps) {
   const today = Math.floor(Date.now() / DAY_MS);
   const counted = d.counted_from ? Date.parse(d.counted_from) / DAY_MS : today;
   const narrowed = STATS_FILTERS.filter(k => filter[k]);
@@ -119,18 +124,29 @@ export function Stats({ digest: d, days, filter = {}, ranges = STATS_RANGES }: S
     : Number.isFinite(start) ? start : Math.min(today, ...d.by_day.map(r => Date.parse(r.date) / DAY_MS));
   const rows = <K extends string, M extends string>(list: Array<Record<K, string> & Record<M, number>>, k: K, m: M) =>
     list.map(r => [r[k], r[m]] as [string, number]);
-  const to = (k: keyof StatsFilter) => (v: string) => href(days, { ...filter, [k]: v });
+  const at = (f: StatsFilter, n = days, a = apart) => href(n, f, a);
+  const to = (k: keyof StatsFilter) => (v: string) => at({ ...filter, [k]: v });
 
   // Each window is another digest, so a link rather than a button, pinned
-  // with the chart's own controls.
-  const windows = (
-    <div role="group" aria-label="Window">
-      {ranges.map(n => (
-        <a key={n} href={href(n, filter)} aria-current={n === days ? 'page' : undefined}>
-          {windowLabel(n)}
+  // with the chart's own controls, and so is whether agents count apart.
+  const controls = (
+    <>
+      <div role="group" aria-label="Window">
+        {ranges.map(n => (
+          <a key={n} href={at(filter, n)} aria-current={n === days ? 'page' : undefined}>
+            {windowLabel(n)}
+          </a>
+        ))}
+      </div>
+      <div role="group" aria-label="Agents">
+        <a href={at(filter, days, false)} aria-current={apart ? undefined : 'page'} title="Visitors count agents">
+          With agents
         </a>
-      ))}
-    </div>
+        <a href={at(filter, days, true)} aria-current={apart ? 'page' : undefined} title="People and agents counted apart">
+          Apart
+        </a>
+      </div>
+    </>
   );
 
   return (
@@ -140,7 +156,7 @@ export function Stats({ digest: d, days, filter = {}, ranges = STATS_RANGES }: S
           <ul aria-label="Narrowed to">
             {narrowed.map(k => (
               <li key={k}>
-                <a href={href(days, { ...filter, [k]: undefined })} title="Remove">
+                <a href={at({ ...filter, [k]: undefined })} title="Remove">
                   {NAMES[k]}: {k === 'country' ? country(filter[k]!) : filter[k]} ×
                 </a>
               </li>
@@ -151,7 +167,7 @@ export function Stats({ digest: d, days, filter = {}, ranges = STATS_RANGES }: S
           )}
         </div>
       )}
-      <StatsFigures digest={d} first={first} windows={windows} />
+      <StatsFigures digest={d} first={first} apart={apart} controls={controls} />
       <div className="stats-lists">
         <StatsList title="Pages" rows={rows(d.top_pages, 'page', 'visitors')} to={to('page')} />
         <StatsList title="Entry pages" rows={rows(d.entry_pages, 'page', 'visitors')} to={to('entry')} />
@@ -159,7 +175,7 @@ export function Stats({ digest: d, days, filter = {}, ranges = STATS_RANGES }: S
         <StatsList
           title="From X posts"
           rows={rows(d.from_posts, 'page', 'visitors')}
-          to={v => href(days, { ...filter, source: 'x', entry: v })}
+          to={v => at({ ...filter, source: 'x', entry: v })}
         />
         <StatsList title="Sibling sites" rows={rows(d.sibling_referrals, 'source', 'visitors')} to={to('source')} />
         <StatsList title="Countries" rows={rows(d.countries, 'country', 'visitors')} label={country} to={to('country')} />

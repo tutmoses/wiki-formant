@@ -45,9 +45,21 @@ interface Figure {
   aggregate?: ChartAggregate;
 }
 
-const figuresOf = ({ previous: p, ...d }: Digest): Figure[] => [
-  { label: 'Visitors', value: count(d.visitors), delta: change(d.visitors, p.visitors), day: r => r.visitors },
-  { label: 'Agents', value: count(d.agents), delta: change(d.agents, p.agents), day: r => r.agents },
+/** Visitors are one figure counting agents too, or `apart` two: people, and agents. */
+const figuresOf = ({ previous: p, ...d }: Digest, apart: boolean): Figure[] => [
+  ...(apart
+    ? [
+        { label: 'People', value: count(d.visitors), delta: change(d.visitors, p.visitors), day: (r: DigestDay) => r.visitors },
+        { label: 'Agents', value: count(d.agents), delta: change(d.agents, p.agents), day: (r: DigestDay) => r.agents },
+      ]
+    : [
+        {
+          label: 'Visitors',
+          value: count(d.visitors_incl_agents),
+          delta: change(d.visitors_incl_agents, p.visitors_incl_agents),
+          day: (r: DigestDay) => r.visitors_incl_agents,
+        },
+      ]),
   { label: 'Page views', value: count(d.pageviews), delta: change(d.pageviews, p.pageviews), day: r => r.pageviews },
   {
     label: 'Bounce rate',
@@ -86,8 +98,8 @@ const EMPTY: DigestDay = { date: '', visitors: 0, pageviews: 0, visits: 0, bounc
  * day from `first` (a UTC day number) to today. A count's empty day is a zero;
  * a rate's is left out, since no visits is not a bounce rate of nothing.
  */
-export function StatsFigures({ digest, first, windows }: { digest: Digest; first: number; windows: ReactNode }) {
-  const figures = useMemo(() => figuresOf(digest), [digest]);
+export function StatsFigures({ digest, first, apart, controls }: { digest: Digest; first: number; apart: boolean; controls: ReactNode }) {
+  const figures = useMemo(() => figuresOf(digest, apart), [digest, apart]);
   const [chosen, choose] = useState(0);
   const figure = figures[chosen] ?? figures[0]!;
   const byDay = useMemo(() => new Map(digest.by_day.map(r => [r.date, r])), [digest.by_day]);
@@ -124,7 +136,7 @@ export function StatsFigures({ digest, first, windows }: { digest: Digest; first
         aggregate={figure.aggregate ?? 'sum'}
         fromZero
         format={figure.format}
-        controls={windows}
+        controls={controls}
         className="stats-chart"
       />
     </>

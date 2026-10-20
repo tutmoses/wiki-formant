@@ -321,7 +321,7 @@ export interface Digest {
    * never among `visitors`.
    */
   agents: number;
-  /** Visitors plus every agent that sent an event, such as an MCP call. */
+  /** Visitors and `agents` as one count, which a stats page shows unless asked to keep them apart. */
   visitors_incl_agents: number;
   /**
    * The headline figures over the same number of days before, narrowed alike.
@@ -432,7 +432,7 @@ export async function digest(
       'bounce_rate', (SELECT round(100.0 * bounces / nullif(visits, 0)) FROM sessions${s}),
       'visit_duration', (SELECT round(seconds / nullif(visits, 0)) FROM sessions${s}),
       'agents', (SELECT count(DISTINCT visitor) FROM ag${s}),
-      'visitors_incl_agents', (SELECT count(DISTINCT visitor) FROM (SELECT visitor FROM v${s} UNION SELECT visitor FROM e${s}) u) + (SELECT visitors FROM archived${s})`;
+      'visitors_incl_agents', (SELECT count(DISTINCT visitor) FROM (SELECT visitor FROM v${s} UNION SELECT visitor FROM ag${s}) u) + (SELECT visitors FROM archived${s})`;
 
   const [row] = (await sql(
     `WITH ${chain('', 0)}, ${chain('_p', 1)}, src AS (
@@ -456,7 +456,7 @@ export async function digest(
           SELECT ${day('at')}, count(DISTINCT visitor), count(*), 0, 0, 0, 0, 0, 0 FROM v GROUP BY 1
           UNION ALL SELECT ${day('at')}, 0, 0, count(*), count(*) FILTER (WHERE views = 1), coalesce(sum(seconds), 0), 0, 0, 0 FROM visits GROUP BY 1
           UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, count(DISTINCT visitor), 0, 0 FROM ag GROUP BY 1
-          UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, 0, count(DISTINCT visitor), 0 FROM (SELECT at, visitor FROM v UNION ALL SELECT at, visitor FROM e) u GROUP BY 1
+          UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, 0, count(DISTINCT visitor), 0 FROM (SELECT at, visitor FROM v UNION ALL SELECT at, visitor FROM ag) u GROUP BY 1
           ${follows ? `UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, 0, 0, count(*) FROM e WHERE ${follows} GROUP BY 1` : ''}
           UNION ALL SELECT to_char(day, 'YYYY-MM-DD'), visitors, pageviews, visits, bounces, seconds, 0, visitors, 0 FROM a
         ) t(date, visitors, pageviews, visits, bounces, seconds, agents, everyone, follows) GROUP BY 1`,
