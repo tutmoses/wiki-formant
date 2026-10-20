@@ -79,7 +79,7 @@ const view = await categoryView({ tree, taxonomy, pages: store }, 'ecosystem', s
 
 ## Wiki read tools
 
-`wikiReadTools` is the read half of a wiki's MCP server over its store and tree: `search_wiki`, `get_page`, `get_pages`, `list_pages`, `get_categories`, `get_recent_changes` and `get_full_corpus`. `searchWiki` is the same rows for an app's plain-GET `?q=` and its search page, so the three never disagree.
+`wikiReadTools` is the read half of a wiki's MCP server over its store and tree: `search_wiki`, `get_page`, `get_pages`, `list_pages`, `get_categories`, `get_recent_changes`, `get_full_corpus` and `get_page_history`. `searchWiki` is the same rows for an app's plain-GET `?q=` and its search page, so the three never disagree.
 
 ```ts
 import { wikiReadTools, searchWiki } from 'wiki-formant/wiki-tools';
@@ -90,6 +90,7 @@ const { items, total } = await searchWiki(reading, 'validators', { page: 1, size
 ```
 
 - Every row carries `path`, which every read tool takes back, and `chars` where the page's text was read. A pasted URL resolves, with `pathPrefix` stripped; a category's path reads its hub article; a miss names the nearest pages.
+- Every row carries the page `id` too, which a `pageList` block takes. `get_page` with `blocks: true` returns the stored blocks, the page `id`, its whole metadata and `version`: what an edit starts from. `forEdit` adds what the app's write tool takes beside them, and `authors` names each revision's author in `get_page_history`.
 - `privateHidden` closes the back office to every tool; without it a hidden page is unlisted but readable by path, as its URL is.
 - `metadata`, `label`, `corpus`, `noMatch` and `skills` are the app's: what a row adds, how a category is named, the sections its llms-full.txt is made of, what an empty search says, and the A2A skills.
 - Writes stay with each app, because who may write is the one thing no two of them agree on.

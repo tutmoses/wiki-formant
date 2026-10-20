@@ -67,7 +67,7 @@ test('a category view counts, narrows by facet and lists each visible section', 
 test('the read tools search, read, batch, list, count and slice over the store', async () => {
   const { store, tree } = await wiki();
   const tools = wikiReadTools({ store, tree, text, url: (t, s) => `https://w.test/${[t, s].filter(Boolean).join('/')}`, noun: 'the test wiki', corpusTitle: 'Test Wiki', pathPrefix: '/wiki' });
-  assert.deepEqual(tools.map(t => t.name), ['search_wiki', 'get_page', 'get_pages', 'list_pages', 'get_categories', 'get_recent_changes', 'get_full_corpus']);
+  assert.deepEqual(tools.map(t => t.name), ['search_wiki', 'get_page', 'get_pages', 'list_pages', 'get_categories', 'get_recent_changes', 'get_full_corpus', 'get_page_history']);
 
   const found = await call(tools, 'search_wiki', { query: 'blueprints' });
   assert.equal(found.pages[0].path, 'tech/engine');
@@ -113,4 +113,39 @@ test('a category link carries its sort only when it is not the default, and a le
   const recent = await categoryView({ tree, taxonomy, pages: store }, 'tech/core', { sort: 'recent' });
   assert.ok(recent.facets[0].options.every(v => v.href.includes('sort=recent')));
   assert.equal(recent.sortHref('title'), '/tech/core');
+});
+
+test('get_page with blocks returns what an edit starts from, rows carry the id, and history reads by path', async () => {
+  const { store, tree } = await wiki();
+  const tools = wikiReadTools({
+    store, tree, text, url: () => '', noun: 'x', corpusTitle: 'x',
+    forEdit: p => ({ kind: p.metadata.kind ?? null }),
+    authors: async ids => new Map(ids.map(id => [id, `name of ${id}`])),
+  });
+  assert.ok(tools.some(t => t.name === 'get_page_history'));
+  const schema = tools.find(t => t.name === 'search_wiki').inputSchema.properties.pageSize;
+  assert.deepEqual([schema.minimum, schema.maximum], [1, 50]);
+
+  const row = (await call(tools, 'list_pages', { tagPath: 'tech/core', sort: 'title' })).pages[0];
+  const stored = await store.get('tech/core', 'alpha');
+  assert.equal(row.id, stored.id);
+
+  const prose = await call(tools, 'get_page', { path: 'tech/core/alpha' });
+  assert.equal(prose.content, 'About alpha.');
+  const edit = await call(tools, 'get_page', { path: 'tech/core/alpha', blocks: true });
+  assert.deepEqual(edit.content, stored.content);
+  assert.deepEqual(edit.metadata, { kind: 'x' });
+  assert.equal(edit.id, stored.id);
+  assert.equal(edit.version, stored.version);
+  assert.equal(edit.kind, 'x');
+
+  await store.save({ tagPath: 'tech/core', slug: 'alpha', content: [{ id: 'p', type: 'content', text: '<p>About alpha, revised.</p>' }], authorId: 'u1', baseVersion: edit.version });
+  const history = await call(tools, 'get_page_history', { path: 'tech/core/alpha', limit: 1 });
+  assert.equal(history.revisions.length, 1);
+  assert.equal(history.currentVersion, history.revisions[0].version);
+  assert.equal(history.revisions[0].author, 'name of u1');
+  assert.ok(history.revisions[0].changes.length);
+  assert.equal(history.revisions[0].pageId, undefined);
+  assert.equal((await call(tools, 'get_page_history', { path: 'tech' })).revisions.length, 1, 'a category path reads its hub');
+  await assert.rejects(call(tools, 'get_page_history', { path: 'tech/core/alfa' }), e => Array.isArray(e.details.didYouMean));
 });

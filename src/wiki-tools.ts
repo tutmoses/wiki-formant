@@ -17,12 +17,12 @@ import { listEnvelope } from './pagination.js';
 import { CORPUS_BUDGET, sliceCorpus, type CorpusSection } from './corpus.js';
 import { isoDate } from './freshness.js';
 import { wikiPath, type WikiNode, type WikiTree } from './tree.js';
-import type { WikiStore, WikiPageListing, PageMetadata } from './store.js';
+import type { WikiStore, WikiPageListing, WikiPageRow, PageMetadata } from './store.js';
 import type { DiffBlock } from './revisions.js';
 import { describe } from './metadata.js';
 import { openingText } from './text.js';
 
-type ToolName = 'search_wiki' | 'get_page' | 'get_pages' | 'list_pages' | 'get_categories' | 'get_recent_changes' | 'get_full_corpus';
+type ToolName = 'search_wiki' | 'get_page' | 'get_pages' | 'list_pages' | 'get_categories' | 'get_recent_changes' | 'get_full_corpus' | 'get_page_history';
 
 export interface WikiToolsOptions<B extends DiffBlock> {
   store: WikiStore<B>;
@@ -39,6 +39,10 @@ export interface WikiToolsOptions<B extends DiffBlock> {
   pathPrefix?: string;
   /** Back-office pages are private here, not merely unlisted: no tool reads one. */
   privateHidden?: boolean;
+  /** What `get_page` with `blocks: true` adds for the app's write tool, such as fields it keeps inside metadata. */
+  forEdit?: (page: WikiPageRow<B>) => Record<string, unknown>;
+  /** Display names by user id, for `get_page_history`. Without it a revision names no author. */
+  authors?: (ids: string[]) => Promise<Map<string, string>>;
   /** What a listing row adds from the page's metadata, or null for nothing. */
   metadata?: (tagPath: string, metadata: PageMetadata) => Record<string, unknown> | null;
   /** A category's name as the tree lists it. Defaults to the node's `name`. */
@@ -59,7 +63,14 @@ const READ = { readOnlyHint: true, idempotentHint: true, openWorldHint: false } 
 
 const pathOf = (tagPath: string, slug: string) => wikiPath(tagPath, slug).slice(1);
 
-type Rowable<B> = Pick<WikiPageListing, 'title' | 'tagPath' | 'slug' | 'snippet' | 'metadata' | 'updatedAt' | 'lastVerifiedAt'> & { content?: B[] };
+/** How a single-page tool takes its page. */
+const ADDRESS = {
+  path: { type: 'string', description: 'The page\'s whole path, e.g. "developers/scrypto/blueprints". Preferred over tagPath + slug.' },
+  tagPath: { type: 'string', description: 'Tag path only ("" for a top-level page). Ignored when `path` is set.' },
+  slug: { type: 'string', description: 'Page slug. Ignored when `path` is set.' },
+} as const;
+
+type Rowable<B> = Pick<WikiPageListing, 'id' | 'title' | 'tagPath' | 'slug' | 'snippet' | 'metadata' | 'updatedAt' | 'lastVerifiedAt'> & { content?: B[] };
 
 /** Whether a tag path is closed to these tools: a back office the wiki keeps private. */
 const offFor = <B extends DiffBlock>(o: Pick<WikiToolsOptions<B>, 'store' | 'privateHidden'>) => (tagPath?: string) =>
@@ -69,6 +80,7 @@ const offFor = <B extends DiffBlock>(o: Pick<WikiToolsOptions<B>, 'store' | 'pri
 const rowFor = <B extends DiffBlock>(o: Pick<WikiToolsOptions<B>, 'url' | 'text' | 'metadata'>) => (p: Rowable<B>) => {
   const meta = o.metadata?.(p.tagPath, (p.metadata ?? {}) as PageMetadata);
   return {
+    id: p.id,
     title: p.title,
     path: pathOf(p.tagPath, p.slug),
     url: o.url(p.tagPath, p.slug),
@@ -119,6 +131,20 @@ export function wikiReadTools<B extends DiffBlock>(o: WikiToolsOptions<B>): Wiki
     return page && !off(page.tagPath) ? page : null;
   };
 
+  /** The page a call names by `path` or `tagPath` + `slug`; a miss names the nearest pages, so a wrong guess is fixed in one retry. */
+  const named = async (r: ReturnType<typeof readArgs>) => {
+    const raw = r.str('path');
+    const t = raw ? target(raw) : { tagPath: r.str('tagPath'), slug: r.str('slug') };
+    if (!t?.slug) throw new McpToolError('Pass either `path` ("tag/path/slug") or `slug` (with optional `tagPath`).');
+    const page = await read(t);
+    if (page) return page;
+    const near = await store.search(t.slug.replace(/-/g, ' '), { take: 5 });
+    throw new McpToolError(`No page at path "${pathOf(t.tagPath, t.slug)}".`, {
+      didYouMean: near.items.filter(p => !off(p.tagPath)).map(p => ({ path: pathOf(p.tagPath, p.slug), title: p.title })),
+      hint: 'Paths are exact. Use search_wiki for a keyword, or list_pages with the tagPath to enumerate the branch.',
+    });
+  };
+
   const full = (page: NonNullable<Awaited<ReturnType<typeof read>>>) => ({
     ...summary({ ...page, snippet: describe(openingText(page.content)) }),
     version: page.version,
@@ -153,8 +179,8 @@ export function wikiReadTools<B extends DiffBlock>(o: WikiToolsOptions<B>): Wiki
         properties: {
           query: { type: 'string', description: 'Search term, matched against page titles and body text' },
           tagPath: { type: 'string', description: 'Only pages at this tag path, e.g. a path from get_categories' },
-          page: { type: 'number', description: '1-based page number (default 1)' },
-          pageSize: { type: 'number', description: 'Results per page (default 20, max 50)' },
+          page: { type: 'number', description: '1-based page number (default 1)', minimum: 1 },
+          pageSize: { type: 'number', description: 'Results per page (default 20, max 50)', minimum: 1, maximum: 50 },
         },
         required: ['query'],
       },
@@ -185,30 +211,21 @@ export function wikiReadTools<B extends DiffBlock>(o: WikiToolsOptions<B>): Wiki
         `One page of ${noun} in full: its text, version, update date and metadata. ` +
         'Address it by `path` ("tag/path/slug", exactly the `path` or `url` a listing returns), or by `tagPath` + `slug`; a category\'s own path reads its hub article. Not a title. ' +
         'For 2 to 20 pages call get_pages, one round trip rather than N. A miss names the nearest pages, so a wrong guess is fixed in one retry. ' +
-        'A page\'s URL with `.md` appended is its markdown.',
+        'A page\'s URL with `.md` appended is its markdown. ' +
+        'With `blocks: true`, `content` is the stored block array, ids and all, beside the page `id` and its whole `metadata`: read a page this way before editing it, and send its `version` back as the edit\'s baseVersion.',
       inputSchema: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: 'The page\'s whole path, e.g. "developers/scrypto/blueprints". Preferred over tagPath + slug.' },
-          tagPath: { type: 'string', description: 'Tag path only ("" for a top-level page). Ignored when `path` is set.' },
-          slug: { type: 'string', description: 'Page slug. Ignored when `path` is set.' },
+          ...ADDRESS,
+          blocks: { type: 'boolean', description: 'Return the stored blocks rather than prose, for an edit' },
         },
         requireOneOf: ['path', 'slug'],
       },
       handler: async args => {
         const r = readArgs(args);
-        const raw = r.str('path');
-        const t = raw ? target(raw) : { tagPath: r.str('tagPath'), slug: r.str('slug') };
-        if (!t?.slug) throw new McpToolError('Pass either `path` ("tag/path/slug") or `slug` (with optional `tagPath`).');
-        const page = await read(t);
-        if (!page) {
-          const near = await store.search(t.slug.replace(/-/g, ' '), { take: 5 });
-          throw new McpToolError(`No page at path "${pathOf(t.tagPath, t.slug)}".`, {
-            didYouMean: near.items.filter(p => !off(p.tagPath)).map(p => ({ path: pathOf(p.tagPath, p.slug), title: p.title })),
-            hint: 'Paths are exact. Use search_wiki for a keyword, or list_pages with the tagPath to enumerate the branch.',
-          });
-        }
-        return withAdjustments(r, full(page));
+        const page = await named(r);
+        if (!r.bool('blocks')) return withAdjustments(r, full(page));
+        return withAdjustments(r, { ...full(page), id: page.id, content: page.content, metadata: page.metadata, ...o.forEdit?.(page) });
       },
     },
     {
@@ -223,7 +240,7 @@ export function wikiReadTools<B extends DiffBlock>(o: WikiToolsOptions<B>): Wiki
         type: 'object',
         properties: {
           paths: { type: 'array', items: { type: 'string' }, description: `Page paths, 1 to ${MAX_BATCH_PATHS} per call` },
-          maxChars: { type: 'number', description: 'Total characters across the pages returned (default 250000, max 1000000)' },
+          maxChars: { type: 'number', description: 'Total characters across the pages returned (default 250000, max 1000000)', minimum: 1_000, maximum: 1_000_000 },
         },
         required: ['paths'],
       },
@@ -277,8 +294,8 @@ export function wikiReadTools<B extends DiffBlock>(o: WikiToolsOptions<B>): Wiki
         properties: {
           tagPath: { type: 'string', description: 'The branch to list, e.g. a path from get_categories. Includes its descendants.' },
           sort: { type: 'string', enum: ['title', 'updatedAt'], description: 'Sort order (default "updatedAt", newest first)' },
-          page: { type: 'number', description: '1-based page number (default 1)' },
-          pageSize: { type: 'number', description: 'Results per page (default 20, max 100)' },
+          page: { type: 'number', description: '1-based page number (default 1)', minimum: 1 },
+          pageSize: { type: 'number', description: 'Results per page (default 20, max 100)', minimum: 1, maximum: 100 },
         },
       },
       handler: async args => {
@@ -340,8 +357,8 @@ export function wikiReadTools<B extends DiffBlock>(o: WikiToolsOptions<B>): Wiki
       inputSchema: {
         type: 'object',
         properties: {
-          days: { type: 'number', description: 'Look back this many days (default 7, max 30)' },
-          limit: { type: 'number', description: 'Most pages returned (default 20, max 50)' },
+          days: { type: 'number', description: 'Look back this many days (default 7, max 30)', minimum: 1, maximum: 30 },
+          limit: { type: 'number', description: 'Most pages returned (default 20, max 50)', minimum: 1, maximum: 50 },
         },
       },
       handler: async args => {
@@ -376,8 +393,8 @@ export function wikiReadTools<B extends DiffBlock>(o: WikiToolsOptions<B>): Wiki
         properties: {
           sizeOnly: { type: 'boolean', description: 'Sizes and breakdowns only, no document. Do this before the first real pull.' },
           tagPath: { type: 'string', description: 'One branch and its descendants. Omit for everything.' },
-          maxChars: { type: 'number', description: `Character budget for \`document\` (default ${CORPUS_BUDGET.default}, max ${CORPUS_BUDGET.max})` },
-          skip: { type: 'number', description: 'Resume from this page index: the `nextSkip` of the previous truncated call (default 0)' },
+          maxChars: { type: 'number', description: `Character budget for \`document\` (default ${CORPUS_BUDGET.default}, max ${CORPUS_BUDGET.max})`, minimum: CORPUS_BUDGET.min, maximum: CORPUS_BUDGET.max },
+          skip: { type: 'number', description: 'Resume from this page index: the `nextSkip` of the previous truncated call (default 0)', minimum: 0 },
         },
       },
       handler: async args => {
@@ -391,6 +408,34 @@ export function wikiReadTools<B extends DiffBlock>(o: WikiToolsOptions<B>): Wiki
           hint: 'Pull with maxChars, or one branch at a time with tagPath. get_pages is cheaper for a handful of pages.',
         });
         return withAdjustments(r, { scope: o.corpusTitle, ...(tagPath ? { tagPath } : {}), ...slice });
+      },
+    },
+    {
+      name: 'get_page_history',
+      title: 'Page history',
+      annotations: READ,
+      description:
+        `A page's revisions in ${noun}, newest first: each one's \`id\`, version, change type, message, date and the blocks it changed. ` +
+        'Address the page as get_page does. A revision `id` is what a restore takes, where this server has one. Defaults: limit 20 (max 100).',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          ...ADDRESS,
+          limit: { type: 'number', description: 'Most revisions returned (default 20, max 100)', minimum: 1, maximum: 100 },
+        },
+        requireOneOf: ['path', 'slug'],
+      },
+      handler: async args => {
+        const r = readArgs(args);
+        const page = await named(r);
+        const revisions = await store.history(page.id, { limit: r.num('limit', 20, 1, 100) });
+        const names = o.authors && await o.authors([...new Set(revisions.flatMap(v => v.authorId ? [v.authorId] : []))]);
+        return withAdjustments(r, {
+          path: pathOf(page.tagPath, page.slug),
+          url: o.url(page.tagPath, page.slug),
+          currentVersion: page.version,
+          revisions: revisions.map(({ pageId: _, authorId, ...v }) => ({ ...v, ...(names ? { author: (authorId && names.get(authorId)) || null } : {}) })),
+        });
       },
     },
   ];

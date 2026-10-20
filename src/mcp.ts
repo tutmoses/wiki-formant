@@ -85,11 +85,35 @@ const allowsBatch = (v: LegacyVersion) => v === '2025-03-26' || v === '2024-11-0
 
 import { clientKey, rateLimit, rateLimitHeaders, withRateLimit, type RateLimitOptions } from './rate-limit.js';
 
+/**
+ * JSON Schema as far as a tool's parameters go. Open past the named keywords,
+ * because an array's items may be a whole block type, which a narrower shape
+ * made every app type as `{ type: 'object' }` and leave the rest unsaid.
+ */
+export type JsonSchema = {
+  type?: 'string' | 'number' | 'integer' | 'boolean' | 'array' | 'object';
+  description?: string;
+  enum?: readonly (string | number)[];
+  items?: JsonSchema;
+  properties?: Record<string, JsonSchema>;
+  required?: readonly string[];
+  minimum?: number;
+  maximum?: number;
+  [keyword: string]: unknown;
+};
+
 export type ToolParam = {
   type: 'string' | 'number' | 'boolean' | 'array' | 'object';
   description: string;
   enum?: string[];
-  items?: { type?: 'string' | 'number' | 'object' };
+  items?: JsonSchema;
+  /**
+   * Bounds a client can read before it calls. The handler still clamps (an
+   * argument out of range comes back adjusted, not refused), so these state the
+   * clamp rather than enforce it.
+   */
+  minimum?: number;
+  maximum?: number;
 };
 
 export type ToolSchema = {
@@ -459,7 +483,7 @@ function validateArgs(tool: McpTool, args: Record<string, unknown>): string | nu
       // No `items` means strings. Items with no one type (a `oneOf` of shapes,
       // as a zod union emits) are the tool's own to check: read as strings, every
       // well-formed call was refused.
-      const itemType = spec.items ? spec.items.type : 'string';
+      const itemType = spec.items ? (spec.items.type === 'integer' ? 'number' : spec.items.type) : 'string';
       if (actual !== 'array') {
         problems.push(
           `Parameter "${key}" must be an array${itemType ? ` of ${itemType}s` : ''}; received ${actual} (${JSON.stringify(value)}).`,
