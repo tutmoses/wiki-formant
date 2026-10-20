@@ -91,6 +91,7 @@ const { items, total } = await searchWiki(reading, 'validators', { page: 1, size
 
 - Every row carries `path`, which every read tool takes back, and `chars` where the page's text was read. A pasted URL resolves, with `pathPrefix` stripped; a category's path reads its hub article; a miss names the nearest pages.
 - Every row carries the page `id` too, which a `pageList` block takes. `get_page` with `blocks: true` returns the stored blocks, the page `id`, its whole metadata and `version`: what an edit starts from. `forEdit` adds what the app's write tool takes beside them, and `authors` names each revision's author in `get_page_history`.
+- `text` should be the serializer the page's markdown twin uses, and `resolve` the resolver its page uses to fill what is read live (a page list's pages): `get_page`, `get_pages` and the default corpus read text through both, so a page reads the same over MCP as at its twin, which `twinParity` checks.
 - `privateHidden` closes the back office to every tool; without it a hidden page is unlisted but readable by path, as its URL is.
 - `metadata`, `label`, `corpus`, `noMatch` and `skills` are the app's: what a row adds, how a category is named, the sections its llms-full.txt is made of, what an empty search says, and the A2A skills.
 - Writes stay with each app, because who may write is the one thing no two of them agree on.

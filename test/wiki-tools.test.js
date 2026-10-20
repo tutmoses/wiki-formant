@@ -149,3 +149,21 @@ test('get_page with blocks returns what an edit starts from, rows carry the id, 
   assert.equal((await call(tools, 'get_page_history', { path: 'tech' })).revisions.length, 1, 'a category path reads its hub');
   await assert.rejects(call(tools, 'get_page_history', { path: 'tech/core/alfa' }), e => Array.isArray(e.details.didYouMean));
 });
+
+test('page text reads lists through the app resolver, as its twin does; blocks stay as stored', async () => {
+  const { store, tree } = await wiki();
+  const list = [{ id: 'l', type: 'recentPages', limit: 2 }];
+  await store.save({ tagPath: 'tech', slug: 'index', title: 'Index', content: list });
+  // The app's resolver fills the list; its text prints what was filled in.
+  const resolve = async blocks => blocks.map(b => (b.type === 'recentPages' ? { ...b, resolvedPages: [{ title: 'Alpha' }, { title: 'Beta' }] } : b));
+  const listText = blocks => blocks.map(b => (b.type === 'recentPages' ? (b.resolvedPages ?? []).map(p => `- ${p.title}`).join('\n') || '(live list)' : text([b]))).join('\n');
+  const tools = wikiReadTools({ store, tree, text: listText, resolve, url: () => '', noun: 'x', corpusTitle: 'x' });
+
+  assert.equal((await call(tools, 'get_page', { path: 'tech/index' })).content, '- Alpha\n- Beta');
+  assert.equal((await call(tools, 'get_pages', { paths: ['tech/index'] })).pages[0].content, '- Alpha\n- Beta');
+  assert.deepEqual((await call(tools, 'get_page', { path: 'tech/index', blocks: true })).content, list);
+  assert.match((await call(tools, 'get_full_corpus', { tagPath: 'tech' })).document, /- Alpha\n- Beta/);
+
+  const unresolved = wikiReadTools({ store, tree, text: listText, url: () => '', noun: 'x', corpusTitle: 'x' });
+  assert.equal((await call(unresolved, 'get_page', { path: 'tech/index' })).content, '(live list)');
+});

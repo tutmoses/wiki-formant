@@ -31,6 +31,13 @@ export interface WikiToolsOptions<B extends DiffBlock> {
   url: (tagPath: string, slug: string) => string;
   /** A page's blocks as plain prose: what `get_page` returns and `chars` counts. */
   text: (blocks: B[]) => string;
+  /**
+   * A page's blocks with what is read live filled in, such as a page list's
+   * pages: the resolver the app's page and markdown twin use. `get_page`,
+   * `get_pages` and the default corpus read their text through it, so a list
+   * reads there as it does on the twin rather than as its stored placeholder.
+   */
+  resolve?: (blocks: B[]) => Promise<B[]>;
   /** The wiki as the descriptions name it: "the Radix Wiki", "this DAO's wiki". */
   noun: string;
   /** The corpus document's heading. */
@@ -145,21 +152,24 @@ export function wikiReadTools<B extends DiffBlock>(o: WikiToolsOptions<B>): Wiki
     });
   };
 
-  const full = (page: NonNullable<Awaited<ReturnType<typeof read>>>) => ({
+  /** Blocks as the page shows them. */
+  const shown = (blocks: B[]) => (o.resolve ? o.resolve(blocks) : Promise.resolve(blocks));
+
+  const head = (page: NonNullable<Awaited<ReturnType<typeof read>>>) => ({
     ...summary({ ...page, snippet: describe(openingText(page.content)) }),
     version: page.version,
-    content: o.text(page.content),
   });
+  const full = async (page: NonNullable<Awaited<ReturnType<typeof read>>>) => ({ ...head(page), content: o.text(await shown(page.content)) });
 
   const sections = async (tagPath?: string): Promise<CorpusSection[]> => {
     if (o.corpus) return o.corpus(tagPath);
     const pages = (await store.corpus())
       .filter(p => !(p.tagPath === '' && p.slug === '') && (!tagPath || p.tagPath === tagPath || p.tagPath.startsWith(`${tagPath}/`)))
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-    return pages.map(p => {
+    return Promise.all(pages.map(async p => {
       const path = pathOf(p.tagPath, p.slug);
-      return { path, tagPath: p.tagPath, section: `## ${p.title}\n\nPath: ${path}\nURL: ${o.url(p.tagPath, p.slug)}\nUpdated: ${isoDate(p.updatedAt)}\n\n${o.text(p.content)}` };
-    });
+      return { path, tagPath: p.tagPath, section: `## ${p.title}\n\nPath: ${path}\nURL: ${o.url(p.tagPath, p.slug)}\nUpdated: ${isoDate(p.updatedAt)}\n\n${o.text(await shown(p.content))}` };
+    }));
   };
 
   const tools: (WikiTool & { name: ToolName })[] = [
@@ -224,8 +234,9 @@ export function wikiReadTools<B extends DiffBlock>(o: WikiToolsOptions<B>): Wiki
       handler: async args => {
         const r = readArgs(args);
         const page = await named(r);
-        if (!r.bool('blocks')) return withAdjustments(r, full(page));
-        return withAdjustments(r, { ...full(page), id: page.id, content: page.content, metadata: page.metadata, ...o.forEdit?.(page) });
+        if (!r.bool('blocks')) return withAdjustments(r, await full(page));
+        // Stored, not resolved: what an edit sends back is what was stored.
+        return withAdjustments(r, { ...head(page), id: page.id, content: page.content, metadata: page.metadata, ...o.forEdit?.(page) });
       },
     },
     {
@@ -262,7 +273,7 @@ export function wikiReadTools<B extends DiffBlock>(o: WikiToolsOptions<B>): Wiki
         let used = 0;
         for (const { input, page } of found) {
           if (!page) { missing.push(input); continue; }
-          const row = full(page);
+          const row = await full(page);
           // At least one page always comes back, so one oversized page can still be read.
           if (pages.length && used + row.content.length > maxChars) { omitted.push({ path: row.path, chars: row.content.length }); continue; }
           used += row.content.length;
