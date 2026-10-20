@@ -83,6 +83,7 @@ function requestProtocol(request: Request): LegacyVersion {
 /** JSON-RPC batching was removed in 2025-06-18 and stays removed; it is legal only below that. */
 const allowsBatch = (v: LegacyVersion) => v === '2025-03-26' || v === '2024-11-05';
 
+import { handleA2a, isA2aMethod } from './a2a.js';
 import { clientKey, rateLimit, rateLimitHeaders, withRateLimit, type RateLimitOptions } from './rate-limit.js';
 
 /**
@@ -241,6 +242,13 @@ export interface McpServerConfig {
    * clicks when they do not have one yet.
    */
   prompts?: McpPrompt[];
+  /**
+   * The tool an A2A `message/send` is answered with, and the argument its text
+   * fills: usually the search tool and its query. Without it a message is
+   * answered with `instructions` and the tool names, which is still an answer
+   * where -32601 was a refusal of the interface the agent card names.
+   */
+  answer?: { tool: string; argument: string };
   /** Appended to the GET refusal so a browser that lands here learns where to go. */
   docsUrl?: string;
   /**
@@ -710,6 +718,7 @@ async function handleRpc(
       }
 
       default:
+        if (isA2aMethod(method)) return await handleA2a(req, config);
         return methodNotFound(id, method, config, dispatch.era);
     }
   } catch (err) {
@@ -757,7 +766,7 @@ export const MCP_CORS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers':
-    'Content-Type, Accept, Authorization, Mcp-Session-Id, Mcp-Protocol-Version, Mcp-Method, Mcp-Name, Last-Event-ID',
+    'Content-Type, Accept, Authorization, Mcp-Session-Id, Mcp-Protocol-Version, Mcp-Method, Mcp-Name, Last-Event-ID, A2A-Version',
   // Allow-Headers governs what a browser may send; without Expose-Headers it
   // may read none of what comes back. A browser client could not see the
   // negotiated version, and could not see `Retry-After` on the 429 telling it

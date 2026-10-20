@@ -501,6 +501,18 @@ export async function agentCardParity(t: Tester): Promise<void> {
     (probe.headers.get('content-type') ?? '').includes('json'),
     `POST ${endpoint} -> ${probe.status} ${probe.headers.get('content-type')}`,
   );
+
+  // Callable is not the same as answering. A `JSONRPC` url invites A2A's own
+  // first call, and a -32601 to it refuses the interface the card names.
+  const send = await t.rpcAt(endpoint, 'message/send', {
+    message: { kind: 'message', role: 'user', messageId: 'conformance', parts: [{ kind: 'text', text: String(a.name ?? 'help') }] },
+  });
+  const reply = send.result as { kind?: string; parts?: Array<{ text?: unknown }> } | undefined;
+  t.check(
+    'agent card url answers A2A',
+    reply?.kind === 'message' && typeof reply.parts?.[0]?.text === 'string',
+    reply ? `message/send -> ${reply.parts?.length} part(s)` : `message/send -> ${JSON.stringify(send.error)}`,
+  );
 }
 
 /**

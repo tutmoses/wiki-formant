@@ -138,10 +138,20 @@ export function agentCard(config: AgentCardConfig): Record<string, unknown> {
     // The endpoint, not the homepage. A card's `url` is where a client sends
     // its first call, and every card here pointed at an HTML page — so a client
     // that believed the card got markup back, or a 405. MCP is JSON-RPC over
-    // HTTP POST, so an A2A caller arriving at it is answered in a shape it can
-    // parse: a -32601 naming every method the server does implement.
+    // HTTP POST, and the endpoint answers A2A's `message/send` (v0.3) and
+    // `SendMessage` (v1.0) from the site's own search (`McpServerConfig.answer`).
     url: endpoint,
     preferredTransport: 'JSONRPC',
+    // v1.0 reads the interfaces from here and ignores `url`; v0.3 the reverse.
+    ...(mcpEndpoint === null
+      ? {}
+      : {
+          supportedInterfaces: (['1.0', '0.3'] as const).map(protocolVersion => ({
+            url: endpoint,
+            protocolBinding: 'JSONRPC',
+            protocolVersion,
+          })),
+        }),
     version,
     capabilities: { streaming: false, pushNotifications: false },
     skills,
