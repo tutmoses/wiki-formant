@@ -719,3 +719,197 @@ export async function robotsChecks(t: Tester, paths: readonly string[]): Promise
     t.check(`robots allows ${path}`, !match || match.allow, match ? `${match.allow ? 'Allow' : 'Disallow'}: ${match.path}` : 'no matching rule');
   }
 }
+
+// ---- drift: what the MCP server says against what the site does -----------
+//
+// Each app had written these against its own surfaces after an audit found its
+// MCP server describing, accepting or returning something its site did not:
+// an edit tool without the version guard the editor sends, page reads that
+// flattened what the markdown twin kept, a manifest stating write auth on a
+// deployment with no writes. The same check, once per app, is how the checks
+// themselves drift, so they live here beside the transport they test.
+
+/** A JSON value that says nothing: comparing two of them proves nothing. */
+const vacuous = (v: unknown): boolean =>
+  v == null || (Array.isArray(v) ? v.length === 0 : typeof v === 'object' && Object.keys(v).length === 0);
+
+/** Where two JSON values first part, for a check's note. */
+const firstDifference = (a: unknown, b: unknown): string => {
+  const [x, y] = [JSON.stringify(a) ?? 'undefined', JSON.stringify(b) ?? 'undefined'];
+  let i = 0;
+  while (i < x.length && x[i] === y[i]) i++;
+  return `at char ${i}: MCP …${x.slice(Math.max(0, i - 20), i + 40)}… vs …${y.slice(Math.max(0, i - 20), i + 40)}…`;
+};
+
+/**
+ * `/.well-known/mcp.json` is `tools/list`, tool for tool, names the endpoint
+ * under test, and states write auth only where the server lists a write tool.
+ *
+ * Both lists are `toolCard` projections, so anything short of equality is a
+ * manifest built from something other than the server's own tools. Pass
+ * `writeAuth` where the server's writes take a credential the manifest should
+ * describe, and the check runs both ways.
+ */
+export async function manifestParity(
+  t: Tester,
+  opts: { url?: string; writeAuth?: boolean } = {},
+): Promise<void> {
+  const manifest = (await (await fetch(opts.url ?? `${t.base}/.well-known/mcp.json`)).json()) as {
+    tools?: Array<{ name: string }>;
+    mcp?: { endpoint?: string };
+    auth?: { writes?: unknown };
+  };
+  const listed = (await t.rpc('tools/list')).result?.tools ?? [];
+  const names = (xs: ReadonlyArray<{ name: string }>) => xs.map(x => x.name).sort().join(' ');
+  const same = JSON.stringify(manifest.tools) === JSON.stringify(listed);
+  t.check(
+    'mcp.json is tools/list',
+    same && listed.length > 0,
+    same ? `${listed.length} tools` : names(manifest.tools ?? []) === names(listed) ? firstDifference(manifest.tools, listed) : `mcp.json: ${names(manifest.tools ?? [])} | tools/list: ${names(listed)}`,
+  );
+  // By path: the manifest names the canonical origin, and a run against a dev server is not it.
+  const path = (u: string | undefined) => (u ? new URL(u, t.base).pathname : '');
+  t.check('mcp.json names the endpoint', path(manifest.mcp?.endpoint) === path(t.endpoint), `${manifest.mcp?.endpoint}`);
+  const writes = listed.filter(x => x.annotations?.readOnlyHint === false).length;
+  const states = !!manifest.auth?.writes;
+  t.check(
+    'mcp.json write auth',
+    (!states || writes > 0) && (opts.writeAuth === undefined || states === opts.writeAuth),
+    `auth.writes ${states ? 'stated' : 'absent'}, ${writes} write tools listed${opts.writeAuth === undefined ? '' : `, expected ${opts.writeAuth ? 'stated' : 'absent'}`}`,
+  );
+}
+
+/**
+ * Two surfaces answering one question answer it identically: a tool's rows and
+ * the GET API's, a tool's search and the `?q=` page's. Two empty answers are
+ * not agreement, so an empty one fails.
+ */
+export function rowParity(t: Tester, label: string, mcp: unknown, rest: unknown): void {
+  const same = JSON.stringify(mcp) === JSON.stringify(rest);
+  t.check(label, same && !vacuous(mcp), vacuous(mcp) ? 'nothing to compare: the MCP answer is empty' : same ? 'identical' : firstDifference(mcp, rest));
+}
+
+/**
+ * A page reads the same over MCP as at its markdown twin: the tool's text is
+ * the twin's body, after the frontmatter, and after the `# Title` line the twin
+ * adds where the page's own blocks open with no h1.
+ */
+export async function twinParity(t: Tester, label: string, twinUrl: string, content: string): Promise<void> {
+  const url = twinUrl.startsWith('http') ? twinUrl : `${t.base}/${twinUrl.replace(/^\//, '')}`;
+  const res = await fetch(url);
+  let body = (await res.text()).replace(/^---\n[\s\S]*?\n---\n+/, '').trim();
+  const text = content.trim();
+  if (!text.startsWith('# ')) body = body.replace(/^# [^\n]*\n+/, '');
+  t.check(
+    label,
+    res.ok && !!text && body === text,
+    !res.ok ? `${res.status} ${url}` : !text ? 'nothing to compare: the MCP text is empty' : body === text ? `${text.length} chars` : firstDifference(text, body),
+  );
+}
+
+/**
+ * What an edit starts from, on any server built on the wiki read tools: rows
+ * carry the id a pageList block takes, `get_page` with `blocks: true` returns
+ * the stored blocks and the version a save takes as its base, and the history's
+ * newest revision is that version. `validate` is the site's own block check,
+ * so blocks the tool hands out are blocks the site's write takes back.
+ */
+export async function editReadChecks(
+  t: Tester,
+  opts: {
+    path: string;
+    endpoint?: string;
+    rows?: ReadonlyArray<{ id?: unknown }>;
+    validate?: (blocks: unknown[]) => true | string;
+    label?: string;
+  },
+): Promise<void> {
+  const endpoint = opts.endpoint ?? t.endpoint;
+  const label = (s: string) => (opts.label ? `[${opts.label}] ${s}` : s);
+  if (opts.rows) {
+    const rows = opts.rows;
+    t.check(label('rows carry the page id'), rows.length > 0 && rows.every(r => typeof r.id === 'string' && r.id.length > 0), `${rows.length} rows, first id=${String(rows[0]?.id)}`);
+  }
+  const page = t.payload(await t.callAt(endpoint, 'get_page', { path: opts.path, blocks: true })) as {
+    id?: string; version?: string; content?: unknown; metadata?: unknown;
+  };
+  const blocks = Array.isArray(page?.content) ? (page.content as unknown[]) : null;
+  const verdict = blocks && opts.validate ? opts.validate(blocks) : true;
+  t.check(
+    label('get_page(blocks)'),
+    !!page?.id && !!page.version && !!blocks && typeof page.metadata === 'object' && verdict === true,
+    !blocks ? `no block array: ${JSON.stringify(page).slice(0, 80)}` : verdict !== true ? `the site's block check refuses them: ${verdict}` : `${blocks.length} blocks, v${page.version}`,
+  );
+  const history = t.payload(await t.callAt(endpoint, 'get_page_history', { path: opts.path, limit: 3 })) as {
+    currentVersion?: string; revisions?: Array<{ id?: string; version?: string; author?: unknown }>;
+  };
+  const newest = history?.revisions?.[0];
+  t.check(
+    label('get_page_history'),
+    !!newest?.id && newest.version === history.currentVersion && newest.version === page?.version && 'author' in newest,
+    `${history?.revisions?.length ?? 0} revisions, newest v${newest?.version} of v${history?.currentVersion}, page v${page?.version}`,
+  );
+}
+
+/**
+ * What a read tool hands out, a write tool takes back unchanged, and the page
+ * reads the same after: the read's shape is the write's. `write` gets the read
+ * as it came; `read` is called again after.
+ */
+export async function roundTrip(
+  t: Tester,
+  label: string,
+  io: { read: () => Promise<unknown>; write: (value: unknown) => Promise<Rpc> },
+): Promise<void> {
+  const before = await io.read();
+  const wrote = await io.write(before);
+  const after = await io.read();
+  const failed = wrote.error ? `-${wrote.error.code} ${wrote.error.message}` : wrote.result?.isError ? String(t.payload(wrote)).slice(0, 100) : '';
+  t.check(
+    label,
+    !vacuous(before) && !failed && JSON.stringify(after) === JSON.stringify(before),
+    vacuous(before) ? 'nothing to compare: the read is empty' : failed ? `the write refused its own read: ${failed}` : JSON.stringify(after) === JSON.stringify(before) ? 'unchanged' : firstDifference(after, before),
+  );
+}
+
+/**
+ * Every field a REST write documents, the matching tool takes. An edit tool
+ * missing the version field the editor sends overwrites whatever landed between
+ * an agent's read and its write. `ops` pairs an OpenAPI path and method with
+ * the tool that does the same write.
+ */
+export async function openapiWriteParity(
+  t: Tester,
+  ops: ReadonlyArray<readonly [path: string, method: string, tool: string]>,
+  specUrl = `${t.base}/.well-known/openapi.json`,
+): Promise<void> {
+  type Op = { requestBody?: { content?: Record<string, { schema?: { properties?: Record<string, unknown> } }> } };
+  const spec = (await (await fetch(specUrl)).json()) as { paths?: Record<string, Record<string, Op>> };
+  const tools = (await t.rpc('tools/list')).result?.tools ?? [];
+  for (const [path, method, tool] of ops) {
+    const content = spec.paths?.[path]?.[method.toLowerCase()]?.requestBody?.content ?? {};
+    const fields = [...new Set(Object.values(content).flatMap(c => Object.keys(c.schema?.properties ?? {})))];
+    const props = Object.keys((tools.find(x => x.name === tool)?.inputSchema as { properties?: object } | undefined)?.properties ?? {});
+    const missing = fields.filter(f => !props.includes(f));
+    t.check(
+      `${tool} takes ${method.toUpperCase()} ${path}`,
+      fields.length > 0 && missing.length === 0,
+      !fields.length ? `the spec documents no body for ${method.toUpperCase()} ${path}` : missing.length ? `missing: ${missing.join(', ')}` : `${fields.length} fields`,
+    );
+  }
+}
+
+/**
+ * The ROLA recipe a challenge tool hands out names the origin the verifier
+ * checks: the origin under test. One that named the canonical site while the
+ * verifier read another variable failed every signature off that site.
+ */
+export async function rolaOriginCheck(
+  t: Tester,
+  opts: { origin?: string; endpoint?: string; tool?: string } = {},
+): Promise<void> {
+  const origin = opts.origin ?? new URL(t.base).origin;
+  const answer = t.payload(await t.callAt(opts.endpoint ?? t.endpoint, opts.tool ?? 'get_challenge')) as { sign?: { message?: string } };
+  const message = answer?.sign?.message ?? '';
+  t.check('ROLA recipe names this origin', message.includes(`"${origin}"`), `expects "${origin}" in: …${message.slice(-90)}`);
+}

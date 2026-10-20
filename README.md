@@ -249,6 +249,16 @@ process.exit(t.summary());
 
 What stays in your repo is fixtures: which tools you expect, what a good answer from each looks like, and which text surfaces you publish. `payloadBudget` weighs every listed call **and** every read-only tool that takes no required arguments, because the one tool nobody thought to list is the one that answers with 3.3 MB; pass a per-call `maxBytes` for a bulk-export tool that is deliberately large. It also asserts that a JSON answer arrived with `structuredContent`.
 
+The drift checks hold an MCP server to what its own site does, so a tool cannot describe, accept or return something the site does not:
+
+- `manifestParity(t, { writeAuth? })`: `/.well-known/mcp.json` is `tools/list` tool for tool, names the endpoint under test, and states write auth only where a write tool is listed (both ways, given `writeAuth`).
+- `rowParity(t, label, mcp, rest)`: a tool's answer and the GET API's or `?q=` page's are identical, and not both empty.
+- `twinParity(t, label, twinUrl, text)`: a read tool's text is the page's markdown twin, past its frontmatter and the title line.
+- `editReadChecks(t, { path, rows?, validate?, endpoint? })`: rows carry page ids, `get_page` with `blocks: true` returns blocks the site's own `validate` accepts and a version, and `get_page_history`'s newest revision is that version.
+- `roundTrip(t, label, { read, write })`: what a read tool hands out, the write tool takes back unchanged, and the next read matches.
+- `openapiWriteParity(t, [[path, method, tool], …])`: every field an OpenAPI write documents, the matching tool takes.
+- `rolaOriginCheck(t)`: a challenge tool's ROLA recipe names the origin under test.
+
 `standardVersionSources(t, openapiPaths)` is the `versionCoherence` map every S10 surface serves — both agent-card paths, `mcp.json`, the server card and each path the OpenAPI document answers at — so a suite names only the paths it adds. `t.rpcAt(endpoint, …)` and `t.callAt` drive a second MCP endpoint on the same surface with the same backoff, User-Agent and tally.
 
 ```ts
