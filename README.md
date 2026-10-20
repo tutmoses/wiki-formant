@@ -542,6 +542,18 @@ export const SITE = siteRefs(SITE_URL);
 <JsonLd data={siteGraphLd({ name, url: SITE_URL, logo, sameAs, searchUrl, api })} />
 ```
 
+## Social cards
+
+`wiki-formant/og` is the card at `/og`, as the element `next/og`'s `ImageResponse` takes. `SocialCard` is the frame: an eyebrow, a title fitted with `describe`, anything under it, then the description and the site's mark along the foot, bottom-aligned on a 1200×630 field. The field and the art are arguments, because they were all that differed: two wikis had each written the same seeded gradient with translucent circles, which is `bubbles(rand, { field, colors })`, and a third draws its own art and passes it as `art`. `cardRandom(...text)` seeds either from the page, so one page always draws the same card. `OG_SIZE` and `OG_HEADERS` (a day at the CDN, a week stale) go on the response.
+
+```tsx
+const rand = cardRandom(title, eyebrow);
+const { background, art } = bubbles(rand, { field: [BG, NAVY], colors: [GREEN, ORANGE] });
+return new ImageResponse(<SocialCard {...{ title, eyebrow, description, background, art }} mark="example.org" colors={{ text, muted, accent }} fontFamily="Inter" />, { ...OG_SIZE, headers: OG_HEADERS, fonts: await fonts });
+```
+
+Fonts stay with the site: Next traces a font file into the function only from a literal path in the app's own code, and satori reads TTF or OTF, never the woff2 `next/font` serves. The frame never sets a style key to `undefined`, which satori throws on rather than skipping; `scrim` darkens the foot for art that is a photograph.
+
 ## Revisions
 
 What changed between two versions of a page, and therefore which semver bump to
