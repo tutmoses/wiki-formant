@@ -11,6 +11,25 @@
    panel showed at once; one never received the utility classes ColumnsView
    used to emit, so two of its four alignments did nothing. */
 
+/* ---- the page frame ---------------------------------------------------------
+   The three numbers every site's page is laid out by, and the one exception to
+   "no design token": they are the frame, not a look, and four sites restating
+   them is how one of them came to draw an 80rem page while the rest drew 72.
+   The column is 72rem with its gutters inside it, the rail 18rem, and the
+   gutter 16 / 24 / 32px at base / 640 / 1024, the header, column and footer
+   reading the same one so they line up. STRUCTURE.md D8 is the spec.
+
+   This file loads into the components layer, which outranks Tailwind's theme
+   layer: a site does not restate these in `@theme`, and one that must differ
+   sets the property on the element that differs. */
+:root {
+  --content-width: 72rem;
+  --sidebar-width: 18rem;
+  --page-pad: 1rem;
+}
+@media (min-width: 40rem) { :root { --page-pad: 1.5rem; } }
+@media (min-width: 64rem) { :root { --page-pad: 2rem; } }
+
 /* ---- ColumnsView ----------------------------------------------------------
    Stacked until there is room for a row. `data-gap` and `data-align` replace
    the Tailwind utilities the view used to emit, which only reached a site whose
@@ -93,7 +112,7 @@
   position: sticky;
   top: var(--rail-top, 0px);
   flex-shrink: 0;
-  width: var(--sidebar-width, 18rem);
+  width: var(--sidebar-width);
   height: calc(100dvh - var(--rail-top, 0px));
   overflow: hidden;
   border-inline-end: var(--rail-border, none);
@@ -109,7 +128,7 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
 .wiki-sidebar__scroll {
   display: flex;
   flex-direction: column;
-  width: var(--sidebar-width, 18rem);
+  width: var(--sidebar-width);
   height: 100%;
   overflow-y: auto;
 }
@@ -148,6 +167,9 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
 .code-tabs-btn { cursor: pointer; }
 .editorial-banner { display: flex; }
 .infobox { overflow-wrap: anywhere; }
+/* A link grid's description is prose, so it stops at the site's measure: it
+   sits outside the article's prose box, and on radix.wiki ran 709px. */
+.link-grid-group-description { max-width: var(--measure); }
 .infobox-series { display: flex; flex-direction: column; }
 .heading-anchor,
 .ref-backlink,
