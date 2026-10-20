@@ -244,6 +244,10 @@ export const SEARCH_GAPS: Gap = { event: 'Search Query', prop: 'q', where: { res
 export const STATS_FILTERS = ['page', 'entry', 'source', 'country', 'device'] as const;
 export type StatsFilter = Partial<Record<(typeof STATS_FILTERS)[number], string>>;
 
+/** A count as a stats page prints it. Here, not in the `'use client'` figures, because
+ * `Stats` calls it on the server, where a client module's export is only a reference. */
+export const count = (n: number) => n.toLocaleString('en');
+
 /**
  * Each filter as a test on one visit. A page, country or device is any of the
  * visit's views; an entry page or a source is its first. `(none)` is no source.

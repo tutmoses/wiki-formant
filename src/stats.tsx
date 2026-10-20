@@ -11,9 +11,9 @@
 // list is a link that adds its own, and every narrowing a link that drops it.
 
 import type { CSSProperties, ReactNode } from 'react';
-import { STATS_FILTERS, type Digest, type StatsFilter } from './analytics.js';
+import { STATS_FILTERS, count, type Digest, type StatsFilter } from './analytics.js';
 import type { PasskeyGate } from './passkey.js';
-import { PasskeyButton, PasskeySignOut, StatsFigures, count } from './stats-figures.js';
+import { PasskeyButton, PasskeySignOut, StatsFigures } from './stats-figures.js';
 
 export interface StatsProps {
   /** One window's figures, from `digest` in `wiki-formant/analytics`. */

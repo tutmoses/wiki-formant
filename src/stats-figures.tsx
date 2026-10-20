@@ -8,10 +8,9 @@
 
 import { startAuthentication, startRegistration } from '@simplewebauthn/browser';
 import { useMemo, useState, type ReactNode } from 'react';
-import type { Digest, DigestDay } from './analytics.js';
+import { count, type Digest, type DigestDay } from './analytics.js';
 import { TimeChart, stepDecimals, type ChartAggregate, type ChartPoint } from './chart.js';
 
-export const count = (n: number) => n.toLocaleString('en');
 // Whole seconds and percentages, unless an axis tick's step needs more to tell it from the next.
 const places = (step?: number) => (step ? stepDecimals(step) : 0);
 const duration = (s: number, step?: number) => (s < 60 ? `${s.toFixed(places(step))}s` : `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`);
