@@ -455,6 +455,129 @@ export function BreadcrumbsRow({
   );
 }
 
+// ---- pager --------------------------------------------------------------------
+
+export interface PagerProps {
+  /** The page showing, from 1. */
+  page: number;
+  total: number;
+  /** Each page's address: the steps are links and the pager ships no JavaScript. */
+  href?: (page: number) => string;
+  /** Or what a step does: the steps are buttons. A carousel passes `go`. */
+  onPage?: (page: number) => void;
+  /** Step round from either end, as a carousel does, instead of stopping. */
+  wrap?: boolean;
+  /** Both steps inert, as while the next page loads. */
+  disabled?: boolean;
+  /** What one page is: the middle reads "<noun> 2 of 9", the steps "Previous <noun>". */
+  noun?: string;
+  prev?: ReactNode;
+  next?: ReactNode;
+  /** The steps at the ends of the line rather than beside the count. */
+  spread?: boolean;
+  /** The landmark's name, when the page has more than one pager. */
+  label?: string;
+  link?: WikiLinkComponent;
+  className?: string;
+}
+
+const Arrow = ({ children }: { children: string }) => <span aria-hidden="true">{children}</span>;
+
+/**
+ * "← Previous · Page 2 of 9 · Next →", for search results and for a carousel.
+ *
+ * Three sites wrote this line by hand, two of them for paged results (one with
+ * links, one with buttons) and one for a snap row of points, and each stopped
+ * at the ends differently: a disabled button, an empty span, a wrap. Here a
+ * step at an end with nowhere to go stays in place, inert, so the count does
+ * not jump sideways on the first and last page.
+ */
+export function Pager({
+  page,
+  total,
+  href,
+  onPage,
+  wrap = false,
+  disabled = false,
+  noun = 'Page',
+  prev = <><Arrow>←</Arrow> Previous</>,
+  next = <>Next <Arrow>→</Arrow></>,
+  spread = false,
+  label = `${noun}s`,
+  link: Link = Anchor,
+  className = '',
+}: PagerProps) {
+  if (total < 2) return null;
+  const to = (dir: 1 | -1) => {
+    const p = page + dir;
+    return p >= 1 && p <= total ? p : wrap ? (p < 1 ? total : 1) : null;
+  };
+  const name = noun.toLowerCase();
+  const step = (dir: 1 | -1, content: ReactNode) => {
+    const p = disabled ? null : to(dir);
+    const aria = `${dir < 0 ? 'Previous' : 'Next'} ${name}`;
+    if (onPage) {
+      return (
+        <button type="button" className="pager-step" aria-label={aria} disabled={p === null} onClick={() => p !== null && onPage(p)}>
+          {content}
+        </button>
+      );
+    }
+    return p !== null && href ? (
+      <Link href={href(p)} className="pager-step" rel={dir < 0 ? 'prev' : 'next'}>{content}</Link>
+    ) : (
+      <span className="pager-step" aria-disabled="true">{content}</span>
+    );
+  };
+  return (
+    <nav aria-label={label} className={`pager ${className}`.trim()} data-spread={spread || undefined}>
+      {step(-1, prev)}
+      <span className="pager-count" aria-live={onPage ? 'polite' : undefined}>
+        {noun} {page} of {total}
+      </span>
+      {step(1, next)}
+    </nav>
+  );
+}
+
+export interface SnapDotsProps {
+  count: number;
+  /** The item showing, from 0: `useSnapRow`'s `at`. */
+  at: number;
+  /** `useSnapRow`'s `go`: each dot becomes a button. Omit it for dots that only count. */
+  onGo?: (i: number) => void;
+  /** What one item is, for each button's name: "Go to <noun> 3". */
+  noun?: string;
+  className?: string;
+}
+
+/**
+ * A snap row's dots, one per item, the one in view marked.
+ *
+ * With `onGo` each is a button, named, its 0.5rem mark in a 1.5rem target; on a
+ * card whose whole face is already a link it is only a count, `aria-hidden`.
+ * The mark is the `<i>` either way, so one rule draws both, and `data-on`
+ * marks the current one in both.
+ */
+export function SnapDots({ count, at, onGo, noun = 'item', className = '' }: SnapDotsProps) {
+  if (count < 2) return null;
+  const cls = `snap-dots ${className}`.trim();
+  const dots = Array.from({ length: count }, (_, i) => i);
+  return onGo ? (
+    <span className={cls}>
+      {dots.map(i => (
+        <button key={i} type="button" aria-label={`Go to ${noun} ${i + 1}`} aria-current={i === at || undefined} data-on={i === at || undefined} onClick={() => onGo(i)}>
+          <i />
+        </button>
+      ))}
+    </span>
+  ) : (
+    <span className={cls} aria-hidden="true">
+      {dots.map(i => <i key={i} data-on={i === at || undefined} />)}
+    </span>
+  );
+}
+
 // ---- infobox -------------------------------------------------------------------
 
 export interface InfoboxAsideProps {

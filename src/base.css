@@ -201,6 +201,44 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
 }
 .breadcrumbs .separator { user-select: none; }
 
+/* ---- Pager and SnapDots -----------------------------------------------------
+   One line that never wraps, the count in tabular figures so stepping does not
+   shift it. A step is a bare control: its colour, size and hit area are the
+   site's, set on `.pager-step`. The dots' colours are `--snap-dot` and
+   `--snap-dot-on`, defaulting to the text colour faint and full. */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--pager-gap, 1rem);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.pager[data-spread] { justify-content: space-between; gap: 0; }
+.pager-step { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.pager-step:is(:disabled, [aria-disabled='true']) { opacity: 0.4; cursor: default; }
+
+.snap-dots { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--snap-dot-gap, 0); }
+.snap-dots button {
+  display: grid;
+  place-items: center;
+  inline-size: var(--snap-dot-hit, 1.5rem);
+  block-size: var(--snap-dot-hit, 1.5rem);
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.snap-dots i {
+  display: block;
+  inline-size: var(--snap-dot-size, 0.5rem);
+  block-size: var(--snap-dot-size, 0.5rem);
+  border-radius: 9999px;
+  background: var(--snap-dot, color-mix(in srgb, currentColor 30%, transparent));
+  transition: background-color 150ms;
+}
+.snap-dots :is(i[data-on], [data-on] > i) { background: var(--snap-dot-on, currentColor); }
+
 /* ---- spinner, skeleton, empty state ----------------------------------------
    The shape and the motion; colour, size and surface are the site's. The
    spinner is a ring in currentColor sized by `--spinner-size`, the skeleton a

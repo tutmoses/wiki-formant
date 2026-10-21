@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { FacetBar, FacetSummary, RelatedPages, Anchor, InfoboxAside, InfoboxFacts } from 'wiki-formant/react-server';
+import { FacetBar, FacetSummary, RelatedPages, Anchor, InfoboxAside, InfoboxFacts, Pager, SnapDots } from 'wiki-formant/react-server';
 
 const html = (c, p) => renderToStaticMarkup(createElement(c, p));
 
@@ -103,4 +103,37 @@ test('a hostile fact value is text, and a javascript: URL is not a link', () => 
 test('the infobox aside is named and carries its series', () => {
   const out = html(InfoboxAside, { label: 'Key facts about A', series: { title: 'Consensus', href: '/c' }, className: 'stack' });
   assert.equal(out, '<aside class="infobox stack" aria-label="Key facts about A"><div class="infobox-series"><span>Part of a series on</span><a href="/c">Consensus</a></div></aside>');
+});
+
+test('a linked pager names its neighbours and holds an inert step at each end', () => {
+  const href = p => `/search?page=${p}`;
+  const first = html(Pager, { page: 1, total: 3, href });
+  assert.match(first, /^<nav aria-label="Pages" class="pager">/);
+  assert.match(first, /<span class="pager-step" aria-disabled="true"><span aria-hidden="true">←<\/span> Previous<\/span>/);
+  assert.match(first, /<span class="pager-count">Page 1 of 3<\/span>/);
+  assert.match(first, /<a href="\/search\?page=2" class="pager-step" rel="next">Next <span aria-hidden="true">→<\/span><\/a>/);
+  const mid = html(Pager, { page: 2, total: 3, href, link: Fwd });
+  assert.match(mid, /<a href="\/search\?page=1" class="pager-step" rel="prev">/);
+  assert.match(mid, /<a href="\/search\?page=3" class="pager-step" rel="next">/);
+});
+
+test('a button pager disables at the ends, wraps when asked, and says nothing for one page', () => {
+  const onPage = () => {};
+  const last = html(Pager, { page: 3, total: 3, onPage });
+  assert.match(last, /<button type="button" class="pager-step" aria-label="Next page" disabled="">/);
+  assert.match(last, /<span class="pager-count" aria-live="polite">/);
+  const round = html(Pager, { page: 3, total: 3, onPage, wrap: true, noun: 'Point', prev: '←', next: '→', spread: true });
+  assert.match(round, /data-spread="true"/);
+  assert.match(round, /<button type="button" class="pager-step" aria-label="Next point">→<\/button>/);
+  assert.match(round, /Point 3 of 3/);
+  assert.match(html(Pager, { page: 2, total: 3, onPage, disabled: true }), /aria-label="Previous page" disabled="">/);
+  assert.equal(html(Pager, { page: 1, total: 1, onPage }), '');
+});
+
+test('snap dots are named buttons with a handler and a hidden count without one', () => {
+  const live = html(SnapDots, { count: 3, at: 1, onGo: () => {}, noun: 'point' });
+  assert.match(live, /^<span class="snap-dots"><button type="button" aria-label="Go to point 1"><i><\/i><\/button>/);
+  assert.match(live, /<button type="button" aria-label="Go to point 2" aria-current="true" data-on="true"><i><\/i><\/button>/);
+  assert.equal(html(SnapDots, { count: 2, at: 0 }), '<span class="snap-dots" aria-hidden="true"><i data-on="true"></i><i></i></span>');
+  assert.equal(html(SnapDots, { count: 1, at: 0, onGo: () => {} }), '');
 });
