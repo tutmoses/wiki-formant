@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  mcpResponse, mcpGet, mcpOptions, handleMcp, McpToolError,
+  mcpResponse, mcpGet, mcpOptions, handleMcp, McpToolError, readOnly,
   MCP_LEGACY_PROTOCOL_VERSION, MCP_META, MCP_MODERN_VERSIONS, MCP_PROTOCOL_VERSIONS,
 } from 'wiki-formant/mcp';
 import { resetRateLimits } from 'wiki-formant/rate-limit';
@@ -592,4 +592,18 @@ test('an entry that is not a JSON-RPC object is -32600, never a thrown 500', asy
   const [bad, pong] = await batch.json();
   assert.equal(bad.error.code, -32600);
   assert.deepEqual(pong.result, {});
+});
+
+test('readOnly drops the writes and every line and prompt that names one', () => {
+  const tool = (name, annotations) => ({ name, description: name, inputSchema: { type: 'object', properties: {} }, annotations, handler: async () => ({}) });
+  const surface = readOnly({
+    serverInfo: { name: 's', version: '1' },
+    instructions: 'Call search first.\nTo write, call login then save.\nget_paid costs money.',
+    tools: [tool('search', { readOnlyHint: true, openWorldHint: false }), tool('save', { readOnlyHint: false }), tool('login', undefined), tool('get_paid', { readOnlyHint: true })],
+    prompts: [{ name: 'find', description: '', text: 'Call search.' }, { name: 'edit', description: '', text: 'Call search, then save.' }],
+  }, ['get_paid']);
+  assert.deepEqual(surface.tools.map(t => t.name), ['search']);
+  assert.deepEqual(surface.tools[0].annotations, { readOnlyHint: true, destructiveHint: false, openWorldHint: false });
+  assert.equal(surface.instructions, 'Call search first.');
+  assert.deepEqual(surface.prompts.map(p => p.name), ['find']);
 });

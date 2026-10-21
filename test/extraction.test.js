@@ -4,7 +4,7 @@ import { hashStr, seededRandom } from 'wiki-formant/seeded';
 import { corpusRoute, textHeaders } from 'wiki-formant/http';
 import { MCP_RATE_LIMIT, MCP_RATE_LIMIT_PER_MIN, MCP_RATE_LIMIT_TEXT } from 'wiki-formant/rate-limit';
 import { BANNER_LABELS, BANNER_VARIANTS } from 'wiki-formant/text';
-import { registryAuthHandler } from 'wiki-formant/well-known';
+import { openaiChallengeHandler, registryAuthHandler } from 'wiki-formant/well-known';
 import {
   TRANSIENT_CODES,
   describeFailure,
@@ -117,6 +117,13 @@ test('a configured key serves the MCPv1 record uncached', async () => {
 test('a P-384 key declares its own type', async () => {
   const res = registryAuthHandler('k', 'p384')();
   assert.match(await res.text(), /k=p384;/);
+});
+
+test('the OpenAI challenge is the bare token, or a 404 when unset', async () => {
+  assert.equal(openaiChallengeHandler(undefined)().status, 404);
+  const res = openaiChallengeHandler('tok_123\n')();
+  assert.equal(res.headers.get('Content-Type'), 'text/plain; charset=utf-8');
+  assert.equal(await res.text(), 'tok_123');
 });
 
 // ---- link check -------------------------------------------------------------

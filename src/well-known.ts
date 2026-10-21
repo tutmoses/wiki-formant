@@ -253,6 +253,19 @@ export function registryAuthHandler(
   };
 }
 
+/**
+ * `/.well-known/openai-apps-challenge`: the token OpenAI's plugin portal issues
+ * to prove the MCP origin is the publisher's, served as the bare text it checks
+ * for. An env var for the same reason as the registry key: the portal issues it
+ * per plugin, after the code has shipped. Unset → 404.
+ */
+export function openaiChallengeHandler(token = process.env.OPENAI_APPS_CHALLENGE): () => Response {
+  return () =>
+    token
+      ? new Response(token.trim(), { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } })
+      : new Response('Not found', { status: 404 });
+}
+
 // ---- MCP discovery manifest --------------------------------------------------
 
 /** A tool as `/.well-known/mcp.json` lists it: what tools/list says, no handler. */
