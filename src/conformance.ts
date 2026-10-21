@@ -925,3 +925,133 @@ export async function rolaOriginCheck(
   const message = answer?.sign?.message ?? '';
   t.check('ROLA recipe names this origin', message.includes(`"${origin}"`), `expects "${origin}" in: …${message.slice(-90)}`);
 }
+
+/** The parts of a ChatGPT plugin package `pluginParity` reads. */
+interface PluginJson {
+  extensions?: {
+    'com.openai'?: {
+      interface?: Record<string, unknown>;
+      review?: {
+        test_cases?: {
+          positive?: Array<{ description?: string; prompt?: string; tools_triggered?: string; expected_behavior?: string }>;
+          negative?: Array<{ description?: string; prompt?: string }>;
+        };
+      };
+    };
+  };
+}
+interface PluginMcpJson {
+  mcpServers?: Record<string, { type?: string; url?: string }>;
+}
+
+const LISTING_LIMITS = { displayName: 30, shortDescription: 30, longDescription: 4000, developerName: 80, category: 80 } as const;
+const LISTING_URLS = ['websiteURL', 'supportURL', 'privacyPolicyURL', 'termsOfServiceURL'] as const;
+const HINTS = ['readOnlyHint', 'destructiveHint', 'openWorldHint'] as const;
+
+/**
+ * A ChatGPT plugin package agrees with the server it names. The ZIP is uploaded
+ * once and OpenAI rescans the server every day, so a renamed tool, a write that
+ * reaches the plugin's endpoint, a description naming a tool the endpoint lacks,
+ * or a moved legal page fails review with nothing in the repo noticing. Pass the
+ * parsed `chatgpt/plugin.json` and `chatgpt/mcp.json`.
+ *
+ * URLs on the plugin's own origin are rebased onto the origin under test, so a
+ * run against a dev server checks the dev server. The demo recording is the
+ * one review field no code can hold, so it is not checked.
+ */
+export async function pluginParity(t: Tester, pkg: { plugin: unknown; mcp: unknown }): Promise<void> {
+  const openai = (pkg.plugin as PluginJson).extensions?.['com.openai'] ?? {};
+  const listing = openai.interface ?? {};
+  const cases = openai.review?.test_cases ?? {};
+  const servers = Object.values((pkg.mcp as PluginMcpJson).mcpServers ?? {});
+  const named = servers[0]?.url ?? '';
+  t.check(
+    'plugin names one server',
+    servers.length === 1 && servers[0]?.type === 'streamable-http' && named.startsWith('https://'),
+    `${servers.length} server(s): ${named || 'no url'}`,
+  );
+  if (!named.startsWith('https://')) return;
+  const canonical = new URL(named).origin;
+  const here = (url: string) => {
+    const u = new URL(url);
+    return u.origin === canonical ? new URL(`${u.pathname}${u.search}`, t.base).href : url;
+  };
+
+  const endpoint = here(named);
+  const tools = (await t.rpcAt(endpoint, 'tools/list')).result?.tools ?? [];
+  const names = new Set(tools.map(x => x.name));
+  t.check('plugin endpoint answers', tools.length > 0, `${endpoint}: ${tools.length} tools`);
+
+  const triggered = [...new Set((cases.positive ?? []).flatMap(c => (c.tools_triggered ?? '').split(/[\s,]+/).filter(Boolean)))];
+  const absent = triggered.filter(n => !names.has(n));
+  t.check(
+    'review cases name live tools',
+    triggered.length > 0 && absent.length === 0,
+    absent.length ? `not on the endpoint: ${absent.join(', ')}` : `${triggered.join(', ')}`,
+  );
+
+  const vague = tools.filter(x => HINTS.some(k => typeof x.annotations?.[k] !== 'boolean'));
+  t.check('plugin hints are booleans', vague.length === 0, vague.length ? vague.map(x => x.name).join(', ') : `${HINTS.join(', ')} on ${tools.length} tools`);
+
+  const writes = tools.filter(x => x.annotations?.readOnlyHint === false).map(x => x.name);
+  const claimsWrite = Array.isArray(listing.capabilities) && listing.capabilities.includes('Write');
+  t.check(
+    'plugin capabilities',
+    claimsWrite === writes.length > 0,
+    `capabilities ${claimsWrite ? 'claim' : 'omit'} Write; ${writes.length ? `writes: ${writes.join(', ')}` : 'no write tools'}`,
+  );
+
+  // A tool the main endpoint has and the plugin's lacks, named anywhere the
+  // model reads on the plugin's endpoint, sends it to a call that cannot work.
+  const lost = ((await t.rpc('tools/list')).result?.tools ?? []).map(x => x.name).filter(n => !names.has(n));
+  const init = await t.rpcAt(endpoint, 'initialize', {
+    protocolVersion: MCP_LEGACY_PROTOCOL_VERSION,
+    capabilities: {},
+    clientInfo: { name: 'plugin-parity', version: '1' },
+  });
+  const prompts = (await t.rpcAt(endpoint, 'prompts/list')).result?.prompts ?? [];
+  const texts: Array<[string, string]> = [
+    ['instructions', init.result?.instructions ?? ''],
+    ...tools.map((x): [string, string] => [`${x.name} description`, x.description ?? '']),
+  ];
+  for (const p of prompts) {
+    const got = (await t.rpcAt(endpoint, 'prompts/get', { name: p.name })).result as
+      | { messages?: Array<{ content?: { text?: string } }> }
+      | undefined;
+    texts.push([`prompt ${p.name}`, (got?.messages ?? []).map(m => m.content?.text ?? '').join('\n')]);
+  }
+  const strays = texts.flatMap(([where, text]) =>
+    lost.filter(n => new RegExp(`\\b${n}\\b`).test(text)).map(n => `${where} names ${n}`),
+  );
+  t.check('plugin text names only its tools', strays.length === 0, strays.length ? strays.join('; ') : `${texts.length} texts, ${lost.length} tools withheld`);
+
+  const str = (k: string) => (typeof listing[k] === 'string' ? (listing[k] as string) : '');
+  const starters = Array.isArray(listing.defaultPrompt) ? (listing.defaultPrompt as unknown[]) : [];
+  const positive = cases.positive ?? [];
+  const faults = [
+    ...Object.entries(LISTING_LIMITS).filter(([k, n]) => !str(k) || str(k).length > n).map(([k, n]) => `${k} ${str(k).length}/${n}`),
+    ...(starters.length > 3 || starters.some(p => typeof p !== 'string' || p.length > 128) ? ['defaultPrompt: at most 3, 128 each'] : []),
+    ...(typeof listing.logo === 'string' ? [] : ['no logo']),
+    ...(positive.length === 5 && positive.every(c => c.description && c.prompt && c.tools_triggered && c.expected_behavior)
+      ? []
+      : ['5 positive cases, each with description, prompt, tools_triggered and expected_behavior']),
+    ...((cases.negative ?? []).length === 3 && (cases.negative ?? []).every(c => c.description && c.prompt) ? [] : ['3 negative cases']),
+  ];
+  t.check('plugin listing', faults.length === 0, faults.length ? faults.join('; ') : `${str('displayName')}: ${str('shortDescription')}`);
+
+  for (const k of LISTING_URLS) {
+    const url = str(k);
+    if (!url.startsWith('https://')) {
+      t.check(`listing ${k}`, false, url ? `not https: ${url}` : 'missing');
+      continue;
+    }
+    if (new URL(url).origin !== canonical) {
+      t.check(`listing ${k}`, true, `${url} (another origin, not fetched)`);
+      continue;
+    }
+    const res = await fetch(here(url));
+    const anchor = decodeURIComponent(new URL(url).hash.slice(1));
+    const found = !anchor || (await res.text()).includes(`id="${anchor}"`);
+    t.check(`listing ${k}`, res.ok && found, `${res.status} ${url}${found ? '' : ` (no id="${anchor}")`}`);
+  }
+}
