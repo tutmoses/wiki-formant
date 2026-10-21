@@ -34,6 +34,11 @@ test('iframes are held to the host list', () => {
   assert.match(clean('<iframe src="https://www.youtube.com/embed/abc"></iframe>'), /youtube/);
   assert.equal(clean('<iframe src="https://evil.example/"></iframe>'), '<iframe></iframe>');
   const own = createHtmlSanitizer({ iframeHosts: ['evil.example'] });
+  // Anyone's YouTube iframe is stored as the editor's YouTube node, once.
+  const node = '<div data-youtube-video><iframe src="https://www.youtube.com/embed/abc"></iframe></div>';
+  assert.equal(clean('<p>x</p><iframe src="https://www.youtube.com/embed/abc"></iframe>'), `<p>x</p>${node}`);
+  assert.equal(clean(node), node);
+  assert.equal(clean(clean(node)), node);
   assert.match(own('<iframe src="https://evil.example/"></iframe>'), /evil\.example/);
 });
 

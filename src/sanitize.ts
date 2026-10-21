@@ -174,8 +174,19 @@ export function createHtmlSanitizer(options: HtmlSanitizerOptions = {}): (html: 
     nonTextTags: ['script', 'style', 'textarea', 'option', 'noscript'],
   };
 
-  return (html: string): string => (!html || !html.includes('<') ? html : sanitizeHtml(html, config));
+  return (html: string): string => (!html || !html.includes('<') ? html : asYouTubeNodes(sanitizeHtml(html, config)));
 }
+
+// A YouTube player the editor did not write: an agent's, an import's, a pasted
+// embed code. Run over the sanitiser's own output, whose markup is regular.
+const BARE_YOUTUBE = /(<div data-youtube-video>)?(<iframe\b[^>]*\bsrc="https:\/\/www\.youtube(?:-nocookie)?\.com\/embed\/[^"]*"[^>]*><\/iframe>)/g;
+
+/**
+ * Every YouTube iframe in the markup the `YouTube` node stores, so the editor
+ * opens it as that node and base.css draws it as one player, whoever wrote it.
+ */
+const asYouTubeNodes = (html: string) =>
+  html.includes('youtube') ? html.replace(BARE_YOUTUBE, (all, wrapped, frame) => (wrapped ? all : `<div data-youtube-video>${frame}</div>`)) : html;
 
 type Leaf = Record<string, unknown> & { type: string };
 
