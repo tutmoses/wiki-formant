@@ -91,8 +91,6 @@ export interface RobotsGroup {
 export const AGENT_SURFACE_PATHS: readonly string[] = [
   '/api/mcp',
   '/llms.txt',
-  '/llms-index.txt',
-  '/llms-full.txt',
   '/openapi.json',
   '/.well-known/',
 ];

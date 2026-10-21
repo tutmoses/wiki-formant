@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { corpusEtag, corpusValidatorsFrom, notModified, textHeaders, markdownHeaders, descriptorHeaders, descriptorResponse, cleanSnippet, pageLine } from 'wiki-formant/http';
+import { cacheTagHeaders, corpusEtag, corpusValidatorsFrom, notModified, textHeaders, markdownHeaders, descriptorHeaders, descriptorResponse, cleanSnippet, pageLine } from 'wiki-formant/http';
 import { parsePagination, paginatedResponse, listEnvelope } from 'wiki-formant/pagination';
 import { parseVersion, formatVersion, bump } from 'wiki-formant/versioning';
 import { documentTitle, fittingTitle, TITLE_BUDGET, TITLE_LIMIT } from 'wiki-formant/metadata';
@@ -225,4 +225,9 @@ test('corpusValidatorsFrom stamps the newest date and seeds the tag the hand-wri
   const empty = corpusValidatorsFrom(['', 0], [null]);
   assert.equal(empty.lastModified, new Date(0).toUTCString());
   assert.equal(empty.etag, corpusEtag(['', 0, new Date(0)]));
+});
+
+test('cacheTagHeaders names one tag or several, comma-joined as Vercel reads them', () => {
+  assert.deepEqual(cacheTagHeaders('site:a.test'), { 'Vercel-Cache-Tag': 'site:a.test' });
+  assert.deepEqual(cacheTagHeaders(['wiki', 'page:docs/x']), { 'Vercel-Cache-Tag': 'wiki,page:docs/x' });
 });

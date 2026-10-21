@@ -52,7 +52,7 @@ test('BUG: a named group always carries a disallow', () => {
   assert.equal(rules.length, AI_CRAWLERS.length + 1 + SEARCH_ENGINES.length);
   assert.deepEqual(rules[1], {
     userAgent: 'GPTBot',
-    allow: ['/', '/llms.txt', '/api/mcp', '/llms-index.txt', '/llms-full.txt', '/openapi.json', '/.well-known/'],
+    allow: ['/', '/llms.txt', '/api/mcp', '/openapi.json', '/.well-known/'],
     disallow: ['/api/', ...RSC_DISALLOW],
   });
 });

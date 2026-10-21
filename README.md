@@ -260,6 +260,7 @@ The drift checks hold an MCP server to what its own site does, so a tool cannot 
 - `roundTrip(t, label, { read, write })`: what a read tool hands out, the write tool takes back unchanged, and the next read matches.
 - `openapiWriteParity(t, [[path, method, tool], …])`: every field an OpenAPI write documents, the matching tool takes.
 - `rolaOriginCheck(t)`: a challenge tool's ROLA recipe names the origin under test.
+- `freshAfterWriteChecks(t, urls, write, { shows?, gone? })`: each URL is read, `write` runs, and each then carries `shows` and not `gone`. It catches a twin or `llms.txt` the CDN keeps past the save that changed it, which every check that reads a surface once passes. Run it against a deployment: with no CDN in front it passes trivially.
 
 `standardVersionSources(t, openapiPaths)` is the `versionCoherence` map every S10 surface serves — both agent-card paths, `mcp.json`, the server card and each path the OpenAPI document answers at — so a suite names only the paths it adds. `t.rpcAt(endpoint, …)` and `t.callAt` drive a second MCP endpoint on the same surface with the same backoff, User-Agent and tally.
 
@@ -267,7 +268,7 @@ The drift checks hold an MCP server to what its own site does, so a tool cannot 
 await versionCoherence(t, server.version, standardVersionSources(t, ['/openapi.json', '/api/openapi.json']), init.result?.serverInfo?.version);
 ```
 
-`descriptorChecks(t)` defaults to `S10_DESCRIPTORS`, the six JSON descriptors every surface here serves, and `distinctEtagChecks(t, ['llms.txt', 'llms-index.txt', 'llms-full.txt'])` asserts that depths projecting one corpus carry different ETags — every one present, which a bare Set-size check misses.
+`descriptorChecks(t)` defaults to `S10_DESCRIPTORS`, the six JSON descriptors every surface here serves, and `distinctEtagChecks(t, ['llms.txt', 'llms-full.txt'])` asserts that depths projecting one corpus carry different ETags — every one present, which a bare Set-size check misses.
 
 ## Markdown twins
 
@@ -290,13 +291,19 @@ return new Response(
 
 `noindex` sends `X-Robots-Tag: noindex`, for a twin of an HTML page: a search engine that reads it has the page already. A document with no HTML page, an AGENTS.md, leaves it off.
 
+Put `cacheTagHeaders(tags)` in `extra`, with the tags your save path already revalidates. A route handler is held at Vercel's CDN by its `s-maxage` alone, so without `Vercel-Cache-Tag` the twin outlives every save by its edge window while the ISR page beside it is fresh. The same goes for `llms.txt`, a search index and a sitemap: any text an agent reads back after writing.
+
+```ts
+headers: markdownHeaders(lastModified, { etag, noindex: true, extra: { ...VARY_ACCEPT, ...cacheTagHeaders(pageTag(path)) } })
+```
+
 Block trees stay in your app — every project owns its own type set. Give this module HTML and it gives you markdown.
 
 > A trap worth naming: if you serve twins via a rewrite, Next drops the destination query string. The rewrite must carry the `.md` extension through to the destination path, or the twin silently serves JSON.
 
 ## Conditional GET
 
-The `llms.txt` / `llms-index.txt` / `llms-full.txt` trio are the most-recrawled URLs a wiki serves and the most expensive to render. Without a corpus-derived ETag, every AI crawler pays full price on every pass, forever.
+`llms.txt` and the markdown twins are the most-recrawled URLs a wiki serves, and a corpus export the most expensive to render. Without a corpus-derived ETag, every AI crawler pays full price on every pass, forever.
 
 A URL that answers JSON or markdown by `Accept` asks `wantsMarkdown(request)` and sends `VARY_ACCEPT` on both branches. Without the Vary, a shared cache hands one client the other's format.
 
@@ -497,7 +504,7 @@ and a crawler obeys only its most-specific matching group, so an agent with no
 group of its own falls through to `*`. Three wikis were measuring five crawlers
 they had never addressed.
 
-Every agent group also allows the agent surface — `/api/mcp`, the three `llms` exports, `/openapi.json`, `/.well-known/` — without being told. `aiAllow` is what an origin serves beyond that.
+Every agent group also allows the agent surface — `/api/mcp`, `/llms.txt`, `/openapi.json`, `/.well-known/` — without being told. `aiAllow` is what an origin serves beyond that.
 
 `crawlerRules` returns every group robots.txt needs: the wildcard, one per AI crawler, and one for each search engine. Search engines get the HTML site and none of its twins — `/*.md$` always, plus `searchDisallow` — because the `*` group keeps the machine surface open to agents, and for Google a twin is a page it already has. Two origins wrote that group by hand and the third never did, so Google crawled its twins. The `<Link>` prefetch payload (`?_rsc=`) is refused in every group.
 

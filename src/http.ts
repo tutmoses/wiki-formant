@@ -1,10 +1,9 @@
 // http.ts — conditional-GET plumbing for text corpus endpoints, and the error
 // answers every route handler gives (at the foot).
 //
-// The three llms depths (llms.txt / llms-index.txt / llms-full.txt) are the
-// most-recrawled URLs a wiki serves and the most expensive to render. With a
-// corpus-derived ETag a recrawl costs a 304 instead of a full corpus build.
-// Without one, every AI crawler pays full price on every pass, forever.
+// llms.txt and the markdown twins are the most-recrawled URLs a wiki serves.
+// With a corpus-derived ETag a recrawl costs a 304 instead of a full corpus
+// build. Without one, every AI crawler pays full price on every pass, forever.
 
 import { isoDate } from './html.js';
 
@@ -146,6 +145,23 @@ export function markdownHeaders(
     ...(opts.noindex ? { 'X-Robots-Tag': 'noindex' } : {}),
     ...opts.extra,
   };
+}
+
+/**
+ * The tag that ties a route handler's response to the writes that change it.
+ * Spread it into the response's headers, beside its `Cache-Control`.
+ *
+ * A route handler is held at Vercel's CDN by its `s-maxage` alone: the tags
+ * `revalidateTag` purges are a page's, and nothing names this response among
+ * them. So a twin, llms.txt or a search index outlived every save by its edge
+ * window, and an agent that read a page back after writing it saw the old
+ * words — four origins shipped that, each with ISR pages that were fresh. A
+ * response carrying `Vercel-Cache-Tag` is purged with the tag, so pass the
+ * tags the save path already revalidates. `freshAfterWriteChecks` holds a
+ * deployment to it.
+ */
+export function cacheTagHeaders(tags: string | readonly string[]): Record<string, string> {
+  return { 'Vercel-Cache-Tag': [tags].flat().join(',') };
 }
 
 /**

@@ -8,6 +8,7 @@ import {
   openapiWriteParity,
   rolaOriginCheck,
   editReadChecks,
+  freshAfterWriteChecks,
 } from 'wiki-formant/conformance';
 
 // A Tester that records checks and answers tool calls from a table, so the
@@ -63,6 +64,18 @@ test('twinParity strips frontmatter, and the title only where the text has no h1
   await twinParity(t, 'missing', 'c.md', 'x');
   await twinParity(t, 'empty', 'a.md', '');
   assert.deepEqual(ok(t), { titled: true, 'own h1': true, flattened: false, missing: false, empty: false });
+});
+
+test('freshAfterWriteChecks: a copy from before the write fails, the written one passes', async () => {
+  const routes = { 'https://example.org/a.md': 'old words', 'https://example.org/llms.txt': 'old words' };
+  serve(routes);
+  const t = tester();
+  // The twin moves on with the write; llms.txt keeps answering its old copy, as an edge window would.
+  await freshAfterWriteChecks(t, ['a.md', 'llms.txt'], async () => { routes['https://example.org/a.md'] = 'new words'; }, { shows: 'new', gone: 'old' });
+  assert.deepEqual(ok(t), { 'a.md after a write': true, 'llms.txt after a write': false });
+  const vacuous = tester();
+  await freshAfterWriteChecks(vacuous, ['a.md'], async () => {}, {});
+  assert.equal(vacuous.results[0].ok, false);
 });
 
 test('roundTrip: a write that takes its read back and changes nothing passes', async () => {

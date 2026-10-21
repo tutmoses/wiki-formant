@@ -820,6 +820,44 @@ export async function twinParity(t: Tester, label: string, twinUrl: string, cont
 }
 
 /**
+ * A write reaches what an agent reads back. Each URL is read first, so the CDN
+ * holds a copy, then `write` runs, and each must then carry `shows` and no
+ * longer carry `gone`.
+ *
+ * Every other check here reads a surface once, so a twin cached past the save
+ * that changed it passed all of them: the pages were ISR and fresh, while the
+ * route handlers beside them answered from their edge window for an hour. A
+ * purge takes a moment to reach every region, so each URL gets five seconds,
+ * nothing near an edge window. With no CDN in front, as on a dev server, it
+ * passes trivially; run it against a deployment.
+ */
+export async function freshAfterWriteChecks(
+  t: Tester,
+  urls: readonly string[],
+  write: () => Promise<unknown>,
+  expect: { shows?: string; gone?: string },
+): Promise<void> {
+  const at = (u: string) => (u.startsWith('http') ? u : `${t.base}/${u.replace(/^\//, '')}`);
+  const fresh = (body: string) => (!expect.shows || body.includes(expect.shows)) && (!expect.gone || !body.includes(expect.gone));
+  await Promise.all(urls.map(u => fetch(at(u)).then(r => r.text())));
+  await write();
+  for (const u of urls) {
+    let res: Response | null = null;
+    let body = '';
+    for (let i = 0; i < 5 && !(res?.ok && fresh(body)); i++) {
+      if (i) await new Promise(r => setTimeout(r, 1000));
+      res = await fetch(at(u));
+      body = await res.text();
+    }
+    t.check(
+      `${u.replace(t.base, '')} after a write`,
+      (!!expect.shows || !!expect.gone) && !!res?.ok && fresh(body),
+      !expect.shows && !expect.gone ? 'nothing to compare: neither shows nor gone' : `${res?.status} ${res?.headers.get('x-vercel-cache') ?? ''} ${fresh(body) ? 'fresh' : 'the copy from before the write'}`,
+    );
+  }
+}
+
+/**
  * What an edit starts from, on any server built on the wiki read tools: rows
  * carry the id a pageList block takes, `get_page` with `blocks: true` returns
  * the stored blocks and the version a save takes as its base, and the history's
