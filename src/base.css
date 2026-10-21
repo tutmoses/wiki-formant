@@ -434,13 +434,11 @@ pre:hover > .code-copy-btn,
 /* ---- embeds ------------------------------------------------------------------
    The players the `wiki-formant/tiptap` nodes store, filling their column at a
    screen's proportions. The node writes a width and height onto the iframe,
-   which `aspect-ratio` with `height: auto` overrides. Corners, borders and the
-   editor's selection ring are the site's. */
-:is(div[data-youtube-video], .map-embed) { margin: 1em 0; }
+   which `aspect-ratio` with `height: auto` overrides. Spacing, corners,
+   borders and the editor's selection ring are the site's. */
 :is(div[data-youtube-video], .map-embed) iframe {
   display: block;
   width: 100%;
   height: auto;
   aspect-ratio: 16 / 9;
-  border: 0;
 }

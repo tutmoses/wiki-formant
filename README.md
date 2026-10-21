@@ -761,7 +761,7 @@ const safe = mapBlockTree(blocks, b => sanitizeCoreLeaf(b, clean), BLOCK_SHAPE);
 
 The default list is derived from what the editor nodes in `wiki-formant/tiptap` store — the embed wrappers' data attributes, the tab markup `activateTabGroups` reads back, the table classes — plus the presentational SVG subset the infographics pipeline embeds. Extend it with `tags`, `attributes`, `classes` and `schemesByTag` derived from your stored HTML, never from memory: a list written from memory erases content on the first render.
 
-A YouTube iframe comes out as the `YouTube` node's markup, `<div data-youtube-video><iframe …></iframe></div>`, whoever wrote it: an agent, an import, a pasted embed code. The editor then opens it as that node, and `base.css` draws it as the same full-width 16:9 player as one the editor wrote, as it does a map embed. Two wikis had drawn that player in their own stylesheets and a third drew any iframe its own way; corners, borders and the editor's selection ring stay the site's.
+A YouTube iframe comes out as the `YouTube` node's markup, `<div data-youtube-video><iframe …></iframe></div>`, whoever wrote it: an agent, an import, a pasted embed code. The editor then opens it as that node, and `base.css` draws it as the same full-width 16:9 player as one the editor wrote, as it does a map embed. Two wikis had drawn that player in their own stylesheets and a third drew any iframe its own way; spacing, corners, borders and the editor's selection ring stay the site's.
 
 Classes pass by name only. Limiting `style` to layout and paint is worth nothing while `class` is free, because every site's own stylesheet ships `fixed inset-0 z-50`, and those draw a fake prompt over the chrome as well as `position` does.
 
