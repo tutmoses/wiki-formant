@@ -7,7 +7,7 @@ Object.assign(globalThis, { window, document: window.document, IS_REACT_ACT_ENVI
 
 const { createElement: h, act, useState } = await import('react');
 const { createRoot } = await import('react-dom/client');
-const { BlockEditor, BlockFieldsKit, CodeTabsFields, ColumnsFields, InfoboxFields, LimitField, LinkGridFields, PageListFields, ReferencesFields } = await import('wiki-formant/block-editor');
+const { BlockEditor, BlockFieldsKit, CodeTabsFields, ColumnsFields, InfoboxFields, LimitField, LinkGridFields, ListFields, PageListFields, ReferencesFields } = await import('wiki-formant/block-editor');
 
 // A three-type wiki: enough for a container, a single-use type and a leaf.
 let n = 0;
@@ -169,6 +169,24 @@ test('a page list picks from the pages it is given, and moves them', () => {
   assert.match(document.body.textContent, /Beta · guides/);
   click($$('button[aria-label="Move page up"]').at(-1));
   assert.deepEqual(state.block.pageIds, ['b', 'a']);
+  unmount();
+});
+
+test('a list moves between its sources, keeps a wiki\'s own, and picks its pages', () => {
+  const pages = [{ id: 'guides/water', title: 'Watering' }];
+  const { state, unmount } = field(ListFields, {
+    block: { id: 'l', type: 'list', source: 'newest', count: 5, show: 'links' },
+    pages,
+    sources: [{ value: 'products', label: 'Products' }],
+    children: 'their own fields',
+  });
+  const [source] = $$('select');
+  type(source, 'chosen');
+  assert.deepEqual(state.block.pages, []);
+  type($$('select').at(-2), 'guides/water');
+  assert.deepEqual(state.block.pages, ['guides/water']);
+  type($$('select')[0], 'products');
+  assert.match(document.body.textContent, /their own fields/);
   unmount();
 });
 

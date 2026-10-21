@@ -9,6 +9,8 @@
 // As elsewhere in this package, the dispatch stays with the caller so a new
 // block type is a compile error there until it is handled.
 
+import { LIST_SOURCES } from './blocks.js';
+
 /**
  * An href acceptable to persist: http, https, mailto, or a relative path or
  * fragment. Everything else — `javascript:`, `data:`, `vbscript:`, a
@@ -136,8 +138,9 @@ export interface CoreAtomicValidatorOptions {
  * core, so the repo's own cases still decide its native types.
  *
  * `recentPages.limit` must be a whole number within the cap and `pageIds` no
- * longer than it — caper's rule, which the other two lacked. A scope field
- * (`tagPath`, `section`) is a string when present.
+ * longer than it — caper's rule, which the other two lacked — and a `list`'s
+ * `count` and `pages` the same. A scope field (`tagPath`, `section`, `under`)
+ * is a string when present, and `pageId` checks a list's picked keys too.
  */
 export function coreAtomicValidator(
   opts: CoreAtomicValidatorOptions = {},
@@ -154,6 +157,15 @@ export function coreAtomicValidator(
           Array.isArray(b.pageIds) &&
           b.pageIds.length <= maxRows &&
           b.pageIds.every(id => typeof id === 'string' && pageId(id))
+        );
+      case 'list':
+        return (
+          (LIST_SOURCES as readonly unknown[]).includes(b.source) &&
+          (b.show === 'links' || b.show === 'cards') &&
+          optionalString(b.under) &&
+          (b.count === undefined || okLimit(b.count, maxRows)) &&
+          (b.pages === undefined ||
+            (Array.isArray(b.pages) && b.pages.length <= maxRows && b.pages.every(id => typeof id === 'string' && pageId(id))))
         );
       case 'codeTabs':
         return validateCodeTabs(b.tabs);

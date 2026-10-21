@@ -37,6 +37,8 @@ import { BlockActions, useBlockOperations } from './react.js';
 import {
   CODE_LANGS,
   DEFAULT_LANG,
+  LIST_SOURCES,
+  type ListSource,
   type BannerBlock,
   type CodeTabsBlock,
   type ColumnsBlock,
@@ -653,11 +655,14 @@ export interface PageOption {
  * the rest are offered in a picker; without, an id is typed in.
  */
 export function PageListFields<B extends { pageIds: string[] }>({ block, onUpdate, pages }: { block: B; onUpdate: (block: B) => void; pages?: readonly PageOption[] }) {
+  return <PagePicker ids={block.pageIds} onChange={pageIds => onUpdate({ ...block, pageIds })} pages={pages} />;
+}
+
+/** Pages picked by key, in order: the body of a page list and of a list that picks its pages by hand. */
+function PagePicker({ ids, onChange: set, pages }: { ids: string[]; onChange: (ids: string[]) => void; pages?: readonly PageOption[] }) {
   const { kit } = useEditorContext();
   const c = kit.classNames;
   const [typed, setTyped] = useState('');
-  const ids = block.pageIds;
-  const set = (pageIds: string[]) => onUpdate({ ...block, pageIds });
   const byId = new Map(pages?.map(p => [p.id, p]));
   const full = ids.length >= MAX_BLOCK_ROWS;
   const add = (id: string) => {
@@ -736,6 +741,78 @@ export function PageListFields<B extends { pageIds: string[] }>({ block, onUpdat
           </Add>
         </div>
       )}
+    </div>
+  );
+}
+
+/** What each of a list's sources is called where it is chosen. */
+const LIST_SOURCE_LABELS: Record<ListSource, string> = {
+  under: 'The pages in a section',
+  newest: 'The newest pages',
+  chosen: 'Pages picked by hand',
+};
+
+const LIST_SHOWS = [
+  { value: 'links', label: 'As links, with their age' },
+  { value: 'cards', label: 'As cards, with a picture and a line each' },
+];
+
+/**
+ * A list block's fields: where its pages come from, and how it shows them.
+ * `pages` are what a hand-picked list chooses from, keyed as the wiki keys
+ * them; `sections` the sections a list may name, else a section is typed.
+ * A wiki with a source of its own passes it in `sources` and draws its fields
+ * as `children`, which show while it is chosen; `show` is then the wiki's own.
+ */
+export function ListFields<B extends { source: string; under?: string; count?: number; pages?: string[]; show: 'links' | 'cards' }>({
+  block,
+  onUpdate,
+  pages,
+  sections,
+  sources = [],
+  children,
+}: {
+  block: B;
+  onUpdate: (block: B) => void;
+  pages?: readonly PageOption[];
+  sections?: readonly { value: string; label: string }[];
+  sources?: readonly { value: string; label: string }[];
+  children?: ReactNode;
+}) {
+  const c = useEditorContext().kit.classNames;
+  const core = (LIST_SOURCES as readonly string[]).includes(block.source);
+  const set = (change: Partial<B>) => onUpdate({ ...block, ...change });
+  const section = (label: string) =>
+    sections ? (
+      <Choice label={label} value={block.under ?? ''} options={[{ value: '', label: 'The whole wiki' }, ...sections]} onChange={under => set({ under: under || undefined } as Partial<B>)} />
+    ) : (
+      <Field label={label}>
+        <TextInput label={label} optional value={block.under} onChange={under => set({ under: under?.trim().replace(/^\/+|\/+$/g, '') || undefined } as Partial<B>)} />
+      </Field>
+    );
+  return (
+    <div className={c.stack}>
+      <Choice
+        label="Which pages"
+        value={block.source}
+        options={[...LIST_SOURCES.map(v => ({ value: v, label: LIST_SOURCE_LABELS[v] })), ...sources]}
+        onChange={source =>
+          set({
+            source,
+            ...(source === 'newest' && !block.count && { count: 5 }),
+            ...(source === 'chosen' && !block.pages && { pages: [] }),
+          } as Partial<B>)
+        }
+      />
+      {block.source === 'under' && section('The section')}
+      {block.source === 'newest' && (
+        <>
+          <LimitField value={block.count} onChange={count => set({ count } as Partial<B>)} />
+          {section('From the section')}
+        </>
+      )}
+      {block.source === 'chosen' && <PagePicker ids={block.pages ?? []} onChange={p => set({ pages: p } as Partial<B>)} pages={pages} />}
+      {core ? <Choice label="Shown" value={block.show} options={LIST_SHOWS} onChange={show => set({ show } as Partial<B>)} /> : children}
     </div>
   );
 }

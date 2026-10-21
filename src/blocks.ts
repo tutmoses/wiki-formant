@@ -129,6 +129,30 @@ export interface ColumnsBlock<A> {
 }
 export interface InfoboxBlock<A> { id: string; type: 'infobox'; blocks: A[] }
 
+/** Where a list's pages come from: those in a section, the newest, or ones picked by hand. */
+export const LIST_SOURCES = ['under', 'newest', 'chosen'] as const;
+export type ListSource = (typeof LIST_SOURCES)[number];
+
+/**
+ * A list of the wiki's pages, one block for what `recentPages` and `pageList`
+ * do between them and for a section's index besides: the pages in a section,
+ * the newest (in a section or across the wiki), or pages picked by hand, shown
+ * as links with their age or as cards. `under` names a section the wiki's own
+ * way, a tag path or a URL path; `pages` holds whatever key the wiki picks a
+ * page by, an id or a path, in the order they are listed. A wiki resolves it
+ * to `items` when the page is read, as it does a page list.
+ */
+export interface ListBlock {
+  id: string;
+  type: 'list';
+  source: ListSource;
+  under?: string;
+  /** How many of the newest. */
+  count?: number;
+  pages?: string[];
+  show: 'links' | 'cards';
+}
+
 // ---- the container walk -----------------------------------------------------
 
 export interface BlockTreeOptions<B> {
@@ -396,7 +420,8 @@ export type CoreAtomicBlock<P = ResolvedPageRef> =
   | { type: 'stats'; items: readonly StatItem[] }
   | { type: 'linkGrid'; intro?: string | null; groups: readonly LinkGridGroup[] }
   | { type: 'testimonial'; quote: string; author: string; role?: string | null }
-  | { type: 'recentPages' | 'pageList'; resolvedPages?: readonly P[] | null };
+  | { type: 'recentPages' | 'pageList'; resolvedPages?: readonly P[] | null }
+  | { type: 'list'; items?: readonly P[] | null };
 
 const bannerLabel = (variant: string): string =>
   (BANNER_LABELS as Record<string, string>)[variant] ?? variant;
@@ -416,6 +441,7 @@ export function coreAtomicText(block: CoreAtomicBlock<{ title: string }>): strin
     case 'testimonial': return testimonialToText(block.quote, block.author, block.role);
     case 'recentPages':
     case 'pageList': return pageListToText(block.resolvedPages ?? []);
+    case 'list': return pageListToText(block.items ?? []);
   }
 }
 
@@ -441,8 +467,9 @@ export function coreAtomicToMarkdown(block: CoreAtomicBlock, opts: CoreMarkdownO
     case 'testimonial': return testimonialToMarkdown(block.quote, block.author, block.role);
     case 'recentPages':
     case 'pageList':
+    case 'list':
       return linkList(
-        (block.resolvedPages ?? []).map(p => ({
+        ((block.type === 'list' ? block.items : block.resolvedPages) ?? []).map(p => ({
           label: p.title,
           href: p.href.startsWith('/') ? `${opts.siteUrl}${p.href}` : p.href,
         })),
@@ -466,6 +493,7 @@ export interface CoreBlockDefaults {
   content: () => { type: 'content'; text: string };
   recentPages: () => { type: 'recentPages'; limit: number };
   pageList: () => { type: 'pageList'; pageIds: string[] };
+  list: () => { type: 'list'; source: 'newest'; count: number; show: 'links' };
   columns: () => { type: 'columns'; columns: { id: string; blocks: never[] }[]; gap: 'md'; align: 'start' };
   infobox: () => { type: 'infobox'; blocks: never[] };
   codeTabs: () => { type: 'codeTabs'; tabs: { label: string; language: string; code: string }[] };
@@ -500,6 +528,7 @@ export function coreBlockDefaults(opts: CoreBlockDefaultsOptions = {}): CoreBloc
     content: () => ({ type: 'content', text: '' }),
     recentPages: () => ({ type: 'recentPages', limit: 5 }),
     pageList: () => ({ type: 'pageList', pageIds: [] }),
+    list: () => ({ type: 'list', source: 'newest', count: 5, show: 'links' }),
     columns: () => ({
       type: 'columns',
       columns: [{ id: newId(), blocks: [] }, { id: newId(), blocks: [] }],

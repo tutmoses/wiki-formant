@@ -711,7 +711,7 @@ leafBlocks(blocks, BLOCK_SHAPE.containers);
 
 The dispatch over a repo's own block union stays in that repo; the bodies come from here. `coreAtomicText` has a prose body for every core leaf — the stats, link-grid and page-list bodies joined the originals when two of the three wikis turned out to extract nothing from them, so their MCP `get_page` answered a hub page as nearly empty.
 
-The core leaves — `content`, `codeTabs`, `banner`, `references`, `stats`, `linkGrid`, `testimonial`, `recentPages`, `pageList` — had the same case bodies in every wiki's text export, markdown twin, validator and new-block record. A repo's switch hands those cases over and keeps its own, so it stays exhaustive over its union:
+The core leaves — `content`, `codeTabs`, `banner`, `references`, `stats`, `linkGrid`, `testimonial`, `recentPages`, `pageList`, and `list`, which does what the two page lists do between them — had the same case bodies in every wiki's text export, markdown twin, validator and new-block record. A repo's switch hands those cases over and keeps its own, so it stays exhaustive over its union:
 
 ```ts
 import { coreAtomicText, coreAtomicToMarkdown, coreBlockDefaults } from 'wiki-formant/blocks';
@@ -742,7 +742,7 @@ if (issues.length) return badRequest(`Invalid content: ${describeBlockIssues(iss
 
 A `codeTabs` tab's `code` is source text in every wiki here, and every view treats it that way: `CodeTabsView` escapes it into a `<pre><code>`, the sanitiser leaves it alone, the markdown twin fences it verbatim. A wiki that escapes and highlights on the server passes `highlighted` to the view. The package used to assume editors stored highlighted markup; none ever had, and every twin printed `Vec<u8>` as `Vec`.
 
-`recentPages` and `pageList` resolve to `ResolvedPageRef`s — build each with `pageRef(page, now)`, which carries the ISO date a `<time>` needs — and `PageRefsView` renders them as a list, with a `renderItem` slot for a wiki that has its own row.
+`recentPages`, `pageList` and a `list` resolve to `ResolvedPageRef`s — build each with `pageRef(page, now)`, which carries the ISO date a `<time>` needs — and `PageRefsView` renders them as a list, with a `renderItem` slot for a wiki that has its own row.
 
 ## Dates
 
@@ -842,7 +842,7 @@ const SCHEMA: BlockSchema<Block> = {
 <BlockEditor blocks={blocks} onChange={setBlocks} schema={SCHEMA} kit={KIT} />
 ```
 
-The dispatch stays a `switch` over the wiki's own union, so a new type is a compile error there. `CodeTabsFields`, `StatsFields`, `ReferencesFields`, `LinkGridFields`, `BannerFields`, `PageListFields`, `ColumnsFields` and `InfoboxFields` take the core blocks `wiki-formant/blocks` declares; the two containers hold the same list, offering `nestedTypes`. `Field`, `Choice` and `LimitField` are exported for a wiki's own editors, so its native types wear the same kit. A card is marked `data-selected` while it is being edited and `data-nested` inside a container; a type the build does not know is shown by its raw type and carried through untouched. Keep the kit and the schema stable — a module constant or a `useMemo` — since both reach every card through context, and a fresh one re-renders every card on every keystroke.
+The dispatch stays a `switch` over the wiki's own union, so a new type is a compile error there. `CodeTabsFields`, `StatsFields`, `ReferencesFields`, `LinkGridFields`, `BannerFields`, `PageListFields`, `ListFields`, `ColumnsFields` and `InfoboxFields` take the core blocks `wiki-formant/blocks` declares; the two containers hold the same list, offering `nestedTypes`. `Field`, `Choice` and `LimitField` are exported for a wiki's own editors, so its native types wear the same kit. A card is marked `data-selected` while it is being edited and `data-nested` inside a container; a type the build does not know is shown by its raw type and carried through untouched. Keep the kit and the schema stable — a module constant or a `useMemo` — since both reach every card through context, and a fresh one re-renders every card on every keystroke.
 
 An editor that draws each block in place, with a list of its own (miow's), hosts the same fields in `<BlockFieldsKit kit={KIT}>`, without `<BlockEditor>`. Only the two container fields need the full editor, since they hold a block list.
 
@@ -850,7 +850,9 @@ A `testimonial` is `{ quote, author, role?, avatarUrl? }`, drawn by `Testimonial
 
 A banner with no text of its own shows `BANNER_MESSAGES` from `wiki-formant/text`, a sentence per variant that names no wiki; `BannerView` takes it unless `message` overrides it.
 
-The core blocks are `ContentBlock`, `CodeTabsBlock`, `StatsBlock`, `LinkGridBlock`, `ReferencesBlock`, `BannerBlock`, `TestimonialBlock`, `ColumnsBlock<A>` and `InfoboxBlock<A>`, `A` being the wiki's atomic union. A wiki builds its union from them beside its own `recentPages` and `pageList`, which hold its own page rows or a section, and its native types.
+The core blocks are `ContentBlock`, `CodeTabsBlock`, `StatsBlock`, `LinkGridBlock`, `ReferencesBlock`, `BannerBlock`, `TestimonialBlock`, `ListBlock`, `ColumnsBlock<A>` and `InfoboxBlock<A>`, `A` being the wiki's atomic union. A wiki builds its union from them beside its own `recentPages` and `pageList`, which hold its own page rows or a section, and its native types.
+
+`ListBlock` is one list of the wiki's pages where those two were two: the pages in a section (`source: 'under'`), the newest, in a section or across the wiki (`'newest'`, `count`), or pages picked by hand (`'chosen'`, `pages`, keyed as the wiki keys a page, an id or a path), shown as links with their age or as cards (`show`). A wiki resolves it to `items` as it does a page list. `ListFields` edits it, with `pages` to pick from and `sections` to name; a wiki with a source of its own, a shop's products say, passes it in `sources` and draws its fields as `children`.
 
 ## Analytics
 

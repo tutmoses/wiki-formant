@@ -135,6 +135,21 @@ test('coreAtomicValidator caps rows, checks ids the wiki way, and rejects a non-
   assert.equal(blockLimit(1e9, 5), MAX_BLOCK_ROWS);
 });
 
+test('a list reads, flattens, starts and checks as the two page lists it stands for', () => {
+  assert.equal(coreAtomicText({ type: 'list', items: pages }), 'Alpha\nBeta');
+  assert.equal(coreAtomicToMarkdown({ type: 'list', items: pages }, { siteUrl: 'https://site.test' }), '- [Alpha](https://site.test/wiki/a)\n- [Beta](https://elsewhere.test/b)');
+  assert.equal(coreAtomicToMarkdown({ type: 'list' }, { siteUrl: 'https://site.test' }), '');
+  assert.deepEqual(coreBlockDefaults().list(), { type: 'list', source: 'newest', count: 5, show: 'links' });
+  const ok = coreAtomicValidator();
+  assert.equal(ok({ type: 'list', source: 'under', under: 'guides', show: 'cards' }), true);
+  assert.equal(ok({ type: 'list', source: 'chosen', pages: ['a', 'b'], show: 'links' }), true);
+  assert.equal(ok({ type: 'list', source: 'newest', count: MAX_BLOCK_ROWS + 1, show: 'links' }), false);
+  assert.equal(ok({ type: 'list', source: 'everything', show: 'links' }), false);
+  assert.equal(ok({ type: 'list', source: 'newest', count: 5, show: 'grid' }), false);
+  const digits = coreAtomicValidator({ pageId: id => /^\d{1,9}$/.test(id) });
+  assert.equal(digits({ type: 'list', source: 'chosen', pages: ['x'], show: 'links' }), false);
+});
+
 test('pgPoolConfig sizes the pool by the pooler the URL names', () => {
   assert.equal(pgPoolConfig('postgres://u@h:6543/db').max, 10);
   assert.equal(pgPoolConfig('postgres://u@h:5432/db').max, 3);
