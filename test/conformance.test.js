@@ -8,7 +8,6 @@ import {
   openapiWriteParity,
   rolaOriginCheck,
   editReadChecks,
-  pluginParity,
 } from 'wiki-formant/conformance';
 
 // A Tester that records checks and answers tool calls from a table, so the
@@ -120,59 +119,4 @@ test('editReadChecks: ids on rows, blocks the site accepts, history at the same 
   const u = tester({ get_page: page, get_page_history: { ...history, currentVersion: '1.3.0' } });
   await editReadChecks(u, { path: 'x', rows: [{}], validate: () => 'unknown block type', label: 'kb' });
   assert.deepEqual(u.results.map(r => [r.tool, r.ok]), [['[kb] rows carry the page id', false], ['[kb] get_page(blocks)', false], ['[kb] get_page_history', false]]);
-});
-
-test('pluginParity holds the package to the endpoint it names', async () => {
-  const hints = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
-  const tool = (name, description = name, annotations = hints) => ({ name, description, annotations });
-  const main = [tool('search'), tool('get_page'), tool('save', 'save', { readOnlyHint: false, destructiveHint: true, openWorldHint: false })];
-  const read = [tool('search', 'Search, then get_page.'), tool('get_page', 'Read one; edit it with save.')];
-  const t = {
-    base: 'http://localhost:3000',
-    endpoint: 'http://localhost:3000/api/mcp',
-    results: [],
-    check(tool, ok, note) { this.results.push({ tool, ok, note }); },
-    rpc: async method => (method === 'tools/list' ? { result: { tools: main } } : {}),
-    rpcAt: async (url, method, params) => {
-      assert.equal(url, 'http://localhost:3000/api/mcp/read');
-      if (method === 'tools/list') return { result: { tools: read } };
-      if (method === 'initialize') return { result: { instructions: 'Call search first.' } };
-      if (method === 'prompts/list') return { result: { prompts: [{ name: 'find' }] } };
-      if (method === 'prompts/get') return { result: { messages: [{ content: { text: `Call search for ${params.name}.` } }] } };
-      return {};
-    },
-  };
-  serve({
-    'http://localhost:3000/': 'home',
-    'http://localhost:3000/privacy': '<h2 id="contact">Contact</h2>',
-    'http://localhost:3000/terms': 'terms',
-  });
-  const positive = ['search', 'get_page', 'search, get_page', 'search', 'gone_tool'].map(tools_triggered => ({ description: 'd', prompt: 'p', tools_triggered, expected_behavior: 'e' }));
-  await pluginParity(t, {
-    mcp: { mcpServers: { s: { type: 'streamable-http', url: 'https://example.org/api/mcp/read' } } },
-    plugin: { extensions: { 'com.openai': {
-      interface: {
-        displayName: 'Example', shortDescription: 'An example', longDescription: 'Long.', developerName: 'Ex', category: 'Education',
-        capabilities: ['Read'], logo: './assets/logo.png', defaultPrompt: ['One'],
-        websiteURL: 'https://example.org', supportURL: 'https://example.org/privacy#contact',
-        privacyPolicyURL: 'https://example.org/privacy#missing', termsOfServiceURL: 'https://x.com/example',
-      },
-      review: { test_cases: { positive, negative: [1, 2, 3].map(() => ({ description: 'd', prompt: 'p' })) } },
-    } } },
-  });
-  assert.deepEqual(ok(t), {
-    'plugin names one server': true,
-    'plugin endpoint answers': true,
-    'review cases name live tools': false,
-    'plugin hints are booleans': true,
-    'plugin capabilities': true,
-    'plugin text names only its tools': false,
-    'plugin listing': true,
-    'listing websiteURL': true,
-    'listing supportURL': true,
-    'listing privacyPolicyURL': false,
-    'listing termsOfServiceURL': true,
-  });
-  assert.match(t.results.find(r => r.tool === 'review cases name live tools').note, /gone_tool/);
-  assert.equal(t.results.find(r => r.tool === 'plugin text names only its tools').note, 'get_page description names save');
 });

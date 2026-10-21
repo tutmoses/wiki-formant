@@ -213,12 +213,6 @@ What it gets right:
 - **The rate limit is declared, not wired.** Put `rateLimit: {capacity, refillPerSec}` on the config and `mcpResponse` enforces it before parsing the body, refuses with a JSON-RPC envelope, and states `RateLimit-Limit`/`-Remaining`/`-Reset` on every answer. Four routes had each transcribed that by hand through three differently-named local helpers, which is how a headroom header gets added to one surface and forgotten on the next.
 - **`mcpRateLimited(retryAfterSec)` is a JSON-RPC envelope.** A 429 whose body is `{"error": "..."}` is a string where the client's parser expects `{code, message}`, on the one response an agent meets exactly when it is working hard.
 
-### A read-only surface
-
-`readOnly(config, hide?)` is the same server with its writes taken off: the tools marked `readOnlyHint: true` and not named in `hide`, with every instruction line and prompt that names a dropped tool dropped too, and `destructiveHint` and `openWorldHint` stated on each tool that is kept. It exists for ChatGPT plugins, whose review refuses crypto transfers and checkout links and whose reviewers cannot sign a ROLA challenge. Mount it at its own route (`mcpResponse(req, readOnly(config))`), so the main endpoint keeps its writes, and hold the plugin package to it with `pluginParity` (Conformance). Keep each instruction a line of its own, so a line that names a write takes nothing else with it.
-
-`openaiChallengeHandler()` from `wiki-formant/well-known` serves `/.well-known/openai-apps-challenge`: the portal's domain token from `OPENAI_APPS_CHALLENGE`, as bare text, or a 404 while it is unset.
-
 ### Structured output, `_meta`, and the envelope gate
 
 **Every object a handler returns comes back as `structuredContent` beside the text block**, so a client reads the answer rather than scraping prose for it. This used to be gated on declaring an `outputSchema`, and the result was that across four live servers and thirty-two tools — every one of them answering in JSON — not a single response ever carried it. `outputSchema` remains the stronger contract, because a client validates against it; it is no longer the price of admission. A handler returning a string is left alone.
@@ -266,7 +260,6 @@ The drift checks hold an MCP server to what its own site does, so a tool cannot 
 - `roundTrip(t, label, { read, write })`: what a read tool hands out, the write tool takes back unchanged, and the next read matches.
 - `openapiWriteParity(t, [[path, method, tool], …])`: every field an OpenAPI write documents, the matching tool takes.
 - `rolaOriginCheck(t)`: a challenge tool's ROLA recipe names the origin under test.
-- `pluginParity(t, { plugin, mcp })`: a ChatGPT plugin package (`chatgpt/plugin.json` and `chatgpt/mcp.json`) agrees with the endpoint it names, rebased onto the origin under test: one streamable-HTTP server that answers; every tool a review case triggers is listed there; every tool states `readOnlyHint`, `destructiveHint` and `openWorldHint` as booleans; `capabilities` claims `Write` exactly when a write tool is listed; no instruction, description or prompt names a tool the main endpoint has and the plugin's lacks; the listing is within the portal's limits with five positive and three negative cases; and each listing page on the site's own origin answers, with its `#anchor` where it names one. The demo recording is the one review field it cannot check.
 
 `standardVersionSources(t, openapiPaths)` is the `versionCoherence` map every S10 surface serves — both agent-card paths, `mcp.json`, the server card and each path the OpenAPI document answers at — so a suite names only the paths it adds. `t.rpcAt(endpoint, …)` and `t.callAt` drive a second MCP endpoint on the same surface with the same backoff, User-Agent and tally.
 

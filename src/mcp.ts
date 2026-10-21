@@ -303,29 +303,6 @@ export interface EnvelopeGate {
 }
 
 /**
- * The same server with its writes taken off, for a client that may not carry
- * them: ChatGPT's plugin review refuses crypto transfers and checkout links, and
- * a reviewer cannot sign a ROLA challenge. It keeps the tools marked
- * `readOnlyHint: true` and not in `hide`, then drops every instruction line and
- * prompt that names a tool it lost, so nothing sends an agent to a tool that is
- * not there.
- *
- * The kept tools state all three hints that review reads. A read-only tool
- * destroys nothing, and an unstated `openWorldHint` is the spec's default, true.
- */
-export function readOnly(config: McpServerConfig, hide: readonly string[] = []): McpServerConfig {
-  const kept = config.tools.filter(t => t.annotations?.readOnlyHint === true && !hide.includes(t.name));
-  const lost = config.tools.filter(t => !kept.includes(t)).map(t => t.name);
-  const names = (text: string) => lost.some(name => new RegExp(`\\b${name}\\b`).test(text));
-  return {
-    ...config,
-    instructions: config.instructions.split('\n').filter(line => !names(line)).join('\n'),
-    tools: kept.map(t => ({ ...t, annotations: { destructiveHint: false, openWorldHint: true, ...t.annotations } })),
-    prompts: config.prompts?.filter(p => !names(p.text)),
-  };
-}
-
-/**
  * A caller-fixable failure inside a handler (page not found, empty input).
  * Reported as a tool result with `isError` so the model sees the text and can
  * correct itself, per the spec's split between protocol and execution errors.
