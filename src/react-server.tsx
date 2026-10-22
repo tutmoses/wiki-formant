@@ -612,8 +612,14 @@ export function InfoboxAside({ label, series, link: Link = Anchor, className, ch
   );
 }
 
-const looksLikeUrl = (v: string, type: string) =>
-  type === 'url' || /^https?:\/\//i.test(v) || /^[^\s/]+\.[a-z]{2,}(\/\S*)?$/i.test(v);
+/** A file or library suffix no domain ends in: "Node.js", "Cargo.toml" and "setup.py" name things, not sites. */
+const NOT_A_TLD = /^(c?js|mjs|jsx|tsx?|json|ya?ml|toml|md|py|sol|wasm|txt|html?|css|pdf|png|jpe?g|svg|gif)$/i;
+
+const looksLikeUrl = (v: string, type: string) => {
+  if (type === 'url' || /^https?:\/\//i.test(v)) return true;
+  const bare = /^[^\s/]+\.([a-z]{2,})(\/\S*)?$/i.exec(v);
+  return !!bare && !NOT_A_TLD.test(bare[1]!);
+};
 
 function externalLink(v: string): ReactNode {
   const href = safeLinkHref(/^[a-z][a-z0-9+.-]*:/i.test(v) ? v : `https://${v}`);

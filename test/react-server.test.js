@@ -91,6 +91,19 @@ test('infobox facts are a row-headed table; links go to the facet, URLs outward'
   assert.match(out, /<a href="https:\/\/a.org"[^>]*>a.org<\/a><br\/>plain/);
 });
 
+test('a fact naming a library or a file is text; a bare domain is still a link', () => {
+  const out = html(InfoboxFacts, { rows: [
+    { label: 'Runtime', value: 'Node.js', type: 'text' },
+    { label: 'Config', value: 'Cargo.toml', type: 'text' },
+    { label: 'Docs', value: 'docs.rs/scrypto', type: 'text' },
+    { label: 'Site', value: 'bun.sh', type: 'text' },
+  ] });
+  assert.match(out, /<td>Node\.js<\/td>/);
+  assert.match(out, /<td>Cargo\.toml<\/td>/);
+  assert.match(out, /<a href="https:\/\/docs\.rs\/scrypto"/);
+  assert.match(out, /<a href="https:\/\/bun\.sh"/);
+});
+
 test('a hostile fact value is text, and a javascript: URL is not a link', () => {
   const out = html(InfoboxFacts, { rows: [
     { label: 'X', value: '"><img src=x onerror=alert(1)>', type: 'text' },
