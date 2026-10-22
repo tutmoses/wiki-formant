@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { BannerView, CodeTabsView, ColumnsView, PageRefsView } from 'wiki-formant/block-views';
+import { BannerView, CodeTabsView, ColumnsView, PageRefsView, ReferencesView } from 'wiki-formant/block-views';
 import { pageRef } from 'wiki-formant/blocks';
 
 const tabs = [{ label: 'Rust', language: 'rust', code: 'fn f<T>() -> Vec<T> { a < b && c > d }' }];
@@ -61,4 +61,14 @@ test('a notice links its label to the policy it enforces, when the wiki names on
   assert.match(linked, /<strong><a href="\/policy\/verifiability">Needs citations<\/a>\.<\/strong> Add sources\./);
   const bare = renderToStaticMarkup(createElement(BannerView, { variant: 'nonsense', message: 'Tidy up.' }));
   assert.match(bare, /<strong>Needs cleanup\.<\/strong> Tidy up\./);
+});
+
+test('two references blocks given their ids label each section with its own heading', () => {
+  const items = [{ text: 'A source', url: 'https://a.org' }];
+  const page = renderToStaticMarkup(createElement('div', null,
+    createElement(ReferencesView, { id: 'r1', items }),
+    createElement(ReferencesView, { id: 'r2', items, title: 'Further reading' })));
+  assert.match(page, /aria-labelledby="references-r1"><h2 id="references-r1">References/);
+  assert.match(page, /aria-labelledby="references-r2"><h2 id="references-r2">Further reading/);
+  assert.match(renderToStaticMarkup(createElement(ReferencesView, { items })), /<h2 id="references-heading">/);
 });

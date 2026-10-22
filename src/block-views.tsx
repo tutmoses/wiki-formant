@@ -228,20 +228,28 @@ export function PageRefsView({
  * that were minted under different rules.
  */
 export function ReferencesView({
+  id,
   items,
   title = 'References',
   processHtml = (html: string) => html,
 }: {
+  /**
+   * The block's id, which keys the heading's: `references-<id>`. Without it the
+   * heading is `references-heading`, which a second references block on the
+   * page would repeat, labelling both sections with the first one's heading.
+   */
+  id?: string;
   items?: readonly (ReferenceItem & { id?: string })[];
   title?: string;
   processHtml?: (html: string) => string;
 }) {
   const rows = items ?? [];
   if (!rows.length) return null;
+  const headingId = id ? `references-${id}` : 'references-heading';
 
   return (
-    <section className="references-block" aria-labelledby="references-heading">
-      <h2 id="references-heading">{title}</h2>
+    <section className="references-block" aria-labelledby={headingId}>
+      <h2 id={headingId}>{title}</h2>
       <ol className="references-list">
         {rows.map((item, i) => {
           const url = safeLinkHref(item.url);
