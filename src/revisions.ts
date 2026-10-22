@@ -1,8 +1,7 @@
 // revisions.ts — what changed between two versions of a page.
 //
 // The semver lives next door in `versioning.ts`; this is the walk that decides
-// which bump to ask for. It carries a leaf-level diff, a changed-flag for the
-// page's banner, and a `patch` classification for when only that flag moved.
+// which bump to ask for, and carries a leaf-level diff for a history view.
 // Matching is by id.
 
 import { incrementVersion, parseVersion, type ChangeType, type SemVer } from './versioning.js';
@@ -38,13 +37,11 @@ export interface BlockChange<L = unknown> {
   leafDiff?: L;
 }
 
-export interface RevisionDiff<L = unknown> {
+export interface RevisionDiff {
   version: SemVer;
   changeType: ChangeType;
-  changes: BlockChange<L>[];
+  changes: BlockChange[];
   titleChanged: boolean;
-  /** A page-level flag outside the block tree — a banner, a notice, a status. */
-  metaChanged: boolean;
   summary: string;
 }
 
@@ -205,35 +202,23 @@ export function diffBlocks<B extends DiffBlock, L = unknown>(
 }
 
 /**
- * `major` for structure, `minor` for prose, `patch` for a page-level flag.
+ * `major` for structure, `minor` for prose and the title.
  *
  * A `modified` change is only ever recorded when `diffAttributes` returned
  * something, so a non-empty change set is always at least a minor bump.
  *
  * @internal
  */
-export function classifyChanges(
-  changes: readonly BlockChange<unknown>[],
-  titleChanged: boolean,
-  metaChanged = false,
-): ChangeType {
-  if (changes.length === 0 && !titleChanged && !metaChanged) return 'none';
+export function classifyChanges(changes: readonly BlockChange<unknown>[], titleChanged: boolean): ChangeType {
   if (changes.some(c => c.action === 'added' || c.action === 'removed' || c.action === 'moved')) {
     return 'major';
   }
-  if (changes.length > 0 || titleChanged) return 'minor';
-  return 'patch';
+  return changes.length > 0 || titleChanged ? 'minor' : 'none';
 }
 
-export function changeSummary(diff: {
-  changes: readonly BlockChange<unknown>[];
-  titleChanged: boolean;
-  metaChanged?: boolean;
-  metaLabel?: string;
-}): string {
+export function changeSummary(diff: { changes: readonly BlockChange<unknown>[]; titleChanged: boolean }): string {
   const parts: string[] = [];
   if (diff.titleChanged) parts.push('title updated');
-  if (diff.metaChanged) parts.push(`${diff.metaLabel ?? 'banner'} updated`);
   const count = (action: BlockChange['action']) => diff.changes.filter(c => c.action === action).length;
   const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`;
   for (const [action, verb] of [
@@ -248,33 +233,22 @@ export function changeSummary(diff: {
   return parts.length > 0 ? parts.join(', ') : 'no changes';
 }
 
-export function computeRevisionDiff<B extends DiffBlock, L = unknown>(opts: {
+export function computeRevisionDiff<B extends DiffBlock>(opts: {
   currentVersion: string | null | undefined;
   oldContent: readonly B[];
   newContent: readonly B[];
   oldTitle: string;
   newTitle: string;
-  /** A page-level value outside the block tree; compared by strict equality. */
-  oldMeta?: unknown;
-  newMeta?: unknown;
-  /** What to call that value in the summary. Defaults to `banner`. */
-  metaLabel?: string;
-  containers?: DiffOptions<B, L>['containers'];
-  leafDiff?: DiffOptions<B, L>['leafDiff'];
-}): RevisionDiff<L> {
-  const changes = diffBlocks<B, L>(opts.oldContent, opts.newContent, {
-    containers: opts.containers,
-    leafDiff: opts.leafDiff,
-  });
+  containers?: DiffOptions<B, unknown>['containers'];
+}): RevisionDiff {
+  const changes = diffBlocks<B>(opts.oldContent, opts.newContent, { containers: opts.containers });
   const titleChanged = opts.oldTitle !== opts.newTitle;
-  const metaChanged = opts.oldMeta !== opts.newMeta;
-  const changeType = classifyChanges(changes, titleChanged, metaChanged);
+  const changeType = classifyChanges(changes, titleChanged);
   const partial = {
     version: incrementVersion(parseVersion(opts.currentVersion), changeType),
     changeType,
     changes,
     titleChanged,
-    metaChanged,
   };
-  return { ...partial, summary: changeSummary({ ...partial, metaLabel: opts.metaLabel }) };
+  return { ...partial, summary: changeSummary(partial) };
 }

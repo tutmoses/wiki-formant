@@ -65,14 +65,13 @@ test('with no leafDiff supplied, nothing is recorded', () => {
   assert.equal(changes[0].leafDiff, undefined);
 });
 
-test('structure is major, prose is minor, a page flag alone is patch', () => {
+test('structure is major, prose and the title are minor', () => {
   const modified = [{ id: 'a', action: 'modified', type: 'content', path: 'root.0' }];
   const added = [{ id: 'a', action: 'added', type: 'content', path: 'root.0' }];
   assert.equal(classifyChanges([], false), 'none');
   assert.equal(classifyChanges(added, false), 'major');
   assert.equal(classifyChanges(modified, false), 'minor');
   assert.equal(classifyChanges([], true), 'minor');
-  assert.equal(classifyChanges([], false, true), 'patch');
 });
 
 test('the summary counts and pluralises each action', () => {
@@ -84,10 +83,6 @@ test('the summary counts and pluralises each action', () => {
       titleChanged: true,
     }),
     'title updated, 2 blocks added, 1 block reordered',
-  );
-  assert.equal(
-    changeSummary({ changes: [], titleChanged: false, metaChanged: true, metaLabel: 'notice' }),
-    'notice updated',
   );
 });
 
