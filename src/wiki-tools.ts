@@ -8,9 +8,9 @@
 // lists a page here lists it the way its HTML route does, hidden paths included.
 //
 // What is the app's: where a page lives (`url`), how blocks read as text,
-// what a row adds (`metadata`), and how its corpus reads when it has an
-// llms-full.txt to match. Writes stay with each app, because who may write
-// is the one thing no two of them agree on.
+// what a row adds (`metadata`), and how its corpus reads when it sets its own
+// sections. Writes stay with each app, because who may write is the one thing
+// no two of them agree on.
 
 import { McpToolError, readArgs, withAdjustments, type McpTool } from './mcp.js';
 import { listEnvelope } from './pagination.js';
@@ -54,7 +54,7 @@ export interface WikiToolsOptions<B extends DiffBlock> {
   metadata?: (tagPath: string, metadata: PageMetadata) => Record<string, unknown> | null;
   /** A category's name as the tree lists it. Defaults to the node's `name`. */
   label?: (node: WikiNode) => string;
-  /** The corpus as sections, when the app's llms-full.txt sets their form. Defaults to one per page from the store. */
+  /** The corpus as sections, when the app sets their form. Defaults to one per page from the store. */
   corpus?: (tagPath?: string) => Promise<CorpusSection[]>;
   /** What an empty search says. */
   noMatch?: (query: string, tagPath?: string) => string;

@@ -1,6 +1,6 @@
 // corpus.ts — a wiki's whole corpus, sliced to something a tool result can hold.
 //
-// /llms-full.txt can afford to be 3 MB: a fetch streams to disk under an ETag.
+// A file export can afford to be 3 MB: a fetch streams to disk under an ETag.
 // A tool result lands in a context window, so the MCP twin of that export needs
 // a preflight, a character budget and a page-aligned resume. Two wikis wrote
 // that loop and called the second a copy of the first "field for field". It was

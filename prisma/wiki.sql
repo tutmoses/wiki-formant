@@ -45,8 +45,6 @@ CREATE INDEX "WikiPage_siteId_tagPath_updatedAt_idx" ON "WikiPage"("siteId", "ta
 CREATE INDEX "WikiPage_siteId_updatedAt_idx" ON "WikiPage"("siteId", "updatedAt");
 
 -- CreateIndex
-
--- CreateIndex
 CREATE UNIQUE INDEX "WikiPage_siteId_tagPath_slug_key" ON "WikiPage"("siteId", "tagPath", "slug");
 
 -- CreateIndex

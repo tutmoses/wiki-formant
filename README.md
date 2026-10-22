@@ -93,7 +93,7 @@ const { items, total } = await searchWiki(reading, 'validators', { page: 1, size
 - Every row carries the page `id` too, which a `pageList` block takes. `get_page` with `blocks: true` returns the stored blocks, the page `id`, its whole metadata and `version`: what an edit starts from. `forEdit` adds what the app's write tool takes beside them, and `authors` names each revision's author in `get_page_history`.
 - `text` should be the serializer the page's markdown twin uses, and `resolve` the resolver its page uses to fill what is read live (a page list's pages): `get_page`, `get_pages` and the default corpus read text through both, so a page reads the same over MCP as at its twin, which `twinParity` checks.
 - `privateHidden` closes the back office to every tool; without it a hidden page is unlisted but readable by path, as its URL is.
-- `metadata`, `label`, `corpus`, `noMatch` and `skills` are the app's: what a row adds, how a category is named, the sections its llms-full.txt is made of, what an empty search says, and the A2A skills.
+- `metadata`, `label`, `corpus`, `noMatch` and `skills` are the app's: what a row adds, how a category is named, the sections `get_full_corpus` slices, what an empty search says, and the A2A skills.
 - Writes stay with each app, because who may write is the one thing no two of them agree on.
 
 ## Taxonomy
@@ -377,7 +377,7 @@ The default `frame-src` is `DEFAULT_IFRAME_HOSTS`, the same list the sanitiser's
 
 `parsePagination` clamps `page ≥ 1` and `pageSize` to 1–100; `paginatedResponse` always carries `totalPages`. Reshaping that response is a breaking change to every client that pages, which is why it lives here rather than being re-typed per repo.
 
-`parseVersion` / `bump` / `compareVersions` handle revision semver tolerantly — a page always has a version, even when the column holds `null` or junk.
+`parseVersion` / `bump` handle revision semver tolerantly — a page always has a version, even when the column holds `null` or junk.
 
 ## React
 
