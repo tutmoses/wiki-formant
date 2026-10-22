@@ -11,7 +11,7 @@
 // Both revisions in the field are spoken: v0.3 (`message/send`, a Message with
 // `kind`) and v1.0 (`SendMessage`, a `{ message }` with proto-JSON enums).
 
-import { McpToolError, type McpServerConfig, type RpcRequest } from './mcp.js';
+import { MCP_LEGACY_PROTOCOL_VERSION, McpToolError, type McpServerConfig, type RpcRequest } from './mcp.js';
 
 type Revision = '0.3' | '1.0';
 
@@ -63,7 +63,7 @@ async function reply(text: string, config: McpServerConfig): Promise<{ text: str
     const out = await tool.handler({ [config.answer!.argument]: text }, {
       meta: {},
       setMeta: () => {},
-      protocolVersion: '2025-11-25',
+      protocolVersion: MCP_LEGACY_PROTOCOL_VERSION,
     });
     const lead = `${config.serverInfo.name} ${tool.name} for ${JSON.stringify(text)}. For more, call this endpoint over MCP: "initialize", then "tools/list".`;
     if (typeof out === 'string') return { text: `${lead}\n\n${out}` };

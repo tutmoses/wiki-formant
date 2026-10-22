@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mcpResponse, McpToolError } from 'wiki-formant/mcp';
+import { mcpResponse, McpToolError, MCP_LEGACY_PROTOCOL_VERSION } from 'wiki-formant/mcp';
 import { agentCard } from 'wiki-formant/well-known';
 
 const config = {
@@ -71,4 +71,12 @@ test('the card names the endpoint for both A2A revisions', () => {
     ['https://w.test/api/mcp', 'JSONRPC', '0.3'],
   ]);
   assert.equal('supportedInterfaces' in agentCard({ name: 'W', description: 'd', url: 'https://w.test', version: '1', skills: [], mcpEndpoint: null }), false);
+});
+
+test('the answering tool is told the version the transport negotiates by default', async () => {
+  let seen;
+  const tool = { ...config.tools[0], handler: async (_args, ctx) => { seen = ctx.protocolVersion; return 'ok'; } };
+  const message = { kind: 'message', role: 'user', messageId: 'm1', parts: [{ kind: 'text', text: 'x' }] };
+  await post(rpc('message/send', { message }), { ...config, tools: [tool] });
+  assert.equal(seen, MCP_LEGACY_PROTOCOL_VERSION);
 });
