@@ -29,8 +29,9 @@ try {
   client = await connect();
   const { rowCount } = all
     ? await client.query(
-        `UPDATE "WikiPage" SET "lastVerifiedAt" = now() WHERE "siteId" = $3 AND ("tagPath" = $1 OR "tagPath" LIKE $2)`,
-        [tagPath, `${tagPath}/%`, site],
+        // starts_with, not LIKE: a `_` or `%` in the path would match other branches.
+        `UPDATE "WikiPage" SET "lastVerifiedAt" = now() WHERE "siteId" = $3 AND ("tagPath" = $1 OR starts_with("tagPath", $2))`,
+        [tagPath, `${tagPath}/`, site],
       )
     : await client.query(
         `UPDATE "WikiPage" SET "lastVerifiedAt" = now() WHERE "siteId" = $3 AND "tagPath" = $1 AND slug = $2`,
