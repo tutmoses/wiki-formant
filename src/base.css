@@ -432,8 +432,8 @@ pre:hover > .code-copy-btn,
 .stats-count { font-variant-numeric: tabular-nums; }
 
 /* ---- embeds ------------------------------------------------------------------
-   The players the `wiki-formant/tiptap` nodes store, filling their column at a
-   screen's proportions. The node writes a width and height onto the iframe,
+   The players the `wiki-formant/tiptap` nodes store, a video or map filling its
+   column at a screen's proportions. The node writes a width and height onto the iframe,
    which `aspect-ratio` with `height: auto` overrides. Spacing, corners,
    borders and the editor's selection ring are the site's. */
 :is(div[data-youtube-video], .map-embed) iframe {
@@ -441,4 +441,13 @@ pre:hover > .code-copy-btn,
   width: 100%;
   height: auto;
   aspect-ratio: 16 / 9;
+}
+
+/* A post on X at the width X lays it out for, as tall as it says it is
+   (`onTweetResize`), and a little before it has said. */
+.twitter-embed iframe {
+  display: block;
+  width: 550px;
+  max-width: 100%;
+  min-height: 200px;
 }

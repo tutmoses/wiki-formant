@@ -19,7 +19,7 @@ import TiptapYoutube from '@tiptap/extension-youtube';
 import TiptapCodeBlock from '@tiptap/extension-code-block';
 import { onTweetResize, tweetEmbedSrc } from './dom.js';
 import { DEFAULT_IFRAME_HOSTS } from './headers.js';
-import { toMapEmbedUrl } from './maps.js';
+import { resolveMapUrl as resolveMapRoute, toMapEmbedUrl } from './maps.js';
 import { useClickOutside } from './react.js';
 import { cx } from './html.js';
 import { slugifyHeading, uniqueHeadingId } from './headings.js';
@@ -83,12 +83,12 @@ export const YouTube = TiptapYoutube.extend({
 function TwitterEmbedView({ node }: { node: any }) {
   const containerRef = useRef<HTMLDivElement>(null);
   // The embed posts its measured height back; `onTweetResize` owns the origin
-  // check.
+  // check, and the source keeps one tweet's height off every other.
   useEffect(
     () =>
-      onTweetResize(height => {
+      onTweetResize((height, source) => {
         const iframe = containerRef.current?.querySelector('iframe');
-        if (iframe) iframe.style.height = `${height}px`;
+        if (iframe && iframe.contentWindow === source) iframe.style.height = `${height}px`;
       }),
     [],
   );
@@ -261,6 +261,22 @@ export function createMapEmbed({ resolveMapUrl }: MapEmbedOptions) {
     },
   });
 }
+
+// ---- every embed ------------------------------------------------------------
+
+/**
+ * Every player a pasted link becomes – a YouTube video, a post on X, a Google
+ * or Apple map – and any other allowed iframe, as one list. Each app had
+ * picked its embeds by hand, and one that left `TwitterEmbed` out kept a
+ * pasted post as a bare link. `resolveMapUrl` follows a shortened map link,
+ * through `/api/resolve-map` unless an app routes it another way.
+ */
+export const embedNodes = ({ resolveMapUrl = resolveMapRoute }: Partial<MapEmbedOptions> = {}) => [
+  YouTube,
+  Iframe,
+  TwitterEmbed,
+  createMapEmbed({ resolveMapUrl }),
+];
 
 // ---- code block -------------------------------------------------------------
 

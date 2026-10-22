@@ -693,7 +693,7 @@ export const X = xAccount({ siteName: 'AcuiQ', handle: '@acu_iq', posts: "a name
 addCopyButtons(el);            // every <pre> gets one, once
 sortTables(el);                // every column-headed table sorts by its headers
 hydrateTweetEmbeds(el);        // placeholders get a live src
-const off = onTweetResize(h => sizeTweetEmbeds(el, h));
+const off = onTweetResize((h, source) => sizeTweetEmbed(el, h, source));
 ```
 
 `addCopyButton` was **byte-identical** in two BlockRenderers, down to the SVG path data. Its idempotence guard now lives inside the function rather than in a `pre:not(:has(…))` at the call site, where it can be — and was — retyped.
@@ -706,7 +706,7 @@ In React, `useArticlePasses(ref, [blocks])` runs the three passes and `useTweetE
 
 `scrollTables(html)` is the one table pass that runs on the string, before render: it wraps each stored table in a `.table-scroll` box, and `base.css` lets that box scroll sideways. A table box ignores `overflow`, so a table with an address or a URL in a cell is as wide as that token whatever its column, and a scroll box added by an effect would arrive after the table had already been laid out too wide. Call it on the render path beside `injectHeadingIds`. A table already in a box keeps it, so it is safe on HTML that has been through it once. `articleHtml(html, { used, slug, anchor, links })` (`wiki-formant/headings`) is that chain: heading ids, the scroll boxes, and, given `links`, `normaliseLinks`.
 
-The embed's origin is written down once. It is both the embed host and the allow-list `onTweetResize` checks before believing a posted height, and it had been spelled out at four call sites across two repos. Any page can `postMessage`; only the embed host may size the embed.
+The embed's origin is written down once. It is both the embed host and the allow-list `onTweetResize` checks before believing a posted height, and it had been spelled out at four call sites across two repos. Any page can `postMessage`; only the embed host may size the embed. Every embed on a page posts to the same listener, so `onTweetResize` hands over the window that posted, and `sizeTweetEmbed` sizes only that one's iframe: two posts on a page had both been drawn at whichever height arrived last.
 
 ## Search
 
@@ -799,7 +799,7 @@ The bytes say what the file is, never the name or type, and SVG is refused. Ever
 
 ## Editor nodes
 
-`wiki-formant/tiptap` carries the custom nodes both wiki editors had written twice: `Iframe`, `YouTube` (the stock extension plus the paste rule it does not ship with), `TwitterEmbed`, `createMapEmbed`, `createCodeBlock` and `createTabs`. `Iframe` and `createMapEmbed` draw a frame only for an https src on `DEFAULT_IFRAME_HOSTS` (`embedSrc`), since an editor draws stored HTML where its author is signed in, and a `javascript:` src runs there under any CSP that allows inline script.
+`wiki-formant/tiptap` carries the custom nodes both wiki editors had written twice: `Iframe`, `YouTube` (the stock extension plus the paste rule it does not ship with), `TwitterEmbed`, `createMapEmbed`, `createCodeBlock` and `createTabs`. `embedNodes({ resolveMapUrl })` is the first four as one list, which an editor puts in its `nodes`: a pasted YouTube, X or map link becomes its player as it lands, and the toolbar's embed prompt has a node for every link it recognises. `resolveMapUrl` defaults to `wiki-formant/maps`', through `/api/resolve-map`. `Iframe` and `createMapEmbed` draw a frame only for an https src on `DEFAULT_IFRAME_HOSTS` (`embedSrc`), since an editor draws stored HTML where its author is signed in, and a `javascript:` src runs there under any CSP that allows inline script.
 
 ```ts
 const CodeBlock = createCodeBlock({

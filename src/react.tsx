@@ -32,7 +32,7 @@ import {
   resolveSidebarOpen,
   SIDEBAR_ATTRIBUTE,
 } from './sidebar.js';
-import { activateTabGroups, addCopyButtons, hydrateTweetEmbeds, onTweetResize, sizeTweetEmbeds, sortTables, startBeacon } from './dom.js';
+import { activateTabGroups, addCopyButtons, hydrateTweetEmbeds, onTweetResize, sizeTweetEmbed, sortTables, startBeacon } from './dom.js';
 import type { WikiLinkComponent } from './react-server.js';
 import { comboboxAria, type ComboboxAria } from './combobox.js';
 import {
@@ -1406,13 +1406,13 @@ export function useArticlePasses(ref: RefObject<HTMLElement | null>, deps: Depen
   }, deps);
 }
 
-/** Tweet placeholders hydrated, and their iframes kept sized to the posted height. */
+/** Tweet placeholders hydrated, and each iframe kept at the height it posts. */
 export function useTweetEmbeds(ref: RefObject<HTMLElement | null>, deps: DependencyList): void {
   useEffect(() => {
     const root = ref.current;
     if (!root) return;
     hydrateTweetEmbeds(root);
-    return onTweetResize(height => sizeTweetEmbeds(root, height));
+    return onTweetResize((height, source) => sizeTweetEmbed(root, height, source));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 }

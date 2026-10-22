@@ -86,19 +86,21 @@ export const tweetEmbedSrc = (tweetId: string | number): string =>
   `${TWITTER_ORIGIN}/embed/Tweet.html?id=${tweetId}&dnt=true`;
 
 /**
- * Subscribe to the height the embed posts back once it has laid itself out.
+ * Subscribe to the height an embed posts back once it has laid itself out,
+ * with the window that posted it.
  *
  * The iframe renders at an unknown height and there is no other way to learn
- * it. The caller decides which iframes the height applies to; this only owns
- * the origin check and the message shape. Returns a disposer.
+ * it. Every embed on the page posts to the same listener, so the source is how
+ * a height finds its own iframe. This only owns the origin check and the
+ * message shape. Returns a disposer.
  */
-export function onTweetResize(resize: (height: number) => void): () => void {
+export function onTweetResize(resize: (height: number, source: MessageEventSource | null) => void): () => void {
   const handleMessage = (e: MessageEvent) => {
     if (e.origin !== TWITTER_ORIGIN) return;
     const data = (e.data as Record<string, any> | null | undefined)?.['twttr.embed'];
     if (data?.method !== 'twttr.private.resize') return;
     const height = data.params?.[0]?.height;
-    if (height) resize(height);
+    if (height) resize(height, e.source);
   };
   window.addEventListener('message', handleMessage);
   return () => window.removeEventListener('message', handleMessage);
@@ -127,10 +129,10 @@ export function hydrateTweetEmbeds(root: ParentNode): void {
   }
 }
 
-/** Apply a measured height to every embed iframe under `root`. */
-export function sizeTweetEmbeds(root: ParentNode, height: number): void {
-  for (const iframe of Array.from(root.querySelectorAll('[data-twitter-embed] iframe'))) {
-    (iframe as HTMLIFrameElement).style.height = `${height}px`;
+/** Apply a posted height to the embed iframe under `root` that posted it, and to no other. */
+export function sizeTweetEmbed(root: ParentNode, height: number, source: MessageEventSource | null): void {
+  for (const iframe of Array.from(root.querySelectorAll<HTMLIFrameElement>('[data-twitter-embed] iframe'))) {
+    if (iframe.contentWindow === source) iframe.style.height = `${height}px`;
   }
 }
 

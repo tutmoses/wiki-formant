@@ -5,6 +5,7 @@ import {
   TWITTER_ORIGIN,
   tweetEmbedSrc,
   onTweetResize,
+  sizeTweetEmbed,
   addCopyButtons,
   sortTables,
   scrollTables,
@@ -63,6 +64,16 @@ test('only the resize message counts, and only with a height', () => {
   win.send(resizeEvent(0));
   win.send(resizeEvent(undefined));
   assert.deepEqual(seen, []);
+});
+
+test('a height comes with the window that posted it, and sizes only that iframe', () => {
+  const win = fakeWindow();
+  const one = { contentWindow: {}, style: {} };
+  const two = { contentWindow: {}, style: {} };
+  const root = { querySelectorAll: () => [one, two] };
+  onTweetResize((h, source) => sizeTweetEmbed(root, h, source));
+  win.send({ ...resizeEvent(640), source: two.contentWindow });
+  assert.deepEqual([one.style.height, two.style.height], [undefined, '640px']);
 });
 
 test('the disposer unsubscribes', () => {
