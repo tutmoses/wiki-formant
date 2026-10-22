@@ -72,6 +72,11 @@ test('render escapes state, names the routine, links a tweet URL and says what i
   assert.match(html, /<a href="https:\/\/x\.com\/i\/1">link<\/a>/);
 });
 
+test('render reads past a null source entry, which compact keeps', () => {
+  const html = render(compact({ sources: { 'x.com': null } }), 'r', () => 'id').map(b => b.text).join('');
+  assert.match(html, /<td>x\.com<\/td><td>–<\/td>/);
+});
+
 test('the bins refuse an incomplete command before touching a database', () => {
   const run = (bin, ...a) => {
     try {

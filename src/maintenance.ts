@@ -137,9 +137,10 @@ export function render(state: LogState, routine: string, newId: () => string = (
 
   const label = (x: SourceListItem) => (typeof x === 'string' ? x : (x.handle ?? x.name ?? x.url ?? ''));
   const sourceRows = sources.slice(0, SHOWN.sources).map(([key, v]) => {
-    const watch = (v.list ?? []).map(label).filter(Boolean);
+    // `v?.`: the state is a routine's own JSON, and `compact` keeps a null entry.
+    const watch = (v?.list ?? []).map(label).filter(Boolean);
     const watching = watch.length ? ` — watching: ${esc(watch.slice(0, 8).join(', '))}${watch.length > 8 ? '…' : ''}` : '';
-    return `<tr><td>${esc(key)}</td><td>${esc(v.lastChecked || '–')}</td><td>${esc(v.note)}${watching}</td></tr>`;
+    return `<tr><td>${esc(key)}</td><td>${esc(v?.lastChecked || '–')}</td><td>${esc(v?.note)}${watching}</td></tr>`;
   });
   const runRows = (state.runHistory ?? []).slice(-SHOWN.runs).reverse().map(r => {
     const tweet = r.tweet && /^https?:\/\//.test(r.tweet) ? `<a href="${esc(r.tweet)}">link</a>` : esc(r.tweet);
