@@ -114,3 +114,31 @@ test('a flat table of contents leaves its items\' padding to the stylesheet', ()
   assert.match(nested, /padding-left:0.75rem/);
   assert.match(nested, /padding-left:1.5rem/);
 });
+
+test('a table of contents mounted before its article reads the article when it arrives', async () => {
+  const { JSDOM } = await import('jsdom');
+  const { window } = new JSDOM('<!doctype html><div id="rail"></div>', { pretendToBeVisual: true });
+  Object.assign(globalThis, {
+    window, document: window.document, MutationObserver: window.MutationObserver, getComputedStyle: window.getComputedStyle,
+    IntersectionObserver: class { observe() {} disconnect() {} }, IS_REACT_ACT_ENVIRONMENT: true,
+  });
+  const { act } = await import('react');
+  const { createRoot } = await import('react-dom/client');
+  const rail = document.getElementById('rail');
+  const root = createRoot(rail);
+  await act(() => root.render(createElement(TableOfContents, { containerSelector: '#article' })));
+  assert.equal(rail.textContent, '');
+
+  const article = document.createElement('main');
+  article.id = 'article';
+  article.innerHTML = '<h2 id="intro">Intro</h2>';
+  document.body.append(article);
+  await act(() => new Promise(r => setTimeout(r, 300)));
+  assert.match(rail.textContent, /Intro/);
+
+  // Watched from then on: a heading streamed into it later is read too.
+  article.insertAdjacentHTML('beforeend', '<h2 id="more">More</h2>');
+  await act(() => new Promise(r => setTimeout(r, 300)));
+  assert.match(rail.textContent, /More/);
+  await act(() => root.unmount());
+});

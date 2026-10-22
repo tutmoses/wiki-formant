@@ -332,10 +332,22 @@ export function TableOfContents({
       }, 200);
     };
 
+    // A container missing at mount is waited for from the body, so an article
+    // that streams in later is still read; once it exists only it is watched.
+    let watched: Element | null | undefined;
+    const observer = new MutationObserver(() => {
+      follow();
+      update();
+    });
+    const follow = () => {
+      const root = document.querySelector(containerSelector);
+      if (root === watched) return;
+      watched = root;
+      observer.disconnect();
+      observer.observe(root ?? document.body, { childList: true, subtree: true });
+    };
+    follow();
     update();
-    const root = document.querySelector(containerSelector);
-    const observer = new MutationObserver(update);
-    if (root) observer.observe(root, { childList: true, subtree: true });
     return () => {
       clearTimeout(timer);
       observer.disconnect();
