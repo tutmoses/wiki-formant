@@ -193,6 +193,22 @@ test('onCall fires once per request with the parsed body', async () => {
   assert.equal(seen[0].method, 'ping');
 });
 
+test('a throwing onCall hook never blocks the response', async () => {
+  const res = await mcpResponse(
+    new Request('https://x', { method: 'POST', body: JSON.stringify(rpc('ping')) }),
+    { ...config, onCall: () => { throw new Error('analytics down'); } },
+  );
+  assert.equal(res.status, 200);
+  assert.deepEqual((await res.json()).result, {});
+});
+
+test('arguments: null is the same as no arguments', async () => {
+  const quiet = { ...config, tools: [{ name: 'noop', description: 'd', inputSchema: { type: 'object', properties: {} }, handler: async args => args }] };
+  const { result } = await handleMcp(rpc('tools/call', { name: 'noop', arguments: null }), quiet);
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(JSON.parse(result.content[0].text), {});
+});
+
 test('handleMcp is usable without the HTTP layer', async () => {
   assert.equal(await handleMcp(rpc('notifications/initialized', {}, null), config), null);
   assert.equal(await handleMcp({ jsonrpc: '2.0', method: 'notifications/roots/list_changed' }, config), null);

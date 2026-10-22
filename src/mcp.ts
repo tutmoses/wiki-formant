@@ -661,7 +661,9 @@ async function handleRpc(
       }
 
       case 'tools/call': {
-        const { name, arguments: rawArgs = {} } = p as { name?: string; arguments?: unknown };
+        // `null` is how some clients spell "no arguments"; it means the same as omitting them.
+        const { name, arguments: rawArgs } = p as { name?: string; arguments?: unknown };
+        const given = rawArgs ?? {};
         const names = config.tools.map(t => t.name);
         const tool = name ? config.tools.find(t => t.name === name) : undefined;
         if (!tool) {
@@ -670,14 +672,14 @@ async function handleRpc(
             availableTools: names,
           });
         }
-        if (typeOf(rawArgs) !== 'object') {
+        if (typeOf(given) !== 'object') {
           return toolText(
             id,
-            `"arguments" must be an object; received ${typeOf(rawArgs)}. Expected schema: ${JSON.stringify(tool.inputSchema)}`,
+            `"arguments" must be an object; received ${typeOf(given)}. Expected schema: ${JSON.stringify(tool.inputSchema)}`,
             true,
           );
         }
-        const args = rawArgs as Record<string, unknown>;
+        const args = given as Record<string, unknown>;
         const invalid = validateArgs(tool, args);
         if (invalid) return toolText(id, invalid, true);
 
@@ -860,7 +862,11 @@ export async function mcpResponse(
   // Tracked before either era refuses anything: a probe the server turns away,
   // and a call an agent walked away from behind a gate, are exactly the ones
   // worth counting.
-  config.onCall?.(request, body);
+  try {
+    config.onCall?.(request, body);
+  } catch {
+    // Analytics never blocks the response, a throwing hook included.
+  }
 
   return isModern(request, body)
     ? modernResponse(request, body as RpcRequest, config, base)
