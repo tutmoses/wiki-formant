@@ -694,16 +694,23 @@ export async function payloadBudget(
 export async function robotsChecks(t: Tester, paths: readonly string[]): Promise<void> {
   const body = await (await fetch(`${t.base}/robots.txt`)).text();
   const rules: Array<{ allow: boolean; path: string }> = [];
+  // A group is a run of User-agent lines and the rules after it, so `*` anywhere
+  // in the run takes the group's rules; the next User-agent after a rule opens
+  // a new group.
   let inStar = false;
+  let inRules = false;
   for (const raw of body.split('\n')) {
     const line = raw.replace(/#.*$/, '').trim();
     const [field, ...rest] = line.split(':');
     if (!field || !rest.length) continue;
     const key = field.trim().toLowerCase();
     const value = rest.join(':').trim();
-    if (key === 'user-agent') inStar = value === '*';
-    else if (inStar && (key === 'allow' || key === 'disallow') && value) {
-      rules.push({ allow: key === 'allow', path: value });
+    if (key === 'user-agent') {
+      if (inRules) [inStar, inRules] = [false, false];
+      inStar ||= value === '*';
+    } else if (key !== 'sitemap') {
+      inRules = true;
+      if (inStar && (key === 'allow' || key === 'disallow') && value) rules.push({ allow: key === 'allow', path: value });
     }
   }
   for (const path of paths) {

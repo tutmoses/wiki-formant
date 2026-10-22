@@ -9,6 +9,7 @@ import {
   rolaOriginCheck,
   editReadChecks,
   freshAfterWriteChecks,
+  robotsChecks,
 } from 'wiki-formant/conformance';
 
 // A Tester that records checks and answers tool calls from a table, so the
@@ -132,4 +133,24 @@ test('editReadChecks: ids on rows, blocks the site accepts, history at the same 
   const u = tester({ get_page: page, get_page_history: { ...history, currentVersion: '1.3.0' } });
   await editReadChecks(u, { path: 'x', rows: [{}], validate: () => 'unknown block type', label: 'kb' });
   assert.deepEqual(u.results.map(r => [r.tool, r.ok]), [['[kb] rows carry the page id', false], ['[kb] get_page(blocks)', false], ['[kb] get_page_history', false]]);
+});
+
+test('robotsChecks reads a group that names * among other agents', async () => {
+  serve({
+    'https://example.org/robots.txt': [
+      'User-agent: *',
+      'User-agent: GPTBot',
+      'Disallow: /private',
+      '',
+      'User-agent: Bytespider',
+      'Disallow: /',
+      '',
+      'User-agent: ClaudeBot',
+      'User-agent: *',
+      'Disallow: /drafts',
+    ].join('\n'),
+  });
+  const t = tester();
+  await robotsChecks(t, ['/private/x', '/drafts/y', '/llms.txt']);
+  assert.deepEqual(ok(t), { 'robots allows /private/x': false, 'robots allows /drafts/y': false, 'robots allows /llms.txt': true });
 });
