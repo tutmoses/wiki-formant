@@ -27,6 +27,11 @@
 // URLs come from /sitemap.xml, so a route the sitemap omits is not checked —
 // which is the right default, since an unlisted route is one nobody asked a
 // crawler to read.
+//
+// Once per site it also checks the icon. miow.me changed its icon in October
+// 2026 and every address of it 404'd at /favicon.ico, the one place a client
+// that never reads the page's <link rel="icon"> looks; so /favicon.ico must
+// answer an image, and the same image the home page declares.
 import { outlineIssues } from '../dist/headings.js';
 import { readSitemap } from '../dist/indexnow.js';
 import { decodeEntities } from '../dist/markdown.js';
@@ -125,6 +130,36 @@ for (const url of checked) {
   if (descriptionOf(page.body) === null) faults.push({ url, fault: 'noDescription', detail: '' });
 }
 
+// The icon, once per site: what the home page declares (a page that declares
+// none is shown /favicon.ico) against what /favicon.ico answers, redirects
+// followed.
+const iconHref = html => {
+  for (const tag of html.match(/<link\b[^>]*>/gi) ?? []) {
+    if (/\brel=["'](?:shortcut )?icon["']/i.test(tag)) return decodeEntities(tag.match(/\bhref=["']([^"']+)["']/i)?.[1] ?? '');
+  }
+  return '';
+};
+const image = async url => {
+  try {
+    const res = await fetch(url, { headers: { 'user-agent': UA } });
+    const type = res.headers.get('content-type') ?? '';
+    return res.ok && /^image\//i.test(type) ? Buffer.from(await res.arrayBuffer()) : `${res.status} ${type}`.trim();
+  } catch (e) {
+    return e.message;
+  }
+};
+{
+  const home = await get(`${site}/`).catch(() => ({ body: '' }));
+  const declared = new URL(iconHref(home.body) || '/favicon.ico', `${site}/`).href;
+  const favicon = await image(`${site}/favicon.ico`);
+  const shown = declared === `${site}/favicon.ico` ? favicon : await image(declared);
+  if (!Buffer.isBuffer(favicon)) faults.push({ url: `${site}/favicon.ico`, fault: 'noFavicon', detail: favicon });
+  if (!Buffer.isBuffer(shown)) faults.push({ url: declared, fault: 'iconDead', detail: shown });
+  else if (Buffer.isBuffer(favicon) && !favicon.equals(shown)) {
+    faults.push({ url: `${site}/favicon.ico`, fault: 'faviconStale', detail: `not the icon the home page declares, ${declared.replace(site, '')}` });
+  }
+}
+
 // Reported once per title rather than once per page, or a shared title on forty
 // routes drowns everything else.
 for (const [title, sharing] of titles) {
@@ -149,7 +184,7 @@ if (JSON_OUT) {
   const byFault = new Map();
   for (const f of faults) byFault.set(f.fault, [...(byFault.get(f.fault) ?? []), f]);
   console.log(`check-pages: ${checked.length} of ${urls.length} sitemap URLs on ${site}\n`);
-  if (!faults.length) console.log('  clean — one h1 per page, no skipped levels, every title inside the budget.');
+  if (!faults.length) console.log('  clean — one h1 per page, no skipped levels, every title inside the budget, and /favicon.ico the icon the page declares.');
   else if (!failing.length) console.log('  no failures; everything below is advisory.\n');
   for (const [fault, list] of [...byFault].sort((a, b) => b[1].length - a[1].length)) {
     console.log(`  ${fault} (${list.length})${ADVISORY.has(fault) ? '  — advisory, does not fail' : ''}`);
