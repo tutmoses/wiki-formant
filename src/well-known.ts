@@ -276,6 +276,8 @@ export interface McpManifestConfig {
   url: string;
   /** Who runs it. Defaults to `name`. */
   provider?: string;
+  /** The MCP endpoint's absolute URL. Defaults to `${url}/api/mcp`. */
+  mcpEndpoint?: string;
   tools: readonly ManifestTool[];
   /** Auth notes, per-tenant endpoints, payment terms — what this origin has that others do not. */
   extra?: Record<string, unknown>;
@@ -289,7 +291,7 @@ export interface McpManifestConfig {
  * so the manifest cannot advertise a version the server does not speak.
  */
 export function mcpManifest(config: McpManifestConfig): Record<string, unknown> {
-  const { name, registryName, version, description, url, provider, tools, extra } = config;
+  const { name, registryName, version, description, url, provider, mcpEndpoint, tools, extra } = config;
   return {
     schema_version: '1.0',
     name,
@@ -300,7 +302,7 @@ export function mcpManifest(config: McpManifestConfig): Record<string, unknown> 
     provider: { name: provider ?? name, url },
     api: { type: 'openapi', url: `${url}/.well-known/openapi.json` },
     mcp: {
-      endpoint: `${url}/api/mcp`,
+      endpoint: mcpEndpoint ?? `${url}/api/mcp`,
       transport: 'streamable-http',
       protocol: 'JSON-RPC 2.0',
       protocolVersion: MCP_PROTOCOL_VERSION,

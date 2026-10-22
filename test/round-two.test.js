@@ -58,6 +58,14 @@ test('the MCP manifest takes versions and tools from the transport and lists tit
   assert.deepEqual(m.auth, { reads: 'none' });
 });
 
+test('the MCP manifest names an endpoint that is not /api/mcp', () => {
+  const m = mcpManifest({
+    name: 'W', registryName: 'test.w/w', version: '1.0.0', description: 'd', url: 'https://w.test',
+    mcpEndpoint: 'https://w.test/w/site/mcp', tools: [],
+  });
+  assert.equal(m.mcp.endpoint, 'https://w.test/w/site/mcp');
+});
+
 test('BUG: the manifest advertises outputSchema where tools/list does', () => {
   // The manifest carried its own tool projection and that projection had no
   // outputSchema, so `/.well-known/mcp.json` said a tool answers with prose
