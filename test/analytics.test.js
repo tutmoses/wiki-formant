@@ -199,7 +199,8 @@ test('collect decodes a beacon path once', async () => {
   await post({ path: '/what%3Fnot' });
   await post({ name: 'Copy', path: '/100%25-guide' });
   await post({ name: 'Copy', path: '/what%3Fnot' });
-  await Promise.all(tasks.map(t => t()));
+  // In turn: the first view also makes the day's salt, so run together the second can insert first.
+  for (const t of tasks) await t();
   assert.deepEqual(inserts('View').map(v => v.values[1]), ['/100%-guide', '/what?not']);
   assert.deepEqual(inserts('Event').map(e => e.values[2]), ['/100%-guide', '/what?not']);
 });
