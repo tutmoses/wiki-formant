@@ -27,9 +27,10 @@
 # pull_request_target trigger: that is the path by which a fork could run
 # workflow code with the publishing credential in scope. A private repository
 # narrows the exposure but is not the reason for the rule — the rule has to
-# survive the repository being made public. Calling this file at `@main` means
-# a push here changes code that runs with every caller's key; this repository
-# and its callers share one owner, which is what makes that acceptable.
+# survive the repository being made public. A caller pins this file to a
+# commit, `@<sha> # main`, so a push here cannot change the code that runs
+# with its key until the caller moves the pin; a change to these steps is
+# followed by a bump in each caller.
 
 name: Publish to MCP Registry
 
