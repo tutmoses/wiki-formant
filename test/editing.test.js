@@ -83,3 +83,26 @@ test('an embed keeps only an https src on an allowed host, so stored HTML cannot
   assert.doesNotMatch(roundTrip('<div data-map-embed><iframe src="javascript:alert(1)"></iframe></div>'), /javascript:/);
   assert.match(roundTrip('<iframe src="https://www.google.com/maps/embed?pb=1"></iframe>'), /src="https:\/\/www\.google\.com\/maps\/embed\?pb=1"/);
 });
+
+test('a map link resolved after the editor closed touches nothing', async () => {
+  const { JSDOM } = await import('jsdom');
+  const { window } = new JSDOM('<div id="e"></div>');
+  Object.assign(globalThis, { window, document: window.document });
+  const { Editor } = await import('@tiptap/core');
+  const { default: StarterKit } = await import('@tiptap/starter-kit');
+  const { createMapEmbed } = await import('wiki-formant/tiptap');
+  let release;
+  const resolving = new Promise(r => { release = r; });
+  const editor = new Editor({ element: document.getElementById('e'), extensions: [StarterKit, createMapEmbed({ resolveMapUrl: () => resolving })] });
+  editor.view.pasteText('https://maps.app.goo.gl/abc', new window.Event('paste'));
+  assert.equal(editor.getJSON().content[0].attrs.src, 'about:blank');
+  editor.destroy();
+  editor.chain = () => { throw new Error('the editor was used after destroy'); };
+  const failures = [];
+  const onRejection = e => failures.push(e);
+  process.on('unhandledRejection', onRejection);
+  release('https://www.google.com/maps/embed?pb=1');
+  await new Promise(r => setTimeout(r, 20));
+  process.off('unhandledRejection', onRejection);
+  assert.deepEqual(failures, []);
+});

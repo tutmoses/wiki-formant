@@ -229,7 +229,8 @@ export function createMapEmbed({ resolveMapUrl }: MapEmbedOptions) {
             .insertContent({ type: 'mapEmbed', attrs: { src: 'about:blank', url } })
             .run();
           resolveMapUrl(url).then(resolved => {
-            if (!resolved) return;
+            // The editor may have closed while the redirect was followed.
+            if (!resolved || ext.editor.isDestroyed) return;
             // Find the placeholder by its url rather than by a captured
             // position: the document has been editable throughout the hop.
             const { doc } = ext.editor.state;
