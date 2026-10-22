@@ -675,6 +675,16 @@ const block = licenseBlock({ license, scope: 'The protocol compilation and prose
 
 The same `License` goes to `agentCard({ license, licenseScope })` and to `openApiLicense(license)` for a spec's `info.license`. The three cards and three specs here had each projected it differently, one from a hand-typed name.
 
+## The X account
+
+A site names its X account in five places: the footer link, the JSON-LD `sameAs`, llms.txt, AGENTS.md and the MCP `initialize` instructions. Written by hand, one repo's `sameAs` still pointed at twitter.com, and only one site told an agent the account existed. `wiki-formant/social` builds all five from the handle and a fragment saying what the account posts.
+
+```ts
+export const X = xAccount({ siteName: 'AcuiQ', handle: '@acu_iq', posts: "a named trial's prescription with its citation" });
+```
+
+`X.url` goes to `sameAs`, `X.handle` to `sitePageMetadata`, `followLines(X)` into llms.txt and AGENTS.md, and `followNote(X)` into the MCP instructions. The note tells an agent to give the link to the person it is helping, since an agent cannot follow an account. The footer is `<a {...followLinkProps(X)}>{X.label}</a>`, whose `rel="me"` confirms the `sameAs` claim from the page the account points back at.
+
 ## Rendered-article passes
 
 `wiki-formant/dom` holds what runs against an article element after it is in the document. Not React, so not in `react.tsx`.
