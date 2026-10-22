@@ -74,11 +74,15 @@ export function maintenanceQueues<P extends QueuePage>(pages: readonly P[], o: Q
   const sources = new Map<string, number>();
   for (const page of pages) {
     const text = JSON.stringify(page.content ?? '');
+    // A page's link to itself is not a way in, as a list naming itself is not.
+    const self = o.href(page);
     let outbound = 0;
     for (const [, target] of text.matchAll(HREF)) {
       if (!target) continue;
-      if (target.startsWith('/')) linkedPaths.add(target.replace(/\/+$/, '') || '/');
-      else if (/^https?:/i.test(target)) outbound++;
+      if (target.startsWith('/')) {
+        const path = target.replace(/\/+$/, '') || '/';
+        if (path !== self) linkedPaths.add(path);
+      } else if (/^https?:/i.test(target)) outbound++;
     }
     sources.set(page.id, outbound + (text.match(REF_URL)?.length ?? 0));
     for (const id of o.listedIds?.(page.content) ?? []) if (id !== page.id && ids.has(id)) linkedIds.add(id);

@@ -32,6 +32,15 @@ test('a wiki that names how to stamp a page says so, and empty queues are droppe
   assert.match(queues[0].description, /then tick Facts checked in the editor\.$/);
 });
 
+test('a page that links only to itself is still orphaned', () => {
+  const pages = [
+    page('a', 'g', 'a', [{ type: 'content', text: '<a href="/g/a#top">top</a> <a href="/g/b">b</a>' }]),
+    page('b', 'g', 'b', [{ type: 'content', text: '<a href="/g/b">self</a>' }]),
+  ];
+  const queues = maintenanceQueues(pages, { href, nowMs: NOW });
+  assert.deepEqual(queues.find(q => q.key === 'orphaned').items.map(i => i.title), ['a']);
+});
+
 test('a citation names the publisher, title, day and address', () => {
   assert.equal(citation({ publisher: 'AcuiQ', title: 'Point codes', date: '2026-10-02T12:00:00Z', url: 'https://acuiq.com/wiki/x' }), 'AcuiQ. "Point codes." October 2, 2026. https://acuiq.com/wiki/x');
 });
