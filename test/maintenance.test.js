@@ -1,7 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { compact, addBacklog, render, staleWrite } from '../dist/maintenance.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { PGlite } from '@electric-sql/pglite';
+import { compact, addBacklog, lateBacklog, render, staleWrite } from '../dist/maintenance.js';
 
 test('compact keeps open work items, pinned flags first, newest next, and caps the rest', () => {
   const backlog = [
@@ -89,4 +93,59 @@ test('the bins refuse an incomplete command before touching a database', () => {
   assert.equal(run('maintenance-log', 'read'), 2, 'no --at or --routine');
   assert.equal(run('maintenance-log', 'erase', '--at', 'a/b', '--routine', 'r'), 2);
   assert.equal(run('mark-verified', 'contents'), 2, 'a slug or --all is required');
+});
+
+test('lateBacklog keeps what was filed after the read, never what the run closed or saw', () => {
+  const stored = {
+    backlog: [{ date: 'd1', item: 'seen', status: 'open' }, { date: 'd2', item: 'late', status: 'open' }, { date: 'd0', item: 'own', status: 'open' }],
+    filed: ['seen', 'late'],
+  };
+  const next = { backlog: [{ date: 'd1', item: 'seen, reworded', status: 'open' }, { date: 'd0', item: 'own', status: 'done' }], filed: ['seen'] };
+  assert.deepEqual(lateBacklog(stored, next, 'today'), [{ date: 'd2', item: 'late', status: 'open' }]);
+  assert.deepEqual(lateBacklog(stored, { ...next, filed: ['seen', 'late'] }, 'today'), []);
+});
+
+// The bin against a PGlite database on disk: `pg` resolves to a shim over it.
+const pgShim = () => {
+  const shim = `import { PGlite } from ${JSON.stringify(import.meta.resolve('@electric-sql/pglite'))};
+    export default { Client: class { async connect() { this.db = await PGlite.create(process.env.PGLITE_DIR); }
+      query(text, values) { return this.db.query(text, values); } async end() { await this.db.close(); } } };`;
+  const hooks = `export async function resolve(s, c, next) {
+    return s === 'pg' ? { url: ${JSON.stringify(`data:text/javascript,${encodeURIComponent(shim)}`)}, shortCircuit: true } : next(s, c); }`;
+  return `data:text/javascript,${encodeURIComponent(`import { register } from 'node:module'; register(${JSON.stringify(`data:text/javascript,${encodeURIComponent(hooks)}`)});`)}`;
+};
+
+test('a write keeps an item filed mid-run and merges metadata instead of replacing it', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'mlog-'));
+  try {
+    let db = await PGlite.create(dir);
+    await db.exec(`
+      CREATE TABLE "WikiPage" (id text PRIMARY KEY, "siteId" text NOT NULL DEFAULT '', "tagPath" text NOT NULL, slug text NOT NULL,
+        title text NOT NULL, content jsonb NOT NULL DEFAULT '[]', metadata jsonb NOT NULL DEFAULT '{}', version text NOT NULL DEFAULT '1.0.0',
+        "updatedAt" timestamptz NOT NULL DEFAULT now());
+      CREATE TABLE "WikiRevision" (id text PRIMARY KEY DEFAULT gen_random_uuid()::text, "pageId" text NOT NULL, title text NOT NULL,
+        content jsonb NOT NULL, version text NOT NULL, "changeType" text NOT NULL, message text, "authorId" text,
+        "createdAt" timestamptz NOT NULL DEFAULT now());
+      INSERT INTO "WikiPage" (id, "tagPath", slug, title, metadata)
+        VALUES ('p', 'ops', 'log', 'Log', '{"state": {"totalRuns": 1}, "lastVerified": "2026-01-01", "owner": "ops"}');`);
+    await db.close();
+
+    const mlog = (...a) => execFileSync('node', ['--import', pgShim(), new URL('../bin/maintenance-log.mjs', import.meta.url).pathname, ...a, '--at', 'ops/log', '--routine', 'r'], {
+      cwd: dir, stdio: 'pipe', env: { PATH: process.env.PATH, DATABASE_URL: 'pglite', PGLITE_DIR: dir },
+    }).toString();
+    const read = JSON.parse(mlog('read'));
+    mlog('backlog-add', JSON.stringify([{ item: 'from the sibling' }]));
+    mlog('write', JSON.stringify({ ...read, totalRuns: 2, backlog: [{ date: '2026-10-22', item: 'own work', status: 'open' }] }));
+
+    db = await PGlite.create(dir);
+    const { rows: [{ metadata }] } = await db.query(`SELECT metadata FROM "WikiPage" WHERE id = 'p'`);
+    await db.close();
+    assert.deepEqual(metadata.state.backlog.map(b => b.item).sort(), ['from the sibling', 'own work']);
+    assert.equal(metadata.state.totalRuns, 2);
+    assert.equal('filed' in metadata.state, false, 'a write consumes what was filed');
+    assert.equal(metadata.owner, 'ops', 'other metadata is kept');
+    assert.equal('lastVerified' in metadata, false, 'the vestigial stamp is gone');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

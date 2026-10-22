@@ -26,11 +26,12 @@
 // page in place, because a full copy per run is what made radix-wiki's log
 // over half its revisions table. `write` refuses a state whose totalRuns is
 // below the stored one: that state was read before another run wrote.
-// `backlog-add` is how another routine files an
-// item: `write` replaces the whole state, so an append through it could lose a
-// concurrent run's, and the row lock serialises the two. A revision bumps the
-// page's version a minor.
-import { PINNED, addBacklog, compact, render, staleWrite } from '../dist/maintenance.js';
+// `backlog-add` is how another routine files an item. It records what it filed
+// in `state.filed`, and a `write` whose state was read before the filing merges
+// the item back in, so a run's whole-state write cannot drop it. Every mode
+// reads and writes under the row lock. Only `state` in the page's metadata is
+// written; other keys are kept. A revision bumps the page's version a minor.
+import { PINNED, addBacklog, compact, lateBacklog, render, staleWrite } from '../dist/maintenance.js';
 import { bump } from '../dist/versioning.js';
 import { arg, connect, invalidate } from './_cli.mjs';
 
@@ -48,6 +49,8 @@ if (!['read', 'write', 'compact', 'backlog-add'].includes(mode) || slugAt < 1 ||
 const pages = '"WikiPage"';
 const revisions = '"WikiRevision"';
 const where = `"tagPath" = $1 AND slug = $2 AND "siteId" = $3`;
+/** The new state into the page's metadata, beside whatever else it holds. `lastVerified` was a stamp nothing read. */
+const withState = `(metadata - 'lastVerified') || jsonb_build_object('state', $2::jsonb)`;
 const address = [at.slice(0, slugAt), at.slice(slugAt + 1), arg('--site') ?? ''];
 
 const readStdin = async () => {
@@ -79,14 +82,14 @@ try {
       await q('ROLLBACK');
       console.log('  nothing to add (all duplicates)');
     } else {
-      const next = compact({ ...state, backlog: [...(state.backlog ?? []), ...added] });
+      const next = compact({ ...state, backlog: [...(state.backlog ?? []), ...added], filed: [...(state.filed ?? []), ...added.map(a => a.item)] });
       console.log(`  ${dry ? '[dry] ' : ''}+${added.length} backlog item(s), ${next.backlog.length} open`);
       for (const a of added) console.log(`     ${a.item}`);
       if (dry) await q('ROLLBACK');
       else {
-        await q(`UPDATE ${pages} SET content = $1, metadata = $2, "updatedAt" = now() WHERE id = $3`, [
+        await q(`UPDATE ${pages} SET content = $1, metadata = ${withState}, "updatedAt" = now() WHERE id = $3`, [
           JSON.stringify(render(next, routine)),
-          JSON.stringify({ state: next, lastVerified: today }),
+          JSON.stringify(next),
           page.id,
         ]);
         await q('COMMIT');
@@ -94,15 +97,22 @@ try {
       }
     }
   } else {
-    const [page] = await q(`SELECT * FROM ${pages} WHERE ${where}`, address);
+    const text = mode === 'write' ? (payload === undefined || payload === '-' ? await readStdin() : payload) : '';
+    if (mode === 'write' && !text.trim()) throw new Error('write needs the state as JSON, as an argument or on stdin with `write -`');
+    // Locked from the read to the write, so a `backlog-add` lands before or after, never in between.
+    await q('BEGIN');
+    const [page] = await q(`SELECT * FROM ${pages} WHERE ${where} FOR UPDATE`, address);
     if (!page) throw new Error(`no log page at ${at}`);
-    let input = page.metadata?.state ?? {};
+    const stored = page.metadata?.state ?? {};
+    let input = stored;
     if (mode === 'write') {
-      const text = payload === undefined || payload === '-' ? await readStdin() : payload;
-      if (!text.trim()) throw new Error('write needs the state as JSON, as an argument or on stdin with `write -`');
       input = JSON.parse(text);
-      const stale = staleWrite(page.metadata?.state ?? {}, input);
+      const stale = staleWrite(stored, input);
       if (stale) throw new Error(stale);
+      const late = lateBacklog(stored, input, today);
+      for (const l of late) console.log(`  kept, filed since this state was read: ${l.item}`);
+      const { filed: _, ...rest } = input;
+      input = { ...rest, backlog: [...(input.backlog ?? []), ...late] };
     }
     const state = compact(input);
     const content = render(state, routine);
@@ -130,11 +140,11 @@ try {
         `content ${JSON.stringify(content).length} B${revise ? `, revision v${version}` : ', no revision today'}`,
     );
 
-    if (!dry) {
-      await q('BEGIN');
+    if (dry) await q('ROLLBACK');
+    else {
       await q(
-        `UPDATE ${pages} SET content = $1, metadata = $2, "updatedAt" = now(), version = $4 WHERE id = $3`,
-        [JSON.stringify(content), JSON.stringify({ state, lastVerified: today }), page.id, version],
+        `UPDATE ${pages} SET content = $1, metadata = ${withState}, "updatedAt" = now(), version = $4 WHERE id = $3`,
+        [JSON.stringify(content), JSON.stringify(state), page.id, version],
       );
       if (revise) {
         await q(

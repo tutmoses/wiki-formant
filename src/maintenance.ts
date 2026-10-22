@@ -47,6 +47,8 @@ export interface LogState {
   backlog?: BacklogEntry[];
   feedback?: FeedbackEntry[];
   runHistory?: RunEntry[];
+  /** What `backlog-add` filed since the last `write`, by item: how a write tells a late item from one it closed. */
+  filed?: string[];
   [key: string]: unknown;
 }
 
@@ -104,6 +106,20 @@ export function staleWrite(stored: LogState, next: LogState): string | null {
   return has < had
     ? `refusing a state with totalRuns ${has} over the stored ${had}: it predates a run that has already written. Read the log again and reapply this run's changes.`
     : null;
+}
+
+/**
+ * The items another routine filed with `backlog-add` after `next` was read,
+ * which `next` therefore cannot carry: in the stored `filed` list and not in
+ * the one `next` was read with. A run's `write` replaces the whole state, so
+ * without this an item filed mid-run was lost. Merged rather than refused,
+ * because a run that has done its work should not be sent back over another
+ * routine's note.
+ */
+export function lateBacklog(stored: LogState, next: LogState, today: string): BacklogEntry[] {
+  const filed = new Set(stored.filed ?? []);
+  const seen = new Set(next.filed ?? []);
+  return addBacklog(next, (stored.backlog ?? []).filter(b => filed.has(itemOf(b)) && !seen.has(itemOf(b))), today);
 }
 
 /** New backlog items, deduplicated against what is there, dated today unless they carry a date. */
