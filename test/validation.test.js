@@ -21,7 +21,15 @@ test('safe schemes pass, unsafe ones do not', () => {
   assert.equal(safeLinkHref('data:text/html,<script>'), null);
   assert.equal(safeLinkHref('vbscript:x'), null);
   assert.equal(safeLinkHref('//evil.com'), null);
+  assert.equal(safeLinkHref('/\\evil.com'), null);
+  assert.equal(safeLinkHref('\\\\evil.com'), null);
   assert.equal(safeLinkHref(null), null);
+});
+
+test('a space inside a url is kept, one at either end is not', () => {
+  assert.equal(safeLinkHref('https://example.com/My Photo.jpg'), 'https://example.com/My Photo.jpg');
+  assert.equal(safeLinkHref('mailto:a@b.c?subject=Hello World'), 'mailto:a@b.c?subject=Hello World');
+  assert.equal(safeLinkHref('  /wiki/a b  '), '/wiki/a b');
 });
 
 test('control characters cannot smuggle a scheme past the check', () => {

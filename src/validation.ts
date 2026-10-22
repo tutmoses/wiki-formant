@@ -24,10 +24,14 @@ import { LIST_SOURCES } from './blocks.js';
 export function safeLinkHref(raw: string | null | undefined): string | null {
   if (!raw) return null;
   // Strip C0 controls (including tab, newline and CR) and DEL before reading
-  // the scheme, so a newline cannot smuggle one past the match below.
-  const href = raw.replace(/[\u0000-\u0020\u007f]/g, '').trim();
+  // the scheme, so a newline cannot smuggle one past the match below. A space
+  // is not one: inside a URL it is the author's (`/My Photo.jpg`), and at
+  // either end `trim` takes it.
+  const href = raw.replace(/[\u0000-\u001f\u007f]/g, '').trim();
   if (!href) return null;
-  if (href.startsWith('//')) return null; // protocol-relative -> external host
+  // Protocol-relative -> external host. A browser reads `\` as `/` here, so
+  // `/\evil.com` is the same link.
+  if (/^[\\/]{2}/.test(href)) return null;
   const scheme = href.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);
   if (scheme) {
     const s = scheme[1]!.toLowerCase();
