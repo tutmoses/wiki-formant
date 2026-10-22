@@ -190,6 +190,20 @@ test('collect answers 204 and defers a view, an event, or nothing', async () => 
   assert.equal(inserts('Event')[0].values[3], '{"url":"https://x.com/a"}');
 });
 
+test('collect decodes a beacon path once', async () => {
+  const { sql, inserts } = fakeSql();
+  const tasks = [];
+  const post = body =>
+    collect(new Request('https://radix.wiki/api/view', { method: 'POST', body: JSON.stringify(body), headers: headers({ 'x-forwarded-for': `8.8.8.${tasks.length}` }) }), { sql, defer: t => tasks.push(t) });
+  await post({ path: '/100%25-guide' });
+  await post({ path: '/what%3Fnot' });
+  await post({ name: 'Copy', path: '/100%25-guide' });
+  await post({ name: 'Copy', path: '/what%3Fnot' });
+  await Promise.all(tasks.map(t => t()));
+  assert.deepEqual(inserts('View').map(v => v.values[1]), ['/100%-guide', '/what?not']);
+  assert.deepEqual(inserts('Event').map(e => e.values[2]), ['/100%-guide', '/what?not']);
+});
+
 test('collect drops a beacon its site resolver refuses', async () => {
   const { sql } = fakeSql();
   const tasks = [];

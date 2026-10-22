@@ -216,15 +216,18 @@ export async function collect(request: Request, { sql, defer, site, rateLimit: l
   if (BOT.test(headers.get('user-agent') ?? '') || !rateLimit(clientKey('beacon', headers), limit).ok) return done;
 
   const body = (await request.json().catch(() => null)) as Partial<Beacon> | null;
-  const path = typeof body?.path === 'string' ? normalisePath(body.path) : null;
-  if (!body || !path) return done;
+  const raw = typeof body?.path === 'string' ? body.path : null;
+  const path = raw === null ? null : normalisePath(raw);
+  if (!body || raw === null || !path) return done;
   const key = site ? await site(request, path) : '';
   if (key === null) return done;
 
+  // The recorders normalise what they are given, so they get the path as sent:
+  // decoded twice, `/100%25-off` was dropped and `/what%3Fnow` cut to `/what`.
   defer(() =>
     typeof body.name === 'string' && body.name
-      ? recordEvent(sql, { name: body.name, props: beaconProps(body.props), url: path, headers, site: key })
-      : recordView(sql, { headers, path, referrer: body.referrer, utm: body.utm, site: key }),
+      ? recordEvent(sql, { name: body.name, props: beaconProps(body.props), url: raw, headers, site: key })
+      : recordView(sql, { headers, path: raw, referrer: body.referrer, utm: body.utm, site: key }),
   );
   return done;
 }
