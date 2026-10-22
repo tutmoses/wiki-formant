@@ -406,11 +406,6 @@ export interface TabsOptions {
   tabLabel?: (index: number) => string;
 }
 
-/**
- * A tab group and its items, which must be registered together — `tabGroup`'s
- * content expression is `tabItem+`, so registering one without the other leaves
- * a node type the schema cannot satisfy.
- */
 /** The classes `base.css` draws the tab editor with, each replaceable. */
 const TABS_CLASSES: Required<TabsClassNames> = {
   editor: 'tabs-editor',
@@ -423,6 +418,11 @@ const TABS_CLASSES: Required<TabsClassNames> = {
   content: 'tabs-content',
 };
 
+/**
+ * A tab group and its items, which must be registered together — `tabGroup`'s
+ * content expression is `tabItem+`, so registering one without the other leaves
+ * a node type the schema cannot satisfy.
+ */
 export function createTabs({
   classNames: own = {},
   icons: ownIcons = {},
@@ -469,7 +469,10 @@ export function createTabs({
       if (tabs.length <= 1) return;
       const pos = posOf(index);
       editor.chain().focus().deleteRange({ from: pos, to: pos + tabs[index].nodeSize }).run();
-      if (activeTab >= tabs.length - 1) setActiveTab(Math.max(0, tabs.length - 2));
+      // The open tab stays open: removing one before it moves it down a place.
+      const at = Math.min(activeTab, tabs.length - 1);
+      const next = Math.max(0, index < at ? at - 1 : Math.min(at, tabs.length - 2));
+      if (next !== activeTab) setActiveTab(next);
     };
 
     const renameTab = (index: number, title: string) => {
