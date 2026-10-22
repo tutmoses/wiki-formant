@@ -41,18 +41,29 @@ export function isStale(page: FreshnessInput, now: number, maxAgeDays = DEFAULT_
   return age === null || age > maxAgeDays;
 }
 
+export interface FreshnessOptions {
+  /** Older than this, unverified, and the page is stale. */
+  maxAgeDays?: number;
+  /**
+   * What the notice asks a reader to re-check the facts against: `current
+   * sources` unless the wiki has more to name. The two Radix wikis add the live
+   * ledger, which a shop's wiki or a medical one has no use for.
+   */
+  against?: string;
+}
+
 /**
- * The sentence the notice carries. Both wikis shipped this string identically,
- * down to the ISO date and the closing request, so it lives here rather than
- * being re-typed either side of the extraction.
+ * The sentence the notice carries. Both Radix wikis shipped this string
+ * identically, down to the ISO date and the closing request; what to re-check
+ * against is the one part that differs between wikis.
  *
  * @internal
  */
-export function freshnessNotice(page: FreshnessInput): string {
+export function freshnessNotice(page: FreshnessInput, against = 'current sources'): string {
   const when = page.lastVerifiedAt
     ? `last verified ${isoDate(new Date(page.lastVerifiedAt))}`
     : 'not yet verified against sources';
-  return `This page was ${when} and may be out of date. Please help re-check its facts against current sources and the live ledger.`;
+  return `This page was ${when} and may be out of date. Please help re-check its facts against ${against}.`;
 }
 
 /**
@@ -66,10 +77,10 @@ export function freshnessNotice(page: FreshnessInput): string {
 export function freshnessBanner(
   page: FreshnessInput,
   nowMs: number,
-  maxAgeDays = DEFAULT_MAX_AGE_DAYS,
+  { maxAgeDays = DEFAULT_MAX_AGE_DAYS, against }: FreshnessOptions = {},
 ): { id: string; type: 'banner'; variant: 'outdated'; text: string } | null {
   if (!isStale(page, nowMs, maxAgeDays)) return null;
-  return { id: '__freshness__', type: 'banner', variant: 'outdated', text: freshnessNotice(page) };
+  return { id: '__freshness__', type: 'banner', variant: 'outdated', text: freshnessNotice(page, against) };
 }
 
 // ---- dates for display ------------------------------------------------------

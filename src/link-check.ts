@@ -25,6 +25,12 @@ export interface Probe {
   note?: string;
   contentType?: string;
   bytes?: number;
+  /**
+   * The host refused a script rather than the page being gone: a bot challenge,
+   * a 429, or a 403/503 whose body is a challenge page. Report it as
+   * unverifiable, never as dead.
+   */
+  walled?: boolean;
 }
 
 export interface ProbeOptions {
@@ -138,23 +144,41 @@ export function perHost<T>(url: string, fn: () => Promise<T>): Promise<T> {
   return next as Promise<T>;
 }
 
+/**
+ * A browser's request headers. A scholarly publisher or a standards body 403s
+ * Node's own user agent whatever the page's health; acuiq2's sweep, which
+ * checks PubMed and journal citations, sent these and saw a fraction of the
+ * false deaths.
+ */
+const BROWSER = {
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36',
+  Accept: 'text/html,application/xhtml+xml,*/*;q=0.8',
+  'Accept-Language': 'en',
+};
+const CHALLENGE = /recaptcha|cf-chl|challenge-platform|just a moment|captcha/i;
+
 async function attempt(url: string, budgetMs: number): Promise<Probe> {
   // One signal for both requests, so the budget covers the HEAD *and* the GET
   // rather than resetting between them. `engines.node` is >= 20, so this needs
   // no controller and no `clearTimeout` in a `finally` that could be forgotten.
   const signal = AbortSignal.timeout(budgetMs);
   try {
-    let res = await fetch(url, { method: 'HEAD', redirect: 'follow', signal });
+    let res = await fetch(url, { method: 'HEAD', redirect: 'follow', headers: BROWSER, signal });
     // Some hosts reject HEAD outright; retry with GET before believing a 4xx.
+    let body = '';
     if (res.status >= 400) {
-      res = await fetch(url, { method: 'GET', redirect: 'follow', signal });
+      res = await fetch(url, { method: 'GET', redirect: 'follow', headers: BROWSER, signal });
+      if (res.status >= 400) body = await res.text().catch(() => '');
     }
+    // A 429 is the host rationing us, which says nothing about the page.
+    const walled = res.headers.get('cf-mitigated') === 'challenge' || res.status === 429 || ([403, 503].includes(res.status) && CHALLENGE.test(body));
     return {
       url,
       status: res.status,
       ok: res.status < 400,
       contentType: (res.headers.get('content-type') || '').split(';')[0]?.trim(),
       bytes: Number(res.headers.get('content-length') || 0),
+      ...(walled && { walled }),
     };
   } catch (err) {
     return { url, status: 0, ok: false, ...describeFailure(err) };

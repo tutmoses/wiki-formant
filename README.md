@@ -422,7 +422,7 @@ const { ref, onScroll, at, step, go } = useSnapRow();
 
 `useClickOutside` is fifteen lines and was in all three. Only one had the `offsetParent` check, and without it a container hidden at the current breakpoint still answers outside-clicks — so on a phone, a tap anywhere dismisses the popover the reader is looking at, because the hidden desktop copy got there first.
 
-`useUnsavedChanges(dirty)` asks before an edit with unsaved changes is left: the browser's own prompt on a reload or a closed tab, and the `confirmLeave()` it returns for a Back link or Cancel, which a client-side navigation never sends through `beforeunload`. If a save leaves by a full page load, pass false once it has landed, or the save's own exit asks. `useSaveShortcut(save)` binds ⌘S and Ctrl+S, reading `save` when the key is pressed.
+`useUnsavedChanges(dirty)` asks before an edit with unsaved changes is left: the browser's own prompt on a reload or a closed tab, and the `confirmLeave()` it returns for a Back link or Cancel, which a client-side navigation never sends through `beforeunload`. If a save leaves by a full page load, pass false once it has landed, or the save's own exit asks. `useSaveShortcut(save)` binds ⌘S and Ctrl+S, reading `save` when the key is pressed. `useSearchShortcut(open)` is Wikipedia's "/" to search, ignored while the reader types in a field: `open` focuses the field or opens what holds it, and returns false to leave the key alone, which `focusShown(input)` does for a field hidden at this width.
 
 ### The listbox contract
 
@@ -764,6 +764,14 @@ A `codeTabs` tab's `code` is source text in every wiki here, and every view trea
 ## Dates
 
 `relativeTime(then, now, { style })` is `compact` (`3h`), `short` (`3h ago`) or `long` (`3 days ago`, day-grained for pages cached for hours), with `absoluteAfterDays` to hand over to the date itself. `now` is always passed in, never read, so a server render and its hydration agree. `formatDay` is always UTC: a stored day formatted in the server's zone, or the browser's, is the previous day for half the world. It reads `en-US` unless given a `locale`: `formatDay(day, { locale: 'en-GB', month: 'long' })` is `19 September 2026`. Both are in `wiki-formant/freshness`, with `isoDate`.
+
+## Freshness and the maintenance queues
+
+`freshnessBanner(page, nowMs, { maxAgeDays, against })` is the synthetic `outdated` banner a page carries once it has gone unchecked for `maxAgeDays` (180), or null. Its notice asks the reader to re-check the facts against `current sources`; the two Radix wikis pass `against: 'current sources and the live ledger'`, which a shop's wiki has no use for.
+
+`wiki-formant/queues` gathers the signals each page shows into Wikipedia's tracking categories: `maintenanceQueues(pages, { href, required, nowMs, verify, listedIds })` returns the outdated, orphaned, unsourced and missing-facts queues, empty ones dropped, from one pass over the pages' content. Pass every page but the home page and the back office, since an orphan is a page no other page links to. `href` is a page's address as its links name it, `required` the facts its category requires, `verify` how a page is stamped as checked here (it closes the outdated queue's sentence), and `listedIds` the ids a list block names its pages by. `MaintenanceQueues` (`wiki-formant/react-server`) draws them, a heading and a count each, under classes `maintenance-*`; the page around them is the wiki's, `noindex`. All four apps serve one at `/maintenance` (on miow, the owner page).
+
+`Cite` (`wiki-formant/react-server`) is "Cite" in an article's meta line, a `<details>` opening on `citation({ publisher, title, date, url })`: `AcuiQ. "Point codes." October 2, 2026. https://…`.
 
 ## Sanitising stored HTML
 

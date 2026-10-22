@@ -1077,6 +1077,37 @@ export function useSaveShortcut(save: () => void): void {
   }, []);
 }
 
+/**
+ * "/" opens search from anywhere, Wikipedia's key, unless the reader is
+ * already typing. `open` focuses the field, or opens whatever holds it, and
+ * returns false when there is nothing to open (a field hidden at this width),
+ * which leaves the key to the page.
+ */
+export function useSearchShortcut(open: () => boolean | void): void {
+  const latest = useRef(open);
+  useEffect(() => {
+    latest.current = open;
+  });
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if (latest.current() !== false) e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+}
+
+/** Focus a search field that is shown: `useSearchShortcut(() => focusShown(ref.current))`. */
+export const focusShown = (input: HTMLInputElement | null): boolean => {
+  // A field hidden at this width has no offsetParent.
+  if (!input?.offsetParent) return false;
+  input.focus();
+  return true;
+};
+
 // ---- revision restore ---------------------------------------------------------
 
 /** Resolves to an error message to show, or null on success. */

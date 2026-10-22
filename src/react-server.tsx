@@ -25,6 +25,8 @@ import { safeLinkHref } from './validation.js';
 import { isoDate } from './html.js';
 import { blockLocation, type BlockChange } from './revisions.js';
 import type { HistoryChange } from './history.js';
+import type { MaintenanceQueue } from './queues.js';
+import { formatDay } from './freshness.js';
 
 /**
  * The shape a router's link component has to satisfy here.
@@ -712,5 +714,78 @@ export function RevisionChanges({ changes, label = type => type }: RevisionChang
         </li>
       ))}
     </ul>
+  );
+}
+
+// ---- maintenance queues -------------------------------------------------------
+
+export interface MaintenanceQueuesProps {
+  queues: readonly MaintenanceQueue[];
+  link?: WikiLinkComponent;
+  /** Shown when every queue is empty. */
+  empty?: ReactNode;
+  /** The level each queue's heading takes. */
+  headingLevel?: 'h2' | 'h3';
+}
+
+/**
+ * `maintenanceQueues`' lists, a heading and a count each. The page around them
+ * (its title, a sentence on what the queues are) is the wiki's.
+ */
+export function MaintenanceQueues({ queues, link: Link = Anchor, empty = <p>Nothing needs attention.</p>, headingLevel: H = 'h2' }: MaintenanceQueuesProps) {
+  if (!queues.length) return <>{empty}</>;
+  return (
+    <>
+      {queues.map(queue => (
+        <section key={queue.key} className="maintenance-queue" aria-labelledby={`queue-${queue.key}`}>
+          <H id={`queue-${queue.key}`}>
+            {queue.title} <span className="maintenance-count">{queue.items.length}</span>
+          </H>
+          <p className="maintenance-description">{queue.description}</p>
+          <ul className="maintenance-list">
+            {queue.items.map(item => (
+              <li key={item.href} className="maintenance-item">
+                <Link href={item.href}>{item.title}</Link>
+                <span className="maintenance-detail">
+                  {item.tagPath ? `${item.tagPath} · ` : ''}
+                  {item.detail}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </>
+  );
+}
+
+// ---- citation -----------------------------------------------------------------
+
+export interface CiteProps {
+  /** Who publishes the page: the site's name. */
+  publisher: string;
+  title: string;
+  /** The day the page last changed, or was published where a wiki keeps that. */
+  date: Date | string;
+  /** The page's one canonical address. */
+  url: string;
+  className?: string;
+}
+
+/** The citation for a page, one line: `Publisher. "Title." October 22, 2026. url`, as acuiq2 first wrote it. */
+export const citation = ({ publisher, title, date, url }: Omit<CiteProps, 'className'>): string =>
+  `${publisher}. "${title}." ${formatDay(date, { month: 'long' })}. ${url}`;
+
+/**
+ * "Cite" in an article's meta line, opening on the citation to copy. Shown,
+ * not copied by a button, so it works with no script and a reader can take
+ * part of it.
+ */
+export function Cite({ className = 'article-cite', ...page }: CiteProps) {
+  return (
+    <details className={className}>
+      <summary>Cite</summary>
+      <code>{citation(page)}</code>
+    </details>
   );
 }

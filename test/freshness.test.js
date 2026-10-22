@@ -37,7 +37,7 @@ test('the notice is the exact sentence both wikis shipped', () => {
   assert.equal(
     freshnessNotice({ lastVerifiedAt: new Date(Date.UTC(2026, 2, 15)) }),
     'This page was last verified 2026-03-15 and may be out of date. '
-    + 'Please help re-check its facts against current sources and the live ledger.',
+    + 'Please help re-check its facts against current sources.',
   );
   assert.match(freshnessNotice({ updatedAt: daysAgo(400) }), /^This page was not yet verified against sources and may be out of date\./);
 });
@@ -95,4 +95,8 @@ test('formatDay is the UTC day whatever the zone', () => {
   assert.equal(formatDay('2026-09-19T23:30:00Z', { month: 'long' }), 'September 19, 2026');
   assert.equal(formatDay('2026-09-19', { locale: 'en-GB', month: 'long' }), '19 September 2026');
   assert.equal(isoDate(new Date('2026-09-19T23:30:00Z')), '2026-09-19');
+});
+
+test('freshnessNotice names what a wiki re-checks against', () => {
+  assert.match(freshnessNotice({ updatedAt: daysAgo(400) }, 'current sources and the live ledger'), /against current sources and the live ledger\.$/);
 });
