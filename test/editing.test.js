@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { SortHeader, BlockActions } from 'wiki-formant/react';
-import { ToolbarButton, toolbarActions, TOOLBAR_ACTIONS } from 'wiki-formant/editor';
+import { ToolbarButton, TOOLBAR_ACTIONS } from 'wiki-formant/editor';
 
 const html = (c, p) => renderToStaticMarkup(createElement(c, p));
 const noop = () => {};
@@ -37,9 +37,9 @@ test('toolbar buttons say what they are and whether they are on', () => {
   );
 });
 
-test('toolbar actions come back in the caller\'s order, and every one is labelled and runnable', () => {
-  assert.deepEqual(toolbarActions(['table', 'bold', 'link']).map(a => a.key), ['table', 'bold', 'link']);
+test('every toolbar action is labelled, runnable, and names what it needs', () => {
   for (const a of TOOLBAR_ACTIONS) {
+    assert.ok(a.needs, a.key);
     assert.ok(a.label && a.label !== a.key, a.key);
     assert.ok(a.run || a.withUrl, a.key);
   }

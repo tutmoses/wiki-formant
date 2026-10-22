@@ -305,13 +305,24 @@ export interface CodeBlockOptions {
   };
 }
 
+/** The classes `base.css` draws a code block's language picker with, each replaceable. */
+const CODE_BLOCK_CLASSES: Required<CodeBlockClassNames> = {
+  wrapper: 'code-block',
+  control: 'code-block-control',
+  button: 'code-block-button',
+  dropdown: 'code-block-menu',
+  option: 'code-block-option',
+  optionActive: 'active',
+};
+
 /** A code block whose language is pickable from a dropdown. */
 export function createCodeBlock({
   langs = CODE_LANGS,
   defaultLang = DEFAULT_LANG,
-  classNames = {},
+  classNames: own = {},
   icons = {},
 }: CodeBlockOptions = {}) {
+  const classNames = { ...CODE_BLOCK_CLASSES, ...own };
   function CodeBlockView({
     node,
     updateAttributes,
@@ -327,7 +338,7 @@ export function createCodeBlock({
     return (
       <NodeViewWrapper className={classNames.wrapper}>
         <div ref={dropdownRef} className={classNames.control}>
-          <button type="button" onClick={() => setOpen(!open)} className={classNames.button}>
+          <button type="button" onClick={() => setOpen(!open)} className={classNames.button} aria-label={`Language: ${lang}`} aria-expanded={open}>
             {icons.lang}
             <span>{lang}</span>
             {icons.chevron?.(open)}
@@ -400,11 +411,25 @@ export interface TabsOptions {
  * content expression is `tabItem+`, so registering one without the other leaves
  * a node type the schema cannot satisfy.
  */
+/** The classes `base.css` draws the tab editor with, each replaceable. */
+const TABS_CLASSES: Required<TabsClassNames> = {
+  editor: 'tabs-editor',
+  list: 'tabs-list',
+  tab: 'tab-button',
+  tabActive: 'active',
+  title: 'tab-title',
+  remove: 'tab-remove',
+  add: 'tab-add',
+  content: 'tabs-content',
+};
+
 export function createTabs({
-  classNames = {},
-  icons = {},
+  classNames: own = {},
+  icons: ownIcons = {},
   tabLabel = i => `Tab ${i}`,
 }: TabsOptions = {}) {
+  const classNames = { ...TABS_CLASSES, ...own };
+  const icons = { add: '+', remove: '×', ...ownIcons };
   function TabGroupView({
     node,
     getPos,
@@ -465,15 +490,16 @@ export function createTabs({
                   onChange={e => renameTab(i, e.target.value)}
                   onClick={() => setActiveTab(i)}
                   className={classNames.title}
+                  aria-label="Tab name"
                 />
                 {tabs.length > 1 && (
-                  <button type="button" onClick={() => removeTab(i)} className={classNames.remove}>
+                  <button type="button" onClick={() => removeTab(i)} className={classNames.remove} aria-label="Remove this tab" title="Remove this tab">
                     {icons.remove}
                   </button>
                 )}
               </div>
             ))}
-            <button type="button" onClick={addTab} className={classNames.add}>
+            <button type="button" onClick={addTab} className={classNames.add} aria-label="Add a tab" title="Add a tab">
               {icons.add}
             </button>
           </div>

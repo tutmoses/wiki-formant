@@ -698,7 +698,7 @@ const off = onTweetResize((h, source) => sizeTweetEmbed(el, h, source));
 
 `addCopyButton` was **byte-identical** in two BlockRenderers, down to the SVG path data. Its idempotence guard now lives inside the function rather than in a `pre:not(:has(…))` at the call site, where it can be — and was — retyped.
 
-In React, `useArticlePasses(ref, [blocks])` runs the three passes and `useTweetEmbeds(ref, [html])` the embed pair, from `wiki-formant/react`. Three renderers had the effect written out and disagreed on its dependencies: two ran once on mount, so a page swapped in without a remount kept its old tables unsortable.
+In React, `useArticlePasses(ref, [blocks])` (`wiki-formant/react`) runs them all, the embed pair included. Three renderers had the effect written out and disagreed on its dependencies: two ran once on mount, so a page swapped in without a remount kept its old tables unsortable.
 
 `activateTabGroups` turns stored `[data-tabs]` markup into a working tab group. The editor persists tabs as nested divs, which is the right thing to store — it survives a markdown twin, a plain HTML render and a reader with JavaScript off, all of which show every tab in order. Making one of them pressable is a reader-side job, and it sits beside the other passes rather than inside a component.
 
@@ -810,17 +810,24 @@ const CodeBlock = createCodeBlock({
 
 The language list defaults to `CODE_LANGS` and `DEFAULT_LANG` from `wiki-formant/blocks`, which two wikis had typed identically; a wiki with its own passes `langs` and `defaultLang`. The ones that take config take it because that is exactly where the two copies differed — class tokens, the language list, and the API route a shortened map URL has to be resolved through. Injecting them is what lets one wiki keep `text-jupiter` and the other `text-accent` without either forking the node, and it keeps this file from dragging an icon library in behind it.
 
-`createTabs` returns `TabGroup` and `TabItem` together: `tabGroup`'s content expression is `tabItem+`, so registering one without the other leaves a node type the schema cannot satisfy. A pasted short map link inserts immediately with `about:blank` and swaps its `src` when the redirect resolves — pasting must not block on a network hop, and the node has to exist for the reader to see anything happen.
+Both node views draw in default classes (`code-block…`, `tabs-editor`, `tab-button`…) that `base.css` styles plainly enough for any site, the editor's rule showing the tab the writer picked included; pass `classNames` and `icons` to draw them your own way. `createTabs` returns `TabGroup` and `TabItem` together: `tabGroup`'s content expression is `tabItem+`, so registering one without the other leaves a node type the schema cannot satisfy. A pasted short map link inserts immediately with `about:blank` and swaps its `src` when the redirect resolves — pasting must not block on a network hop, and the node has to exist for the reader to see anything happen.
 
 `createHeadingIds({ slug })` decorates each heading in the editor with the id its published copy will carry, through `uniqueHeadingId` — the dedupe `injectHeadingIds` uses — so a rail listing headings mid-edit links to the anchors readers will get. `uploadImageTo('/api/upload')` is the `uploadImage` two editors had written identically.
 
-`toolbarActions([...])` picks the formatting commands, in order, with the labels a screen reader announces — two toolbars titled buttons with the internal key, so one said "codeBlock". `WikiToolbar` lays them out the way three wikis had each assembled them by hand: the format buttons, Remove link while the cursor is in a link, upload and embed, the insert buttons, and the table controls while the cursor is in a table. Every button is a `ToolbarButton` (named, and `aria-pressed`, since these are toggles); the link button opens the address field and reads as on while it is open. Which buttons, icons and classes are yours; a toolbar shaped differently builds from `ToolbarButton` and `runTableAction` directly.
+`WikiToolbar` shows what the editor can do and nothing else: each command whose node, mark or command the editor's extensions include, so an app's buttons follow from its nodes and no app keeps a second list. They come in groups – undo and redo; bold, italic, inline code and link; the three headings; lists, quote and code block; then upload (given `onUpload`), embed (where there are embed nodes), table, tabs and divider – with Remove link after Link while the cursor is in a link, and the table controls while it is in a table. Four apps had each listed buttons by hand: one had no numbered list, one had a code-block node and no button for it, and only one had undo. Every button is a `ToolbarButton`, named and `aria-pressed`; the icons, the classes and anything after the buttons (`children`) are yours.
 
 ```tsx
-<WikiToolbar editor={editor} isActive={isActive} prompt={url} actions={FORMAT} trailing={INSERT} onUpload={triggerUpload} embed
+<WikiToolbar editor={editor} prompt={url} onUpload={triggerUpload}
   icons={{ ...ICONS, unlink: <Unlink />, upload: <Upload />, embed: <Globe /> }}
   classNames={{ toolbar: 'toolbar', button: 'toolbar-btn', pressed: 'toolbar-btn-on', divider: 'toolbar-divider' }} />
 <UrlPromptField prompt={url} classNames={{ row: 'row', input: 'input', apply: 'btn', cancel: 'btn-quiet' }} />
+```
+
+`WikiLine` is a one-line field – a title, a heading, a caption, a button – edited in the element that shows it. Its schema is the line and the `marks` it may keep (`bold`, `italic`, `link`), so a typed "- " makes no list and a pasted heading runs into the line; its value is that HTML, or plain text with no marks. It has its own undo, and `onFocus` hands over its editor, so one `WikiToolbar` can drive whichever field was last touched. `base.css` gives it a placeholder from `data-placeholder`.
+
+```tsx
+<WikiLine as="h1" value={title} onChange={setTitle} placeholder="The page's title" />
+<WikiLine as="p" marks={['bold', 'italic', 'link']} value={note} onChange={setNote} placeholder="A note" />
 ```
 
 `useUrlPrompt(editor, { resolveMapUrl })` is the link and embed address field under a toolbar, in place of a `window.prompt` that blocks the page and cannot show the link the cursor is in. Three editors had written it and one still used the prompt; only one copy both opened a link field on the current address and unlinked on an emptied one. The hook carries both, closes the field when the editor it serves changes (a toolbar shared between blocks would otherwise apply it to the wrong one), and leaves the markup to you.

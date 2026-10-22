@@ -170,37 +170,56 @@ test('⌘S and Ctrl+S save with the latest callback, and nothing else does', () 
   assert.equal(press({ key: 's', metaKey: true }), false);
 });
 
-test('the toolbar shows Remove link and the table controls only where they apply', () => {
-  const { WikiToolbar, toolbarActions } = editorModule;
+test('the toolbar shows what the editor can do, and Remove link only in a link', () => {
+  const { WikiToolbar } = editorModule;
   const editor = editorWith('<p>See <a href="/old">the guide</a>.</p>');
   const root = createRoot(document.getElementById('root'));
   const prompt = { kind: 'link', toggle: () => {} };
   const render = () =>
     act(() =>
-      root.render(
-        createElement(WikiToolbar, {
-          editor,
-          isActive: a => (typeof a === 'string' ? editor.isActive(a) : false),
-          prompt,
-          actions: toolbarActions(['bold', 'link']),
-          onUpload: () => {},
-          icons: { bold: 'B', link: 'L', unlink: 'U', upload: '↑' },
-          classNames: { pressed: 'on' },
-        }),
-      ),
+      root.render(createElement(WikiToolbar, { editor, prompt, onUpload: () => {}, icons: {}, classNames: { pressed: 'on', divider: 'd' } })),
     );
   render();
   const label = l => document.querySelector(`[aria-label="${l}"]`);
   // The prompt is open on a link, so the link button reads as on.
   assert.equal(label('Link').getAttribute('aria-pressed'), 'true');
   assert.equal(label('Bold').getAttribute('aria-pressed'), 'false');
+  for (const l of ['Undo', 'Redo', 'Inline code', 'Heading', 'Subheading', 'Small heading', 'Numbered list', 'Code block', 'Divider']) assert.ok(label(l), l);
+  // StarterKit and a link: no image, table, tabs or embed node, so none of their buttons.
+  for (const l of ['Picture', 'Table', 'Tabs', 'Video, post or map']) assert.equal(label(l), null, l);
   assert.equal(label('Remove link'), null);
-  assert.ok(label('Upload image'));
-  assert.equal(label('Embed'), null);
+  assert.ok(document.querySelectorAll('.d').length >= 3);
   caretIn(editor, 'guide');
   render();
   assert.ok(label('Remove link'));
-  assert.ok(!document.body.textContent.includes('+Col'));
   act(() => root.unmount());
   editor.destroy();
+});
+
+test('a line keeps one line and its own marks, and its toolbar shows only those', () => {
+  const { WikiLine, WikiToolbar } = editorModule;
+  const root = createRoot(document.getElementById('root'));
+  const values = [];
+  const props = { as: 'h1', value: 'Pebble <strong>Pottery</strong>', marks: ['bold'], placeholder: 'Name', onChange: v => values.push(v) };
+  const tree = editor =>
+    createElement('div', null,
+      createElement(WikiLine, props),
+      editor && createElement(WikiToolbar, { editor, prompt: { kind: null, toggle: () => {} }, icons: {} }),
+    );
+  act(() => root.render(tree(null)));
+  const h1 = document.querySelector('h1[data-wiki-line]');
+  assert.equal(h1.getAttribute('contenteditable'), 'true');
+  assert.equal(h1.innerHTML, 'Pebble <strong>Pottery</strong>');
+  const editor = h1.editor;
+  assert.ok(editor.schema.marks.bold);
+  assert.equal(editor.schema.marks.italic, undefined);
+  assert.equal(editor.schema.nodes.paragraph, undefined);
+  editor.commands.focus('end');
+  editor.commands.insertContent(' studio');
+  assert.equal(values.at(-1), 'Pebble <strong>Pottery studio</strong>');
+  act(() => root.render(tree(editor)));
+  const labels = [...document.querySelectorAll('[role="toolbar"] [aria-label]')].map(b => b.getAttribute('aria-label'));
+  assert.deepEqual(labels, ['Undo', 'Redo', 'Bold']);
+  act(() => root.unmount());
+  assert.ok(editor.isDestroyed);
 });

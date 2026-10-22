@@ -1390,10 +1390,11 @@ export type { WikiLinkComponent, WikiLinkProps } from './react-server.js';
 
 /**
  * The `wiki-formant/dom` passes over a rendered article: tab groups, copy
- * buttons, sortable tables. All three renderers ran the same three in an
- * effect, and they disagreed on when: two ran it once on mount, so a page
- * swapped in without a remount kept its old tables unsortable. Each pass is
- * idempotent, so running on every `deps` change is safe.
+ * buttons, sortable tables, and each post on X hydrated and kept at the height
+ * it posts. All three renderers ran the same passes in an effect, and they
+ * disagreed on when: two ran it once on mount, so a page swapped in without a
+ * remount kept its old tables unsortable. Each pass is idempotent, so running
+ * on every `deps` change is safe.
  */
 export function useArticlePasses(ref: RefObject<HTMLElement | null>, deps: DependencyList): void {
   useEffect(() => {
@@ -1402,15 +1403,6 @@ export function useArticlePasses(ref: RefObject<HTMLElement | null>, deps: Depen
     activateTabGroups(root);
     addCopyButtons(root);
     sortTables(root);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-}
-
-/** Tweet placeholders hydrated, and each iframe kept at the height it posts. */
-export function useTweetEmbeds(ref: RefObject<HTMLElement | null>, deps: DependencyList): void {
-  useEffect(() => {
-    const root = ref.current;
-    if (!root) return;
     hydrateTweetEmbeds(root);
     return onTweetResize((height, source) => sizeTweetEmbed(root, height, source));
     // eslint-disable-next-line react-hooks/exhaustive-deps

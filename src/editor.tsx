@@ -31,8 +31,8 @@ import TiptapTableCell from '@tiptap/extension-table-cell';
 import TiptapTableHeader from '@tiptap/extension-table-header';
 import Placeholder from '@tiptap/extension-placeholder';
 import { useEditor } from '@tiptap/react';
-import type { AnyExtension, Editor } from '@tiptap/core';
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { Editor as TiptapEditor, Node as TiptapNode, type AnyExtension, type Editor } from '@tiptap/core';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { toMapEmbedUrl } from './maps.js';
 import { cx } from './html.js';
 
@@ -211,11 +211,11 @@ function insertEmbed(
 
 /** The table controls, shown only while the selection is inside a table. */
 export const TABLE_ACTIONS: ReadonlyArray<[command: string, label: string, danger?: boolean]> = [
-  ['addColumnAfter', '+Col'],
-  ['addRowAfter', '+Row'],
-  ['deleteColumn', '-Col', true],
-  ['deleteRow', '-Row', true],
-  ['deleteTable', '-Tbl', true],
+  ['addColumnAfter', 'Add column'],
+  ['addRowAfter', 'Add row'],
+  ['deleteColumn', 'Remove column', true],
+  ['deleteRow', 'Remove row', true],
+  ['deleteTable', 'Remove table', true],
 ];
 
 /** `editor.isActive` as a toolbar button's `active` descriptor expresses it. */
@@ -228,6 +228,8 @@ export function runTableAction(editor: Editor, command: string): void {
 }
 
 export type ToolbarKey =
+  | 'undo'
+  | 'redo'
   | 'bold'
   | 'italic'
   | 'code'
@@ -247,42 +249,55 @@ export interface ToolbarAction {
   key: ToolbarKey;
   /** What a screen reader announces and a tooltip shows. */
   label: string;
+  /** The node, mark or command the editor needs for the button to show. */
+  needs: string;
   active?: ActiveDescriptor;
   /** Absent on `link`, which needs a URL: call `withUrl` once you have one. */
   run?: (editor: Editor) => void;
   withUrl?: (editor: Editor, url: string) => void;
 }
 
+const heading = (level: 2 | 3 | 4, label: string): ToolbarAction => ({
+  key: `h${level}`,
+  label,
+  needs: 'heading',
+  active: ['heading', { level }],
+  run: e => e.chain().focus().toggleHeading({ level }).run(),
+});
+
 /**
- * The formatting commands, labelled. Three toolbars ran these identically and
- * two titled their buttons with the internal key — a screen reader said
- * "codeBlock", and inline code and code block shared one icon and one name.
- * Upload and embed stay with the caller: they are the parts that differ.
+ * The formatting commands, labelled, in toolbar order. Three toolbars ran these
+ * identically and two titled their buttons with the internal key – a screen
+ * reader said "codeBlock", and inline code and code block shared one icon and
+ * one name.
  *
  * @internal
  */
 export const TOOLBAR_ACTIONS: readonly ToolbarAction[] = [
-  { key: 'bold', label: 'Bold', active: 'bold', run: e => e.chain().focus().toggleBold().run() },
-  { key: 'italic', label: 'Italic', active: 'italic', run: e => e.chain().focus().toggleItalic().run() },
-  { key: 'code', label: 'Inline code', active: 'code', run: e => e.chain().focus().toggleCode().run() },
-  { key: 'link', label: 'Link', active: 'link', withUrl: (e, href) => e.chain().focus().setLink({ href }).run() },
-  { key: 'h2', label: 'Heading 2', active: ['heading', { level: 2 }], run: e => e.chain().focus().toggleHeading({ level: 2 }).run() },
-  { key: 'h3', label: 'Heading 3', active: ['heading', { level: 3 }], run: e => e.chain().focus().toggleHeading({ level: 3 }).run() },
-  { key: 'h4', label: 'Heading 4', active: ['heading', { level: 4 }], run: e => e.chain().focus().toggleHeading({ level: 4 }).run() },
-  { key: 'bulletList', label: 'Bulleted list', active: 'bulletList', run: e => e.chain().focus().toggleBulletList().run() },
-  { key: 'orderedList', label: 'Numbered list', active: 'orderedList', run: e => e.chain().focus().toggleOrderedList().run() },
-  { key: 'blockquote', label: 'Quote', active: 'blockquote', run: e => e.chain().focus().toggleBlockquote().run() },
-  { key: 'codeBlock', label: 'Code block', active: 'codeBlock', run: e => e.chain().focus().toggleCodeBlock().run() },
-  { key: 'divider', label: 'Divider', run: e => e.chain().focus().setHorizontalRule().run() },
+  { key: 'undo', label: 'Undo', needs: 'undo', run: e => e.chain().focus().undo().run() },
+  { key: 'redo', label: 'Redo', needs: 'redo', run: e => e.chain().focus().redo().run() },
+  { key: 'bold', label: 'Bold', needs: 'bold', active: 'bold', run: e => e.chain().focus().toggleBold().run() },
+  { key: 'italic', label: 'Italic', needs: 'italic', active: 'italic', run: e => e.chain().focus().toggleItalic().run() },
+  { key: 'code', label: 'Inline code', needs: 'code', active: 'code', run: e => e.chain().focus().toggleCode().run() },
+  { key: 'link', label: 'Link', needs: 'link', active: 'link', withUrl: (e, href) => e.chain().focus().setLink({ href }).run() },
+  heading(2, 'Heading'),
+  heading(3, 'Subheading'),
+  heading(4, 'Small heading'),
+  { key: 'bulletList', label: 'Bulleted list', needs: 'bulletList', active: 'bulletList', run: e => e.chain().focus().toggleBulletList().run() },
+  { key: 'orderedList', label: 'Numbered list', needs: 'orderedList', active: 'orderedList', run: e => e.chain().focus().toggleOrderedList().run() },
+  { key: 'blockquote', label: 'Quote', needs: 'blockquote', active: 'blockquote', run: e => e.chain().focus().toggleBlockquote().run() },
+  { key: 'codeBlock', label: 'Code block', needs: 'codeBlock', active: 'codeBlock', run: e => e.chain().focus().toggleCodeBlock().run() },
   {
     key: 'table',
     label: 'Table',
+    needs: 'table',
     active: 'table',
     run: e => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
   },
   {
     key: 'tabs',
     label: 'Tabs',
+    needs: 'tabGroup',
     active: 'tabGroup',
     // Two, not one: a group of one is a heading with extra steps, and the node
     // refuses to delete its last tab anyway.
@@ -296,11 +311,45 @@ export const TOOLBAR_ACTIONS: readonly ToolbarAction[] = [
         })
         .run(),
   },
+  { key: 'divider', label: 'Divider', needs: 'horizontalRule', run: e => e.chain().focus().setHorizontalRule().run() },
 ];
 
-/** The actions a toolbar shows, in the order it shows them. */
-export function toolbarActions(keys: readonly ToolbarKey[]): ToolbarAction[] {
-  return keys.flatMap(key => TOOLBAR_ACTIONS.filter(a => a.key === key));
+/** The groups the toolbar draws, a divider between each. Upload and embed lead the last. */
+const GROUPS: readonly (readonly ToolbarKey[])[] = [
+  ['undo', 'redo'],
+  ['bold', 'italic', 'code', 'link'],
+  ['h2', 'h3', 'h4'],
+  ['bulletList', 'orderedList', 'blockquote', 'codeBlock'],
+  ['table', 'tabs', 'divider'],
+];
+
+/**
+ * Whether the editor can do what an action does: its schema has the node or
+ * mark, or it has the command, and a heading button's level is one the editor
+ * allows. What a toolbar shows follows from the extensions an editor was
+ * built with, so no app keeps a list of buttons beside its list of nodes.
+ *
+ * @internal
+ */
+export function supports(editor: Editor, { key, needs }: ToolbarAction): boolean {
+  const { nodes, marks } = editor.schema;
+  if (needs === 'heading') {
+    const levels = editor.extensionManager.extensions.find(e => e.name === 'heading')?.options.levels as number[] | undefined;
+    return !!nodes.heading && !!levels?.includes(Number(key.slice(1)));
+  }
+  return !!(nodes[needs] || marks[needs] || needs in editor.commands);
+}
+
+/** The editor redrawn on every change, for a toolbar whose editor is not the component's own. */
+function useTransactions(editor: Editor | null): void {
+  const [, redraw] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    if (!editor) return;
+    editor.on('transaction', redraw);
+    return () => {
+      editor.off('transaction', redraw);
+    };
+  }, [editor]);
 }
 
 /**
@@ -328,80 +377,98 @@ export function ToolbarButton({
 }
 
 export interface WikiToolbarProps {
-  editor: Editor;
-  /** `useWikiEditor`'s `isActive`. */
-  isActive: (a?: ActiveDescriptor) => boolean;
+  /** The editor it drives; with none it shows only `children`. */
+  editor: Editor | null;
   /** `useUrlPrompt`'s state: the link button opens it, and shows pressed while it is open. */
   prompt: UrlPromptState;
-  /** The formatting buttons, before Remove link, upload and embed. */
-  actions: readonly ToolbarAction[];
-  /** The insert buttons after them, such as table and tabs. */
-  trailing?: readonly ToolbarAction[];
-  /** Shows the upload button, which calls this: `useWikiEditor`'s `triggerUpload`. */
+  /** Shows the upload button where the editor takes images: `useWikiEditor`'s `triggerUpload`. */
   onUpload?: () => void;
-  /** Shows the embed button, which opens the prompt on an embed address. */
-  embed?: boolean;
-  icons: Partial<Record<ToolbarKey, ReactNode>> & { unlink: ReactNode; upload?: ReactNode; embed?: ReactNode };
+  icons: Partial<Record<ToolbarKey | 'unlink' | 'upload' | 'embed', ReactNode>>;
   classNames?: {
     toolbar?: string;
     button?: string;
     /** Added to a button that is on. */
     pressed?: string;
+    /** Drawn between groups, and before the table controls. */
     divider?: string;
     /** A table control, which is a word rather than an icon. */
     tableButton?: string;
     /** Added to the table controls that delete. */
     danger?: string;
   };
+  /** After the buttons: a hint, or controls of the app's own. */
+  children?: ReactNode;
 }
 
 /**
- * The formatting bar three wikis had each assembled from `toolbarActions`,
- * `ToolbarButton` and `TABLE_ACTIONS`, in the same order with the same rules:
- * a link button that needs an address and so opens the prompt, a Remove link
- * button while the cursor is in a link, upload and embed between the format
- * and insert groups, and the table controls while the cursor is in a table.
- * Which buttons, which icons and which classes are the caller's.
+ * The formatting bar. It shows what the editor can do and nothing else: every
+ * command whose node, mark or command the editor has (`supports`), grouped,
+ * then upload where it takes images and embed where it has embed nodes, then
+ * the table controls while the cursor is in a table. Remove link follows Link
+ * while the cursor is in a link. The same bar drives a whole article, a one-line
+ * field and an editor shared between blocks; which icons and classes are the
+ * caller's. Every button is a `ToolbarButton`, named and `aria-pressed`.
  */
-export function WikiToolbar({ editor, isActive, prompt, actions, trailing = [], onUpload, embed, icons, classNames: c = {} }: WikiToolbarProps) {
-  const button = ({ key, label, active, run }: ToolbarAction) => {
-    const pressed = isActive(active) || (key === 'link' && prompt.kind === 'link');
+export function WikiToolbar({ editor, prompt, onUpload, icons, classNames: c = {}, children }: WikiToolbarProps) {
+  useTransactions(editor);
+  if (!editor || editor.isDestroyed) {
+    return (
+      <div className={c.toolbar} role="toolbar" aria-label="Text formatting">
+        {children}
+      </div>
+    );
+  }
+  const button = (a: ToolbarAction) => {
+    const pressed = (!!a.active && (typeof a.active === 'string' ? editor.isActive(a.active) : editor.isActive(...a.active))) || (a.key === 'link' && prompt.kind === 'link');
     return (
       <ToolbarButton
-        key={key}
-        label={label}
-        pressed={active ? pressed : undefined}
-        onPress={() => (run ? run(editor) : prompt.toggle('link'))}
+        key={a.key}
+        label={a.label}
+        pressed={a.active ? pressed : undefined}
+        onPress={() => (a.run ? a.run(editor) : prompt.toggle('link'))}
         className={cx(c.button, pressed && c.pressed)}
       >
-        {icons[key]}
+        {icons[a.key]}
       </ToolbarButton>
     );
   };
+  const extra: Partial<Record<ToolbarKey, ReactNode>> = {
+    link: editor.isActive('link') && (
+      <ToolbarButton key="unlink" label="Remove link" onPress={() => editor.chain().focus().extendMarkRange('link').unsetLink().run()} className={c.button}>
+        {icons.unlink}
+      </ToolbarButton>
+    ),
+  };
+  const insert = [
+    onUpload && editor.schema.nodes.image && (
+      <ToolbarButton key="upload" label="Picture" onPress={onUpload} className={c.button}>
+        {icons.upload}
+      </ToolbarButton>
+    ),
+    (editor.schema.nodes.youtube || editor.schema.nodes.iframe) && (
+      <ToolbarButton
+        key="embed"
+        label="Video, post or map"
+        pressed={prompt.kind === 'embed'}
+        onPress={() => prompt.toggle('embed')}
+        className={cx(c.button, prompt.kind === 'embed' && c.pressed)}
+      >
+        {icons.embed}
+      </ToolbarButton>
+    ),
+  ].filter(Boolean);
+  const groups = GROUPS.map((keys, i) => [
+    ...(i === GROUPS.length - 1 ? insert : []),
+    ...keys.flatMap(key => TOOLBAR_ACTIONS.filter(a => a.key === key && supports(editor, a)).flatMap(a => [button(a), extra[a.key]])),
+  ].filter(Boolean)).filter(g => g.length);
   return (
     <div className={c.toolbar} role="toolbar" aria-label="Text formatting">
-      {actions.map(button)}
-      {editor.isActive('link') && (
-        <ToolbarButton label="Remove link" onPress={() => editor.chain().focus().extendMarkRange('link').unsetLink().run()} className={c.button}>
-          {icons.unlink}
-        </ToolbarButton>
-      )}
-      {onUpload && (
-        <ToolbarButton label="Upload image" onPress={onUpload} className={c.button}>
-          {icons.upload}
-        </ToolbarButton>
-      )}
-      {embed && (
-        <ToolbarButton
-          label="Embed"
-          pressed={prompt.kind === 'embed'}
-          onPress={() => prompt.toggle('embed')}
-          className={cx(c.button, prompt.kind === 'embed' && c.pressed)}
-        >
-          {icons.embed}
-        </ToolbarButton>
-      )}
-      {trailing.map(button)}
+      {groups.map((g, i) => (
+        <Fragment key={i}>
+          {i > 0 && c.divider && <span className={c.divider} aria-hidden />}
+          {g}
+        </Fragment>
+      ))}
       {editor.isActive('table') && (
         <>
           <span className={c.divider} aria-hidden />
@@ -412,6 +479,7 @@ export function WikiToolbar({ editor, isActive, prompt, actions, trailing = [], 
           ))}
         </>
       )}
+      {children}
     </div>
   );
 }
@@ -420,7 +488,8 @@ export function WikiToolbar({ editor, isActive, prompt, actions, trailing = [], 
 
 export interface UrlPromptFieldProps {
   prompt: UrlPromptState;
-  placeholders?: { link?: string; embed?: string };
+  /** The link field's placeholder, where the wiki's own paths differ from a full address. */
+  placeholders?: { link?: string };
   classNames?: { row?: string; input?: string; apply?: string; cancel?: string };
 }
 
@@ -440,7 +509,7 @@ export function UrlPromptField({ prompt, placeholders = {}, classNames: c = {} }
         autoCapitalize="none"
         className={c.input}
         aria-label={link ? 'Link address' : 'Embed address'}
-        placeholder={link ? (placeholders.link ?? 'https://… (empty removes the link)') : (placeholders.embed ?? 'YouTube, X, Google or Apple Maps, or any iframe URL')}
+        placeholder={link ? (placeholders.link ?? 'https://… (empty removes the link)') : 'A YouTube, X, Google Maps or Apple Maps link'}
         value={prompt.value}
         onChange={e => prompt.setValue(e.target.value)}
         onKeyDown={prompt.onKeyDown}
@@ -590,16 +659,11 @@ export interface WikiEditorState {
   handleFileChange: (e: ChangeEvent<HTMLInputElement>) => Promise<void>;
   /** Open the file picker — what an upload toolbar button calls. */
   triggerUpload: () => void;
-  isActive: (a?: ActiveDescriptor) => boolean;
 }
 
 /**
- * The editor, its upload plumbing and the state a toolbar reads.
- *
- * The toolbar itself stays with the consumer: the two wikis differ on which
- * buttons exist, which icon set draws them, and whether a link is entered in a
- * `window.prompt` or an inline field. Those are real differences. What they had
- * no business differing on is everything below.
+ * The editor and its upload plumbing. `WikiToolbar` given the editor draws
+ * the buttons its extensions allow; the icons and classes are the app's.
  */
 export function useWikiEditor({
   value,
@@ -687,11 +751,99 @@ export function useWikiEditor({
 
   const triggerUpload = useCallback(() => fileInputRef.current?.click(), []);
 
-  const isActive = useCallback(
-    (a?: ActiveDescriptor) =>
-      a ? Boolean(Array.isArray(a) ? editor?.isActive(a[0], a[1]) : editor?.isActive(a)) : false,
-    [editor],
-  );
+  return { editor, fileInputRef, isUploading, handleFileChange, triggerUpload };
+}
 
-  return { editor, fileInputRef, isUploading, handleFileChange, triggerUpload, isActive };
+// ---- one line ---------------------------------------------------------------
+
+/** What a one-line field may keep. With none, its value is plain text. */
+export type LineMark = 'bold' | 'italic' | 'link';
+
+// A line's whole document is the line, so Enter has nowhere to go.
+const LineDoc = TiptapNode.create({
+  name: 'doc',
+  topNode: true,
+  content: 'text*',
+  addKeyboardShortcuts: () => ({ Enter: () => true, 'Shift-Enter': () => true }),
+});
+
+/** A paste as one line: its blocks and breaks run on with a space, before the schema keeps only the marks the line takes. */
+const pastedLine = (html: string) => cleanPastedHtml(html).replace(/<\/(p|h[1-6]|li|div|blockquote|tr|td|th)>|<br\s*\/?>/gi, ' ');
+
+export interface WikiLineProps {
+  as: 'h1' | 'h2' | 'h3' | 'p' | 'span' | 'div' | 'small' | 'figcaption';
+  value: string;
+  onChange: (value: string) => void;
+  /** Shown while it is empty, and its accessible name. */
+  placeholder: string;
+  marks?: readonly LineMark[];
+  className?: string;
+  /** The editor, as it takes focus: what a toolbar shared between fields claims. */
+  onFocus?: (editor: Editor) => void;
+}
+
+/**
+ * One line of words – a title, a heading, a caption, a button – edited in the
+ * element that shows it, so it reads as the page draws it. Its schema is the
+ * line and the `marks` it may keep, so nothing else can get in: no list from a
+ * typed "- ", no heading from a paste. Its value is that HTML, or plain text
+ * when it keeps no marks. It has its own undo, and `WikiToolbar` given its
+ * editor shows undo and its marks. `base.css` gives it its placeholder.
+ */
+export function WikiLine({ as: Tag, value, onChange, placeholder, marks = [], className, onFocus }: WikiLineProps) {
+  const ref = useRef<HTMLElement>(null);
+  const [editor, setEditor] = useState<Editor | null>(null);
+  const latest = useRef({ onChange, onFocus });
+  useEffect(() => {
+    latest.current = { onChange, onFocus };
+  });
+  const key = marks.join();
+  const out = (e: Editor) => (key ? e.getHTML() : e.getText()).replace(/\s+/g, ' ');
+  const content = (v: string) => (key ? v : { type: 'doc', content: v ? [{ type: 'text', text: v }] : [] });
+
+  // Mounted on the element itself: the element is the editable root.
+  useLayoutEffect(() => {
+    const has = (m: LineMark) => key.split(',').includes(m);
+    const e = new TiptapEditor({
+      element: { mount: ref.current! } as unknown as Element,
+      extensions: [
+        LineDoc,
+        StarterKit.configure({
+          document: false,
+          paragraph: false,
+          heading: false,
+          blockquote: false,
+          bulletList: false,
+          orderedList: false,
+          listItem: false,
+          codeBlock: false,
+          code: false,
+          horizontalRule: false,
+          hardBreak: false,
+          strike: false,
+          dropcursor: false,
+          gapcursor: false,
+          ...(has('bold') ? {} : { bold: false }),
+          ...(has('italic') ? {} : { italic: false }),
+        }),
+        ...(has('link') ? [wikiLink] : []),
+      ],
+      content: content(value),
+      editorProps: { transformPastedHTML: pastedLine, transformPastedText: t => t.replace(/\s+/g, ' ') },
+      onUpdate: ({ editor }) => latest.current.onChange(out(editor)),
+      onFocus: ({ editor }) => latest.current.onFocus?.(editor),
+    });
+    setEditor(e);
+    return () => e.destroy();
+    // The value is read once here; the effect below takes later ones.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  // Take a change from outside, never one the field itself just reported.
+  useEffect(() => {
+    if (editor && !editor.isFocused && out(editor) !== value) editor.commands.setContent(content(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, value]);
+
+  return <Tag ref={ref as RefObject<HTMLParagraphElement>} className={className} data-wiki-line="" data-placeholder={placeholder} aria-label={placeholder} />;
 }
