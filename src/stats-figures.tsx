@@ -13,7 +13,7 @@ import { TimeChart, stepDecimals, type ChartAggregate, type ChartPoint } from '.
 
 // Whole seconds and percentages, unless an axis tick's step needs more to tell it from the next.
 const places = (step?: number) => (step ? stepDecimals(step) : 0);
-const duration = (s: number, step?: number) => (s < 60 ? `${s.toFixed(places(step))}s` : `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`);
+const duration = (s: number, step?: number) => (s < 60 ? `${s.toFixed(places(step))}s` : `${Math.floor(Math.round(s) / 60)}m ${Math.round(s) % 60}s`);
 const percent = (n: number, step?: number) => `${n.toFixed(places(step))}%`;
 interface Delta {
   text: string;
