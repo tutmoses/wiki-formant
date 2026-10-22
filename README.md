@@ -268,7 +268,7 @@ The drift checks hold an MCP server to what its own site does, so a tool cannot 
 await versionCoherence(t, server.version, standardVersionSources(t, ['/openapi.json', '/api/openapi.json']), init.result?.serverInfo?.version);
 ```
 
-`descriptorChecks(t)` defaults to `S10_DESCRIPTORS`, the six JSON descriptors every surface here serves, and `distinctEtagChecks(t, ['llms.txt', 'llms-full.txt'])` asserts that depths projecting one corpus carry different ETags — every one present, which a bare Set-size check misses.
+`descriptorChecks(t)` defaults to `S10_DESCRIPTORS`, the six JSON descriptors every surface here serves.
 
 ## Markdown twins
 

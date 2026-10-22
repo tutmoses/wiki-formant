@@ -33,7 +33,6 @@ import {
   SIDEBAR_ATTRIBUTE,
 } from './sidebar.js';
 import { activateTabGroups, addCopyButtons, hydrateTweetEmbeds, onTweetResize, sizeTweetEmbed, sortTables, startBeacon } from './dom.js';
-import type { WikiLinkComponent } from './react-server.js';
 import { comboboxAria, type ComboboxAria } from './combobox.js';
 import {
   Component,

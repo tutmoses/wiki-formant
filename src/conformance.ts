@@ -592,22 +592,6 @@ export async function descriptorChecks(t: Tester, paths: readonly string[] = S10
 }
 
 /**
- * Documents that project one corpus at different depths carry different ETags.
- *
- * Depths sharing a validator pass every conditional-GET check and still never
- * move when only one of them changes. Every one must also HAVE an ETag: a Set
- * of three nulls is size one and fails, but one null among two tags would pass
- * a size check alone — the copy of this check one repo carried had exactly
- * that hole.
- */
-export async function distinctEtagChecks(t: Tester, paths: readonly string[], label = 'llms depths have distinct ETags'): Promise<void> {
-  const tags = await Promise.all(
-    paths.map(p => fetch(`${t.base}/${p.replace(/^\//, '')}`).then(r => r.headers.get('etag'))),
-  );
-  t.check(label, tags.every(Boolean) && new Set(tags).size === paths.length, tags.join(' '));
-}
-
-/**
  * Every tool carries behavioural hints, and the ones that write say so.
  *
  * Without them a client that auto-approves read-only calls has no way to tell a
