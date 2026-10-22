@@ -693,13 +693,12 @@ export const X = xAccount({ siteName: 'AcuiQ', handle: '@acu_iq', posts: "a name
 addCopyButtons(el);            // every <pre> gets one, once
 sortTables(el);                // every column-headed table sorts by its headers
 hydrateTweetEmbeds(el);        // placeholders get a live src
-await renderMath(el);          // $$…$$, \\[…\\] and \\(…\\) typeset by KaTeX, loaded only when there is maths
 const off = onTweetResize((h, source) => sizeTweetEmbed(el, h, source));
 ```
 
 `addCopyButton` was **byte-identical** in two BlockRenderers, down to the SVG path data. Its idempotence guard now lives inside the function rather than in a `pre:not(:has(…))` at the call site, where it can be — and was — retyped.
 
-In React, `useArticlePasses(ref, [blocks])` (`wiki-formant/react`) runs them all, the embed pair and the maths included. KaTeX is an optional peer: an app installs `katex`, and a page with no delimiter never fetches it. There is no single-`$` delimiter, since prose writes $XRD. Three renderers had the effect written out and disagreed on its dependencies: two ran once on mount, so a page swapped in without a remount kept its old tables unsortable.
+In React, `useArticlePasses(ref, [blocks])` (`wiki-formant/react`) runs them all, the embed pair included, and typesets maths: `renderMath` (also `wiki-formant/react`, since its stylesheet import cannot sit in a module server code reaches) sets `$$…$$` and `\[…\]` as a display and `\(…\)` inline. KaTeX is an optional peer: an app installs `katex`, and a page with no delimiter never fetches it. There is no single-`$` delimiter, since prose writes $XRD. Three renderers had the effect written out and disagreed on its dependencies: two ran once on mount, so a page swapped in without a remount kept its old tables unsortable.
 
 `activateTabGroups` turns stored `[data-tabs]` markup into a working tab group. The editor persists tabs as nested divs, which is the right thing to store — it survives a markdown twin, a plain HTML render and a reader with JavaScript off, all of which show every tab in order. Making one of them pressable is a reader-side job, and it sits beside the other passes rather than inside a component.
 

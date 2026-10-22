@@ -32,7 +32,7 @@ import {
   resolveSidebarOpen,
   SIDEBAR_ATTRIBUTE,
 } from './sidebar.js';
-import { activateTabGroups, addCopyButtons, hydrateTweetEmbeds, onTweetResize, renderMath, sizeTweetEmbed, sortTables, startBeacon } from './dom.js';
+import { activateTabGroups, addCopyButtons, hydrateTweetEmbeds, onTweetResize, sizeTweetEmbed, sortTables, startBeacon } from './dom.js';
 import type { WikiLinkComponent } from './react-server.js';
 import { comboboxAria, type ComboboxAria } from './combobox.js';
 import {
@@ -1385,6 +1385,35 @@ const decodePath = (path: string): string => {
 };
 
 export type { WikiLinkComponent, WikiLinkProps } from './react-server.js';
+
+// ---- maths ------------------------------------------------------------------
+
+// Here rather than in `dom.ts` because of its stylesheet import: `dom.ts` is
+// reached from server modules (`headings.ts`), and a bundler cannot chunk a
+// CSS import from plain server code. This module is a client one.
+
+/** What marks maths in stored prose. No single `$`: prose writes $XRD, and two cashtags in one block would read as a formula. */
+const MATH = /\$\$|\\\(|\\\[/;
+
+/**
+ * Typeset the maths under `root` with KaTeX: `$$…$$` and `\[…\]` as a display,
+ * `\(…\)` inline. KaTeX and its stylesheet load only when the text holds a
+ * delimiter, so a page with no maths fetches nothing. KaTeX is an optional peer
+ * the app installs. Typeset maths carries no delimiter, so a second pass finds
+ * nothing to do.
+ */
+export async function renderMath(root: HTMLElement): Promise<void> {
+  if (!MATH.test(root.textContent ?? '')) return;
+  const [{ default: render }] = await Promise.all([import('katex/contrib/auto-render'), import('katex/dist/katex.min.css' as string)]);
+  render(root, {
+    delimiters: [
+      { left: '$$', right: '$$', display: true },
+      { left: '\\(', right: '\\)', display: false },
+      { left: '\\[', right: '\\]', display: true },
+    ],
+    throwOnError: false,
+  });
+}
 
 // ---- rendered-article passes --------------------------------------------------
 

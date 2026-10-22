@@ -136,31 +136,6 @@ export function sizeTweetEmbed(root: ParentNode, height: number, source: Message
   }
 }
 
-// ---- maths ------------------------------------------------------------------
-
-/** What marks maths in stored prose. No single `$`: prose writes $XRD, and two cashtags in one block would read as a formula. */
-const MATH = /\$\$|\\\(|\\\[/;
-
-/**
- * Typeset the maths under `root` with KaTeX: `$$…$$` and `\[…\]` as a display,
- * `\(…\)` inline. KaTeX and its stylesheet load only when the text holds a
- * delimiter, so a page with no maths fetches nothing. KaTeX is an optional peer
- * the app installs. Typeset maths carries no delimiter, so a second pass finds
- * nothing to do.
- */
-export async function renderMath(root: HTMLElement): Promise<void> {
-  if (!MATH.test(root.textContent ?? '')) return;
-  const [{ default: render }] = await Promise.all([import('katex/contrib/auto-render'), import('katex/dist/katex.min.css' as string)]);
-  render(root, {
-    delimiters: [
-      { left: '$$', right: '$$', display: true },
-      { left: '\\(', right: '\\)', display: false },
-      { left: '\\[', right: '\\]', display: true },
-    ],
-    throwOnError: false,
-  });
-}
-
 // ---- tab groups -------------------------------------------------------------
 
 export interface TabGroupClassNames {

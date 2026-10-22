@@ -6,7 +6,6 @@ import {
   tweetEmbedSrc,
   onTweetResize,
   sizeTweetEmbed,
-  renderMath,
   addCopyButtons,
   sortTables,
   scrollTables,
@@ -321,6 +320,7 @@ test('text that only names a table is left alone', () => {
 // ---- maths ------------------------------------------------------------------
 
 test('text with no maths loads nothing, and a cashtag is not maths', async () => {
+  const { renderMath } = await import('wiki-formant/react');
   // KaTeX is not importable under node:test without a bundler, so a pass that
   // tried to load it here would reject: resolving proves it never tried.
   await renderMath({ textContent: 'Fees are paid in $XRD, and 10 $XRD buys a lot.' });
