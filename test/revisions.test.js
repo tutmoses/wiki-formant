@@ -50,6 +50,14 @@ test('BUG: a container is not "modified" every time its children move', () => {
   assert.equal(changes[0].action, 'modified');
 });
 
+test('BUG: a block read back from jsonb, its keys reordered, is not "modified"', () => {
+  // Postgres hands a stored block's keys back in its own order, nested ones
+  // included: a references block saved again unchanged read as edited.
+  const before = [{ id: 'r', type: 'references', items: [{ id: 'x', url: 'https://a.example', text: 'A' }] }];
+  const after = [{ type: 'references', id: 'r', items: [{ text: 'A', id: 'x', url: 'https://a.example' }] }];
+  assert.deepEqual(diffBlocks(before, after, opts), []);
+});
+
 test('leafDiff is asked about every side of a change', () => {
   const leafDiff = (from, to) =>
     (from ?? to).type === 'content' ? { from: from?.text ?? '', to: to?.text ?? '' } : undefined;

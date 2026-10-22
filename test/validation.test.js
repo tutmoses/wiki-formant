@@ -17,6 +17,7 @@ test('safe schemes pass, unsafe ones do not', () => {
   assert.equal(safeLinkHref('/relative'), '/relative');
   assert.equal(safeLinkHref('#anchor'), '#anchor');
   assert.equal(safeLinkHref('mailto:a@b.c'), 'mailto:a@b.c');
+  assert.equal(safeLinkHref('tel:+441315550000'), 'tel:+441315550000');
   assert.equal(safeLinkHref('javascript:alert(1)'), null);
   assert.equal(safeLinkHref('data:text/html,<script>'), null);
   assert.equal(safeLinkHref('vbscript:x'), null);

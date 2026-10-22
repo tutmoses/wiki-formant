@@ -12,7 +12,7 @@
 import { LIST_SOURCES } from './blocks.js';
 
 /**
- * An href acceptable to persist: http, https, mailto, or a relative path or
+ * An href acceptable to persist: http, https, mailto, tel, or a relative path or
  * fragment. Everything else — `javascript:`, `data:`, `vbscript:`, a
  * protocol-relative `//host` — comes back null.
  *
@@ -35,7 +35,7 @@ export function safeLinkHref(raw: string | null | undefined): string | null {
   const scheme = href.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);
   if (scheme) {
     const s = scheme[1]!.toLowerCase();
-    if (s !== 'http' && s !== 'https' && s !== 'mailto') return null;
+    if (s !== 'http' && s !== 'https' && s !== 'mailto' && s !== 'tel') return null;
   }
   return href;
 }

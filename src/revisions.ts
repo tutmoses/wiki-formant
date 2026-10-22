@@ -97,8 +97,16 @@ export function extractBlocks<B>(
   return out;
 }
 
+/** A value with every object's keys in one order: jsonb hands a stored block's keys back in its own. */
+const canonical = (v: unknown): unknown =>
+  Array.isArray(v)
+    ? v.map(canonical)
+    : v && typeof v === 'object'
+      ? Object.fromEntries(Object.keys(v).sort().map(k => [k, canonical((v as Record<string, unknown>)[k])]))
+      : v;
+
 /**
- * Which scalar fields differ. Nested block arrays are skipped: they are walked
+ * Which scalar fields differ, whatever order their keys are in. Nested block arrays are skipped: they are walked
  * as their own entries, and comparing them here would report a container as
  * modified every time anything inside it moved.
  */
@@ -123,7 +131,7 @@ function diffAttributes<B extends DiffBlock>(
     if (skip.has(key)) continue;
     const from = (oldBlock as unknown as Record<string, unknown>)[key];
     const to = (newBlock as unknown as Record<string, unknown>)[key];
-    if (JSON.stringify(from) !== JSON.stringify(to)) diffs[key] = { from, to };
+    if (JSON.stringify(canonical(from)) !== JSON.stringify(canonical(to))) diffs[key] = { from, to };
   }
   return Object.keys(diffs).length > 0 ? diffs : undefined;
 }
