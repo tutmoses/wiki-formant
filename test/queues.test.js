@@ -44,3 +44,12 @@ test('a page that links only to itself is still orphaned', () => {
 test('a citation names the publisher, title, day and address', () => {
   assert.equal(citation({ publisher: 'AcuiQ', title: 'Point codes', date: '2026-10-02T12:00:00Z', url: 'https://acuiq.com/wiki/x' }), 'AcuiQ. "Point codes." October 2, 2026. https://acuiq.com/wiki/x');
 });
+
+test('a numeric fact the facts panel shows is not missing', () => {
+  const pages = [
+    page('n', 'g', 'n', [], { metadata: { year: 2024, zero: 0, blank: '  ' } }),
+  ];
+  const required = () => [{ key: 'year', label: 'Year' }, { key: 'zero', label: 'Zero' }, { key: 'blank', label: 'Blank' }];
+  const incomplete = maintenanceQueues(pages, { href, nowMs: NOW, required }).find(q => q.key === 'incomplete');
+  assert.equal(incomplete.items[0].detail, 'missing Blank');
+});

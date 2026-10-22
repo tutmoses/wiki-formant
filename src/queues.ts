@@ -14,6 +14,7 @@
 // category requires, so those are the arguments.
 
 import { daysSince, isStale, DEFAULT_MAX_AGE_DAYS } from './freshness.js';
+import { metaValue } from './taxonomy.js';
 
 export interface QueuePage {
   id: string;
@@ -89,10 +90,10 @@ export function maintenanceQueues<P extends QueuePage>(pages: readonly P[], o: Q
   }
 
   const item = (p: P, detail: string): QueueItem => ({ title: p.title, href: o.href(p), tagPath: p.tagPath, detail });
-  const facts = (p: P) => (p.metadata && typeof p.metadata === 'object' ? (p.metadata as Record<string, unknown>) : {});
+  // Missing is what the facts panel would not show, so a number counts as given.
   const incomplete = pages.flatMap(p => {
     const missing = (o.required?.(p.tagPath) ?? [])
-      .filter(k => { const v = facts(p)[k.key]; return typeof v !== 'string' || !v.trim(); })
+      .filter(k => !metaValue(p, k.key))
       .map(k => k.label.replace(/:$/, ''));
     return missing.length ? [item(p, `missing ${missing.join(', ')}`)] : [];
   });

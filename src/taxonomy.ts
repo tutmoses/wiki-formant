@@ -160,7 +160,8 @@ export const defaultHref = hrefBuilder();
 const DEFAULT_ALPHA_INDEX_MIN_PAGES = 40;
 
 /** A key's value as text. Metadata is untyped JSON, and a number or a list stored under a key must not throw. */
-const metaValue = (page: FacetablePage, key: string): string => {
+/** A metadata value as the facts panel shows it: trimmed text or a number, else ''. @internal */
+export const metaValue = (page: { metadata?: unknown }, key: string): string => {
   const value = (page.metadata as Record<string, unknown> | null | undefined)?.[key];
   return typeof value === 'string' ? value.trim() : typeof value === 'number' ? String(value) : '';
 };
