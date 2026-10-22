@@ -38,7 +38,7 @@ const UNSUPPORTED = new Set([
 ]);
 
 /** @internal */
-export const isA2aMethod = (method: string) => method in SEND || TASK.has(method) || UNSUPPORTED.has(method);
+export const isA2aMethod = (method: string) => Object.hasOwn(SEND, method) || TASK.has(method) || UNSUPPORTED.has(method);
 
 const error = (id: RpcRequest['id'], code: number, message: string) => ({ jsonrpc: '2.0' as const, id, error: { code, message } });
 
@@ -69,7 +69,7 @@ async function reply(text: string, config: McpServerConfig): Promise<{ text: str
     if (typeof out === 'string') return { text: `${lead}\n\n${out}` };
     // The text twin stays beside the data, as it does on an MCP tool result:
     // a client that reads only text parts still has to be able to read the answer.
-    return { text: `${lead}\n\n${JSON.stringify(out, null, 2)}`, ...(out && typeof out === 'object' && !Array.isArray(out) ? { data: out } : {}) };
+    return { text: `${lead}\n\n${JSON.stringify(out ?? null, null, 2)}`, ...(out && typeof out === 'object' && !Array.isArray(out) ? { data: out } : {}) };
   } catch (err) {
     if (err instanceof McpToolError) return { text: `${err.message}\n\n${orientation(config)}` };
     throw err;

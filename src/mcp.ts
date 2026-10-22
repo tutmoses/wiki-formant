@@ -454,7 +454,7 @@ function validateArgs(tool: McpTool, args: Record<string, unknown>): string | nu
   const problems: string[] = [];
 
   for (const key of Object.keys(args)) {
-    if (key in properties) continue;
+    if (Object.hasOwn(properties, key)) continue;
     problems.push(
       allowed.length
         ? `Unknown parameter "${key}". Allowed parameters: ${quote(allowed)}.`
@@ -593,6 +593,10 @@ async function handleRpc(
   const foreign: readonly string[] = ERA_METHODS[dispatch.era === 'modern' ? 'legacy' : 'modern'];
   if (foreign.includes(method)) return methodNotFound(id, method, config, dispatch.era);
 
+  // A notification has no response at all, a method-not-found included:
+  // `notifications/progress` or `roots/list_changed` is not an error to answer.
+  if (method.startsWith('notifications/')) return null;
+
   try {
     switch (method) {
       case 'initialize':
@@ -611,11 +615,6 @@ async function handleRpc(
           capabilities: capabilitiesOf(config),
           instructions: config.instructions,
         });
-
-      // Notifications have no response at all.
-      case 'notifications/initialized':
-      case 'notifications/cancelled':
-        return null;
 
       case 'ping':
         return ok(id, {});
@@ -694,7 +693,9 @@ async function handleRpc(
 
         try {
           const data = await tool.handler(args, ctx);
-          const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+          // `?? null`: a handler that returns nothing still owes a string, and
+          // JSON.stringify(undefined) is undefined.
+          const text = typeof data === 'string' ? data : JSON.stringify(data ?? null, null, 2);
           // Every object answer, not only the schema-bearing ones. Gated on
           // `outputSchema`, a JSON-returning tool without one would carry no
           // `structuredContent`, and agents would parse prose to reach data the

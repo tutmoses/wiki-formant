@@ -195,6 +195,7 @@ test('onCall fires once per request with the parsed body', async () => {
 
 test('handleMcp is usable without the HTTP layer', async () => {
   assert.equal(await handleMcp(rpc('notifications/initialized', {}, null), config), null);
+  assert.equal(await handleMcp({ jsonrpc: '2.0', method: 'notifications/roots/list_changed' }, config), null);
   const pong = await handleMcp(rpc('ping'), config);
   assert.deepEqual(pong.result, {});
 });
@@ -592,4 +593,17 @@ test('an entry that is not a JSON-RPC object is -32600, never a thrown 500', asy
   const [bad, pong] = await batch.json();
   assert.equal(bad.error.code, -32600);
   assert.deepEqual(pong.result, {});
+});
+
+test('a key Object.prototype carries is still an unknown parameter', async () => {
+  const { result } = await handleMcp(rpc('tools/call', { name: 'search', arguments: { q: 'x', toString: 1, constructor: 'y' } }), config);
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /Unknown parameter "toString"/);
+  assert.match(result.content[0].text, /Unknown parameter "constructor"/);
+});
+
+test('a handler that returns nothing still answers with text', async () => {
+  const quiet = { ...config, tools: [{ name: 'noop', description: 'd', inputSchema: { type: 'object', properties: {} }, handler: async () => undefined }] };
+  const { result } = await handleMcp(rpc('tools/call', { name: 'noop', arguments: {} }), quiet);
+  assert.equal(result.content[0].text, 'null');
 });

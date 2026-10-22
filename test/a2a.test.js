@@ -60,6 +60,10 @@ test('task methods are TaskNotFound, the rest unsupported, a missing message inv
   assert.equal((await post(rpc('message/send', {}))).error.code, -32602);
 });
 
+test('a name Object.prototype carries is not an A2A method', async () => {
+  for (const m of ['toString', 'constructor']) assert.equal((await post(rpc(m, { message: { parts: [{ text: 'x' }] } }))).error.code, -32601);
+});
+
 test('the card names the endpoint for both A2A revisions', () => {
   const card = agentCard({ name: 'W', description: 'd', url: 'https://w.test', version: '1', skills: [] });
   assert.deepEqual(card.supportedInterfaces.map(i => [i.url, i.protocolBinding, i.protocolVersion]), [
