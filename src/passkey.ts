@@ -92,6 +92,8 @@ export interface PasskeyGate {
   cookie: string;
   /** Whether a session cookie's value is a live session whose passkey is still saved. */
   signedIn(session: string | undefined): Promise<boolean>;
+  /** Whether a request carries a live session: `signedIn` over its cookie, for a write route. */
+  allows(request: Request): Promise<boolean>;
   /** A single-use invite token, good for `days`. The bin turns it into a link. */
   invite(days?: number): Promise<string>;
   /**
@@ -120,23 +122,25 @@ export function createPasskeyGate({ sql, rpName, cookie = 'passkey_session', ses
     return setCookie(value, sessionDays * 86_400, secure);
   }
 
+  const sessionOf = (request: Request): string | undefined =>
+    request.headers.get('cookie')?.split(/;\s*/).find(c => c.startsWith(`${cookie}=`))?.slice(cookie.length + 1);
+
+  const signedIn = async (value: string | undefined): Promise<boolean> =>
+    !!value &&
+    ((await sql(
+      `SELECT 1 FROM "PasskeyToken" t JOIN "Passkey" p ON p.id = t."passkeyId"
+       WHERE t.hash = $1 AND t.kind = 'session' AND t."expiresAt" > now()`,
+      await hash(value),
+    )) as unknown[]).length > 0;
+
   return {
     cookie,
-    signedIn: async value =>
-      !!value &&
-      ((await sql(
-        `SELECT 1 FROM "PasskeyToken" t JOIN "Passkey" p ON p.id = t."passkeyId"
-         WHERE t.hash = $1 AND t.kind = 'session' AND t."expiresAt" > now()`,
-        await hash(value),
-      )) as unknown[]).length > 0,
+    signedIn,
+    allows: request => signedIn(sessionOf(request)),
     invite: (days = 1) => issue(sql, 'invite', days * DAY),
 
     async signOut(request) {
-      const value = request.headers
-        .get('cookie')
-        ?.split(/;\s*/)
-        .find(c => c.startsWith(`${cookie}=`))
-        ?.slice(cookie.length + 1);
+      const value = sessionOf(request);
       if (value) await spend(sql, 'session', value);
       return setCookie('', 0, new URL(request.url).protocol === 'https:');
     },

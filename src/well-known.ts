@@ -1,5 +1,6 @@
 // well-known.ts — the descriptors an agent finds before it knows anything else
-// about an origin: the A2A Agent Card and the MCP registry's domain proof.
+// about an origin: the A2A Agent Card, the MCP manifest and the registry's
+// domain proof, and the one route that serves them.
 //
 // All three apps here serve both, and all three had written them out. The
 // registry-auth handler was identical bar a domain named in a comment; the
@@ -329,3 +330,47 @@ export function descriptorHandler(
 /** The whole `<mcp-url>/server-card` route, projected from server.json. */
 export const serverCardHandler = (manifest: ServerManifest): ((request: Request) => Response) =>
   descriptorHandler(serverCard(manifest, MCP_PROTOCOL_VERSIONS));
+
+// ---- the whole directory ------------------------------------------------------
+
+export interface WellKnownDocs {
+  agentCard: unknown;
+  mcpManifest: unknown;
+  openapi: unknown;
+  /**
+   * The registry's key material, read from the environment by default. `null`
+   * serves no proof: a tenant of a host whose namespace is the host's own.
+   */
+  registryAuth?: { publicKey?: string; keyType?: string } | null;
+}
+
+/**
+ * The `/.well-known/[doc]` route: the agent card at `agent.json` and
+ * `agent-card.json` (A2A v0.3 renamed it; older clients ask for the first), the
+ * MCP manifest at `mcp.json`, the OpenAPI spec at `openapi.json` and the
+ * registry's domain proof at `mcp-registry-auth`. Every other name is a 404.
+ *
+ * Each app served these as five or six one-line routes re-exporting each other;
+ * one dynamic segment holds them all, and a rewrite puts `/openapi.json` on it.
+ */
+export function wellKnownHandler(
+  docs: WellKnownDocs,
+): (request: Request, context: { params: Promise<{ doc: string }> }) => Promise<Response> {
+  const { registryAuth = {} } = docs;
+  const bodies: Record<string, unknown> = {
+    'agent.json': docs.agentCard,
+    'agent-card.json': docs.agentCard,
+    'mcp.json': docs.mcpManifest,
+    'openapi.json': docs.openapi,
+  };
+  return async (request, { params }) => {
+    const { doc } = await params;
+    if (doc === 'mcp-registry-auth' && registryAuth) {
+      return registryAuthHandler(
+        registryAuth.publicKey ?? process.env.MCP_REGISTRY_PUBLIC_KEY,
+        registryAuth.keyType ?? process.env.MCP_REGISTRY_KEY_TYPE,
+      )();
+    }
+    return Object.hasOwn(bodies, doc) ? descriptorResponse(request, bodies[doc]) : new Response('Not found', { status: 404 });
+  };
+}

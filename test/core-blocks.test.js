@@ -164,3 +164,22 @@ test('pgPoolConfig sizes the pool by the pooler the URL names', () => {
     connectionTimeoutMillis: 30000,
   });
 });
+
+test('defineBlocks derives the model from the defaults and the checks', async () => {
+  const { defineBlocks } = await import('wiki-formant/validation');
+  const { coreBlockDefaults } = await import('wiki-formant/blocks');
+  const core = coreBlockDefaults();
+  const model = defineBlocks({
+    defaults: { content: core.content, columns: core.columns, infobox: core.infobox, list: core.list, tip: () => ({ type: 'tip', address: '' }) },
+    checks: { tip: b => typeof b.address === 'string', list: (b, check) => check(b) && b.under !== 'private' },
+  });
+  assert.deepEqual(model.atomicTypes, ['content', 'list', 'tip']);
+  const tip = model.createBlock('tip');
+  assert.equal(typeof tip.id, 'string');
+  assert.equal(model.validateBlocks([tip, model.createBlock('content')]), true);
+  assert.equal(model.validateBlocks([{ id: 'a', type: 'tip' }]), false);
+  assert.equal(model.validateBlocks([{ id: 'a', type: 'list', source: 'under', under: 'private', show: 'links' }]), false);
+  assert.equal(model.validateBlocks([{ id: 'a', type: 'stats', items: [] }]), false);
+  const cols = model.createBlock('columns');
+  assert.notEqual(model.duplicateBlock(cols).columns[0].id, cols.columns[0].id);
+});

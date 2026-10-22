@@ -117,3 +117,17 @@ test('an origin with no MCP server still names a callable url', () => {
   assert.equal(card.mcpEndpoint, undefined);
   assert.equal(card.url, 'https://example.com');
 });
+
+test('one route serves the card at both paths, the manifest, the spec and the proof', async () => {
+  const { wellKnownHandler } = await import('wiki-formant/well-known');
+  const GET = wellKnownHandler({ agentCard: { a: 1 }, mcpManifest: { m: 1 }, openapi: { o: 1 }, registryAuth: { publicKey: 'k' } });
+  const get = doc => GET(new Request(`https://x.test/.well-known/${doc}`), { params: Promise.resolve({ doc }) });
+  assert.deepEqual(await (await get('agent.json')).json(), { a: 1 });
+  assert.deepEqual(await (await get('agent-card.json')).json(), { a: 1 });
+  assert.deepEqual(await (await get('mcp.json')).json(), { m: 1 });
+  assert.deepEqual(await (await get('openapi.json')).json(), { o: 1 });
+  assert.match(await (await get('mcp-registry-auth')).text(), /k/);
+  assert.equal((await get('toString')).status, 404);
+  const tenant = wellKnownHandler({ agentCard: {}, mcpManifest: {}, openapi: {}, registryAuth: null });
+  assert.equal((await tenant(new Request('https://x.test/'), { params: Promise.resolve({ doc: 'mcp-registry-auth' }) })).status, 404);
+});

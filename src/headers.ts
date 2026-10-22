@@ -11,8 +11,11 @@
 // `youtube-nocookie.com` its sanitiser kept, so those embeds survived cleaning
 // and then rendered blank.
 //
-// Zero imports, so a config pays for nothing it does not use. `withWikiDefaults`
-// is here for the same reason: next.config.ts is its only caller.
+// One import, node:crypto for a script's hash, so a config pays for nothing
+// else. `withWikiDefaults` is here for the same reason: next.config.ts is its
+// only caller.
+
+import { createHash } from 'node:crypto';
 
 /** A header as Next's `headers()` wants it. */
 export interface HeaderEntry {
@@ -67,14 +70,27 @@ export const BASE_CSP: Readonly<Partial<Record<CspDirective, readonly string[]>>
   'frame-src': frameSources(),
 };
 
+/** A `script-src` source admitting exactly this inline script body. */
+export const scriptHash = (body: string): string =>
+  `'sha256-${createHash('sha256').update(body, 'utf8').digest('base64')}'`;
+
 /**
  * The policy string: `BASE_CSP` with each directive in `directives` replacing
  * its default. An empty list drops the directive.
+ *
+ * A `nonce` swaps `script-src` for the strict form, `'self'`, the nonce and a
+ * hash of each of `inlineScripts`, with no `'unsafe-inline'`. The hashes admit
+ * a static boot script without the layout reading the nonce, which would make
+ * every route render per request; hashing here means a package bump that
+ * changes the script moves its hash too, where a hand-copied one went stale
+ * and blanked every nonce route. Without a nonce the baseline stands.
  */
 export function contentSecurityPolicy(
   directives: Partial<Record<CspDirective, readonly string[]>> = {},
+  { nonce = null, inlineScripts = [] }: { nonce?: string | null; inlineScripts?: readonly string[] } = {},
 ): string {
-  return Object.entries({ ...BASE_CSP, ...directives })
+  const strict = nonce ? { 'script-src': ["'self'", `'nonce-${nonce}'`, ...inlineScripts.map(scriptHash)] } : {};
+  return Object.entries({ ...BASE_CSP, ...directives, ...strict })
     .filter(([, sources]) => sources?.length)
     .map(([name, sources]) => `${name} ${sources!.join(' ')}`)
     .join('; ');

@@ -42,3 +42,11 @@ test('the policy rides only where it is passed', () => {
   assert.equal(withCsp.length, 7);
   assert.deepEqual(withCsp.find(h => h.key === 'Strict-Transport-Security'), { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' });
 });
+
+test('a nonce makes script-src strict and admits each inline script by its hash', async () => {
+  const { contentSecurityPolicy, scriptHash } = await import('wiki-formant/headers');
+  const strict = contentSecurityPolicy({}, { nonce: 'n0', inlineScripts: ['boot()'] });
+  assert.match(strict, new RegExp(`script-src 'self' 'nonce-n0' ${scriptHash('boot()').replace(/[+/]/g, '\\$&')}`));
+  assert.doesNotMatch(strict.split('; ').find(d => d.startsWith('script-src')), /unsafe-inline/);
+  assert.match(contentSecurityPolicy({}, { nonce: null, inlineScripts: ['boot()'] }), /script-src 'self' 'unsafe-inline'/);
+});

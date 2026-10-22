@@ -128,6 +128,8 @@ export interface ColumnsBlock<A> {
   align?: 'start' | 'center' | 'end' | 'stretch';
 }
 export interface InfoboxBlock<A> { id: string; type: 'infobox'; blocks: A[] }
+/** A wiki's whole block union from its atomic one: the leaves and the two containers holding them. */
+export type BlockTree<A> = A | InfoboxBlock<A> | ColumnsBlock<A>;
 
 /** Where a list's pages come from: those in a section, the newest, or ones picked by hand. */
 export const LIST_SOURCES = ['under', 'newest', 'chosen'] as const;

@@ -9,7 +9,7 @@
 // As elsewhere in this package, the dispatch stays with the caller so a new
 // block type is a compile error there until it is handled.
 
-import { LIST_SOURCES } from './blocks.js';
+import { coreBlockShape, LIST_SOURCES, type BlockTreeShape } from './blocks.js';
 
 /**
  * An href acceptable to persist: http, https, mailto, tel, or a relative path or
@@ -314,4 +314,62 @@ export function duplicateBlockIds<B extends { type: string; id: string }>(
     return { ...block, id: newId(), blocks: b.blocks.map(x => ({ ...(x as object), id: newId() })) } as unknown as B;
   }
   return { ...block, id: newId() };
+}
+
+// ---- the whole model -------------------------------------------------------
+
+type Checked = Record<string, unknown>;
+
+export interface BlockModelOptions<B extends { id: string; type: string }> {
+  /** What inserting each type makes. Its keys are the types this wiki knows. */
+  defaults: Record<B['type'], () => Omit<B, 'id'>>;
+  /**
+   * The leaf check for each native type, and for a core type the wiki narrows.
+   * `core` is the core check, for a narrowing that adds to it rather than
+   * replacing it. A type with no entry gets the core check.
+   */
+  checks?: Partial<Record<B['type'], (block: Checked, core: (block: Checked) => boolean) => boolean>>;
+  /** As `coreAtomicValidator`'s. */
+  pageId?: (id: string) => boolean;
+  maxRows?: number;
+}
+
+export interface BlockModel<B extends { id: string; type: string }> {
+  /** Every type, in the order `defaults` lists them. */
+  types: B['type'][];
+  /** Every type but the two containers: what may nest inside one. */
+  atomicTypes: B['type'][];
+  shape: BlockTreeShape<B>;
+  createBlock: (type: B['type']) => B;
+  duplicateBlock: (block: B) => B;
+  validateBlocks: (content: unknown) => content is B[];
+  blockIssues: (content: unknown) => BlockIssue[];
+}
+
+/**
+ * A wiki's block model from its type set: the new-block factories and the leaf
+ * checks are its own, and everything derived from them is this. Each wiki had
+ * derived the same seven things by hand, and two kept a list of nestable types
+ * that drifted from the types the write path accepted.
+ */
+export function defineBlocks<B extends { id: string; type: string }>(opts: BlockModelOptions<B>): BlockModel<B> {
+  const { defaults, checks = {} as NonNullable<BlockModelOptions<B>['checks']>, pageId, maxRows } = opts;
+  const types = Object.keys(defaults) as B['type'][];
+  const atomicTypes = types.filter(t => t !== 'columns' && t !== 'infobox');
+  const core = coreAtomicValidator({ pageId, maxRows });
+  const own = checks as Record<string, ((block: Checked, core: (block: Checked) => boolean) => boolean) | undefined>;
+  const { validateBlocks, blockIssues } = createBlockValidator({
+    isKnownType: t => Object.hasOwn(defaults, t),
+    isAtomicType: t => (atomicTypes as string[]).includes(t),
+    validateAtomic: b => (own[b.type as string] ?? core)(b, core),
+  });
+  return {
+    types,
+    atomicTypes,
+    shape: coreBlockShape<B>(),
+    createBlock: type => ({ id: crypto.randomUUID(), ...defaults[type]() }) as B,
+    duplicateBlock: block => duplicateBlockIds(block),
+    validateBlocks: (content): content is B[] => validateBlocks(content),
+    blockIssues,
+  };
 }
