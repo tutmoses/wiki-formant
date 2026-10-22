@@ -146,6 +146,7 @@ export function toListing<R extends { content?: unknown }>(row: R): Omit<R, 'con
 
 
 const conflict = (message: string) => new HttpError(409, message);
+const SLUG_TAKEN = 'A page with that slug already exists in this category';
 
 /** Re-order rows to match an id list, dropping ids that no longer resolve. */
 export function orderByIds<T extends { id: string }>(rows: readonly T[], ids: readonly string[]): T[] {
@@ -308,17 +309,19 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
                      AND (${prose} ILIKE $3 OR (q.tsq IS NOT NULL AND p.search_tsv @@ q.tsq))))
        ),
        paged AS (
-         SELECT *, count(*) OVER ()::int AS total FROM matched
+         SELECT * FROM matched
           ORDER BY tier, CASE WHEN tier = 0 THEN title END, CASE WHEN tier = 3 THEN fts END DESC, "updatedAt" DESC
           LIMIT $7::int OFFSET $8::int
        )
+       -- The count is joined to the page rather than windowed over it, so a
+       -- page past the end still carries the total, on one row of nulls.
        SELECT ${COLUMNS}, tier, total,
               CASE WHEN tier = 3 THEN ts_headline('english', ${proseSql()}, tsq, '${HEADLINE_OPTIONS}') END AS headline
-         FROM paged
+         FROM (SELECT count(*)::int AS total FROM matched) t LEFT JOIN paged ON true
         ORDER BY tier, CASE WHEN tier = 0 THEN title END, CASE WHEN tier = 3 THEN fts END DESC, "updatedAt" DESC`,
       query.trim(), `${term}%`, `%${term}%`, hidden, site, tagPath, take, skip,
     );
-    const items = found.map(({ tier, total: _, headline, content, ...row }) => ({
+    const items = found.filter(hit => hit.id !== null).map(({ tier, total: _, headline, content, ...row }) => ({
       ...row,
       ...(withContent ? { content: content as B[] } : {}),
       score: tier,
@@ -328,6 +331,9 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
     return { items, total: found[0]?.total ?? 0 };
   };
 
+  /** A revision query's guard: `$1`, its page, is this site's. Another site's page id finds nothing. */
+  const OWN_PAGE = `"pageId" IN (SELECT id FROM ${PAGE} WHERE id = $1 AND "siteId" = $2)`;
+
   /**
    * A page's revisions, newest first, each with what changed against the one
    * before it. `limit` counts what is returned; one more is read so the oldest
@@ -335,15 +341,15 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
    */
   const history = async (pageId: string, { limit = 50, offset = 0 }: { limit?: number; offset?: number } = {}) => {
     const revisions = await rows<WikiRevisionRow<B>>(
-      `SELECT ${REVISION_COLUMNS} FROM ${REVISION} WHERE "pageId" = $1 ORDER BY "createdAt" DESC, id DESC LIMIT $2::int OFFSET $3::int`,
-      pageId, limit + 1, offset,
+      `SELECT ${REVISION_COLUMNS} FROM ${REVISION} WHERE "pageId" = $1 AND ${OWN_PAGE} ORDER BY "createdAt" DESC, id DESC LIMIT $3::int OFFSET $4::int`,
+      pageId, site, limit + 1, offset,
     );
     const entries = withChanges(revisions, { containers: o.containers }) as WikiRevisionEntry[];
     return revisions.length > limit ? entries.slice(0, limit) : entries;
   };
 
   const revision = (pageId: string, revisionId: string) =>
-    one<WikiRevisionRow<B>>(`SELECT ${REVISION_COLUMNS} FROM ${REVISION} WHERE "pageId" = $1 AND id = $2`, pageId, revisionId);
+    one<WikiRevisionRow<B>>(`SELECT ${REVISION_COLUMNS} FROM ${REVISION} WHERE "pageId" = $1 AND ${OWN_PAGE} AND id = $3`, pageId, site, revisionId);
 
   const create = async (input: SaveInput<B>): Promise<SaveResult<B>> => {
     if (input.title === undefined || input.content === undefined) throw new HttpError(400, 'A new page needs a title and content');
@@ -373,12 +379,16 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
    */
   const save = async (input: SaveInput<B>): Promise<SaveResult<B>> => {
     const existing = await get(input.tagPath, input.slug);
+    if (!existing && input.baseVersion !== undefined) {
+      throw conflict(`This page was deleted since it was opened at v${input.baseVersion}. Saving now would create it again; reload to decide.`);
+    }
     if (!existing) return create(input);
     if (input.baseVersion !== undefined && input.baseVersion !== existing.version) {
       throw conflict(`This page changed since it was opened: it is at v${existing.version} now, not v${input.baseVersion}. Reload it and apply the edit again.`);
     }
     const slug = input.newSlug && input.newSlug !== existing.slug ? input.newSlug : existing.slug;
-    if (slug !== existing.slug && (await get(existing.tagPath, slug))) throw conflict('A page with that slug already exists in this category');
+    const slugTaken = async () => slug !== existing.slug && (await get(existing.tagPath, slug)) !== null;
+    if (await slugTaken()) throw conflict(SLUG_TAKEN);
 
     const title = input.title ?? existing.title;
     const content = input.content ?? existing.content;
@@ -408,7 +418,12 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
       existing.id, existing.version, title, slug, JSON.stringify(content),
       input.metadata === undefined ? null : JSON.stringify(input.metadata),
       version, input.verified === true, changeType, input.message ?? diff.summary, input.authorId ?? null,
-    );
+    ).catch(async err => {
+      // A page that took the slug after the check above fails the unique index.
+      // Asked again rather than read off the error, whose shape is the driver's.
+      if (await slugTaken()) throw conflict(SLUG_TAKEN);
+      throw err;
+    });
     if (!page) throw conflict('This page was saved by someone else while this edit was being written. Reload it and apply the edit again.');
     return { page, created: false, changeType, summary: diff.summary };
   };

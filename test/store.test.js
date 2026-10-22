@@ -218,3 +218,50 @@ test('a path under a hidden one is hidden from every listing, named in the tree 
   assert.equal(store.isHidden('ops/runs/2026'), true);
   assert.deepEqual((await store.search('run', { tagPath: 'ops/runs/2026' })).items.map(p => p.slug), ['log']);
 });
+
+test('a save opened on a page deleted since is a conflict, not a re-creation', async () => {
+  const { sql } = await db();
+  const store = wikiStore({ sql });
+  const { page } = await store.save({ tagPath: 'docs', slug: 'gone', title: 'Gone', content: [para('a', 'x')] });
+  await store.remove('docs', 'gone');
+  await assert.rejects(
+    store.save({ tagPath: 'docs', slug: 'gone', content: [para('a', 'y')], baseVersion: page.version }),
+    e => e.status === 409 && /deleted/.test(e.message),
+  );
+  assert.equal(await store.get('docs', 'gone'), null);
+});
+
+test('a slug taken between the check and the write is a 409, not the index error', async () => {
+  const { pg, sql } = await db();
+  // Another writer claims the slug after the store checked it was free.
+  const racing = async (query, ...values) => {
+    if (/UPDATE "WikiPage" SET title/.test(query)) {
+      await pg.query(`INSERT INTO "WikiPage" ("tagPath", slug, title) VALUES ('docs', 'b', 'Theirs')`);
+    }
+    return sql(query, ...values);
+  };
+  const store = wikiStore({ sql: racing });
+  await store.save({ tagPath: 'docs', slug: 'a', title: 'A', content: [para('a', 'x')] });
+  await assert.rejects(store.save({ tagPath: 'docs', slug: 'a', newSlug: 'b' }), e => e.status === 409);
+  assert.equal((await store.get('docs', 'a')).title, 'A');
+});
+
+test('a search paged past the end still reports the total', async () => {
+  const { sql } = await db();
+  const store = wikiStore({ sql });
+  await store.save({ tagPath: 'docs', slug: 'v', title: 'Validators', content: [para('a', 'x')] });
+  await store.save({ tagPath: 'docs', slug: 'r', title: 'Running validators', content: [para('a', 'y')] });
+  assert.deepEqual(await store.search('validators', { skip: 10 }), { items: [], total: 2 });
+  assert.deepEqual(await store.search('nothing-here'), { items: [], total: 0 });
+});
+
+test("a revision is read only through its own site's page", async () => {
+  const { sql } = await db();
+  const a = wikiStore({ sql, siteId: 'a' });
+  const b = wikiStore({ sql, siteId: 'b' });
+  const { page } = await a.save({ tagPath: 'docs', slug: 'x', title: 'X', content: [para('a', 'one')] });
+  const [rev] = await a.history(page.id);
+  assert.equal((await a.revision(page.id, rev.id)).id, rev.id);
+  assert.deepEqual(await b.history(page.id), []);
+  assert.equal(await b.revision(page.id, rev.id), null);
+});

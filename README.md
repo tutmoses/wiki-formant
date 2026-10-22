@@ -37,9 +37,9 @@ const { items, total } = await store.search('validators', { take: 20 });
 await store.save({ tagPath, slug, content, authorId, message, baseVersion: page.version });
 ```
 
-- **A save is one statement.** The page update and its revision are a data-modifying CTE guarded on the version the save read. A save that lost a race writes nothing and throws a 409 `HttpError`; pass `baseVersion` and a save opened on an old version is refused the same way, instead of erasing the edit in between.
+- **A save is one statement.** The page update and its revision are a data-modifying CTE guarded on the version the save read. A save that lost a race writes nothing and throws a 409 `HttpError`; pass `baseVersion` and a save opened on an old version, or on a page deleted since, is refused the same way, instead of erasing the edit in between or re-creating the page. A rename onto a slug another save took meanwhile is a 409 too.
 - **The bump is the diff's.** Added, removed or moved blocks are `major`, changed prose or title `minor`; `change` overrides it for a script that knows better. A metadata-only save moves no version and writes no revision.
-- **History is diffed on read.** A revision stores the page as it was saved, never a diff, so a script's revision and the editor's carry the same history. `history(pageId, { limit })` reads one row more than it returns, so the oldest entry shown is diffed against its real predecessor.
+- **History is diffed on read.** A revision stores the page as it was saved, never a diff, so a script's revision and the editor's carry the same history. `history(pageId, { limit })` reads one row more than it returns, so the oldest entry shown is diffed against its real predecessor. It and `revision` answer only for a page of the store's own site.
 - **Listings carry a snippet, not the article.** `list`, `recent` and `byIds` drop `content` for one line of it; a category of 200 cards otherwise ships 200 block arrays.
 - **Search is four tiers**: title prefix, title, literal prose, then full text on `search_tsv` with Postgres' own headline as the snippet. Hidden paths are left out unless the search names one; `content: true` keeps each row's blocks.
 - **A path under a hidden one is hidden too**, in every listing, whether or not the tree names it.
