@@ -63,6 +63,11 @@ test('a code tab containing a fence gets a longer one', () => {
   assert.equal(out, '**Markdown**\n\n````\n```ts\nx\n```\n````');
 });
 
+test("a code tab keeps its first line's indentation, dropping only blank lines", () => {
+  const out = codeTabsToMarkdown([{ label: 'YAML', language: 'yaml', code: '\n\n  key: 1\n  other: 2\n\n' }]);
+  assert.equal(out, '**YAML**\n\n```yaml\n  key: 1\n  other: 2\n```');
+});
+
 test('a code tab with no language still fences', () => {
   assert.equal(codeTabsToMarkdown([{ label: 'Shell', code: 'ls' }]), '**Shell**\n\n```\nls\n```');
 });

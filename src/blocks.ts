@@ -344,7 +344,10 @@ export function codeTabsToMarkdown(tabs: readonly CodeTab[]): string {
     .map(t => {
       const longest = Math.max(0, ...(t.code.match(/`+/g) ?? []).map(run => run.length));
       const fence = '`'.repeat(Math.max(3, longest + 1));
-      return `**${t.label}**\n\n${fence}${t.language || ''}\n${t.code.trim()}\n${fence}`;
+      // Blank lines go from either end, but not the first line's indentation:
+      // in YAML or Python it is part of the code.
+      const code = t.code.replace(/^\s*\n/, '').trimEnd();
+      return `**${t.label}**\n\n${fence}${t.language || ''}\n${code}\n${fence}`;
     })
     .join('\n\n');
 }
