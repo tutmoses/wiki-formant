@@ -176,8 +176,16 @@ export function cacheTagHeaders(tags: string | readonly string[]): Record<string
 export function wantsMarkdown(request: { url: string; headers: { get(name: string): string | null | undefined } }): boolean {
   return (
     new URL(request.url).searchParams.get('format') === 'text' ||
-    /text\/(markdown|plain)/.test(request.headers.get('accept') ?? '')
+    (request.headers.get('accept') ?? '').split(',').some(acceptsText)
   );
+}
+
+/** One Accept media range naming markdown or plain text at a weight above zero: `q=0` means "not this". */
+function acceptsText(range: string): boolean {
+  const [type, ...params] = range.toLowerCase().split(';').map(s => s.replace(/\s/g, ''));
+  if (type !== 'text/markdown' && type !== 'text/plain') return false;
+  const q = params.find(p => p.startsWith('q='));
+  return !q || Number(q.slice(2)) > 0;
 }
 
 /** The header every response from a content-negotiated URL carries. */
@@ -258,7 +266,9 @@ export function pageLine(opts: {
 }): string {
   const excerpt = opts.excerpt ? `: ${cleanSnippet(opts.excerpt)}` : '';
   const stamp = opts.updated ? isoDate(opts.updated) : '';
-  return `- [${opts.title}](${opts.url})${excerpt}${stamp ? ` _(updated ${stamp})_` : ''}`;
+  // A bracket in a title ("[RFC] Fees") would close the link text early.
+  const title = opts.title.replace(/[[\]\\]/g, '\\$&');
+  return `- [${title}](${opts.url})${excerpt}${stamp ? ` _(updated ${stamp})_` : ''}`;
 }
 
 // ---- route factories --------------------------------------------------------

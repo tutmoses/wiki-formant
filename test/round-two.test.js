@@ -32,6 +32,14 @@ test('markdown is asked for by format or by Accept, never by default', () => {
   assert.deepEqual(VARY_ACCEPT, { Vary: 'Accept' });
 });
 
+test('an Accept refusing markdown at q=0 does not get markdown', () => {
+  const req = accept => ({ url: 'https://w.test/api/wiki/a', headers: new Headers({ accept }) });
+  assert.equal(wantsMarkdown(req('application/json, text/markdown;q=0')), false);
+  assert.equal(wantsMarkdown(req('text/plain; q=0.0, */*')), false);
+  assert.equal(wantsMarkdown(req('application/json, text/markdown;q=0.5')), true);
+  assert.equal(wantsMarkdown(req('Text/Plain')), true);
+});
+
 test('a stale page gets an outdated banner block, a fresh one none', () => {
   const now = Date.parse('2026-09-18');
   assert.equal(freshnessBanner({ lastVerifiedAt: '2026-09-01' }, now), null);

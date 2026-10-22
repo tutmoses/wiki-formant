@@ -50,6 +50,11 @@ test('a page line links, excerpts and dates', () => {
   assert.equal(pageLine({ title: 'T', url: 'u' }), '- [T](u)');
 });
 
+test('a bracket in a page title cannot close the link text early', () => {
+  assert.equal(pageLine({ title: '[RFC] Fees', url: 'u' }), '- [\\[RFC\\] Fees](u)');
+  assert.equal(pageLine({ title: 'a\\', url: 'u' }), '- [a\\\\](u)');
+});
+
 test('pagination clamps both ends and never trusts the query string', () => {
   const p = new URLSearchParams('page=-3&pageSize=9999');
   assert.deepEqual(parsePagination(p), { page: 1, pageSize: 100 });
