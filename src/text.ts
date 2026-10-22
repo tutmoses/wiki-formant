@@ -23,7 +23,7 @@ export function stripHtml(html: string): string {
       .replace(/<a[^>]+href="([^"]*)"[^>]*>(.*?)<\/a>/gi, ' $2 ($1) ')
       .replace(/<br\s*\/?>/gi, '\n')
       .replace(/<\/(?:p|h[1-6]|li|tr|th|td|div)>/gi, '\n')
-      .replace(/<(?:li)>/gi, '- ')
+      .replace(/<li\b[^>]*>/gi, '- ')
       .replace(/<[^>]+>/g, ''),
   )
     .replace(/\n{3,}/g, '\n\n')

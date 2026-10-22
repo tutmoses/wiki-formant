@@ -48,7 +48,7 @@ const NAMED_ENTITIES: Record<string, string> = {
  */
 export function decodeEntities(s: string): string {
   return s.replace(/&(?:#x([0-9a-fA-F]{1,6})|#(\d{1,7})|([a-zA-Z][a-zA-Z0-9]{1,9}));/g, (m, hex?: string, dec?: string, name?: string) => {
-    if (name) return NAMED_ENTITIES[name] ?? m;
+    if (name) return Object.hasOwn(NAMED_ENTITIES, name) ? NAMED_ENTITIES[name]! : m;
     const code = hex ? parseInt(hex, 16) : Number(dec);
     return code <= 0x10ffff ? String.fromCodePoint(code) : m;
   });
@@ -191,15 +191,17 @@ export interface FrontmatterFields {
 
 /** YAML frontmatter block, `---` fences included. */
 export function frontmatter(fields: FrontmatterFields): string {
-  const esc = (s: string) => s.replace(/"/g, '\\"');
+  // A YAML double-quoted scalar: a backslash starts an escape (`\b` is a
+  // backspace) and a raw newline ends the line, so both are escaped with the quote.
+  const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, '\\n');
   return [
     '---',
     `title: "${esc(fields.title)}"`,
-    `url: "${fields.url}"`,
+    `url: "${esc(fields.url)}"`,
     ...(fields.updated ? [`updated: ${isoDate(fields.updated)}`] : []),
     ...(fields.lastVerified ? [`last_verified: ${isoDate(fields.lastVerified)}`] : []),
     ...(fields.license
-      ? [`license: ${fields.license.spdx}`, `license_url: "${fields.license.url}"`]
+      ? [`license: ${fields.license.spdx}`, `license_url: "${esc(fields.license.url)}"`]
       : []),
     ...Object.entries(fields.extra ?? {})
       .filter(([, v]) => v !== undefined && v !== '')

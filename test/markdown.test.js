@@ -47,6 +47,7 @@ test('named entities decode instead of reaching the reader as ampersand soup', (
   assert.equal(decodeEntities('a &mdash; b &rsquo;c&rsquo; &nbsp;&alpha;'), 'a — b ’c’  α');
   assert.equal(decodeEntities('&#8212; &#x2014;'), '— —');
   assert.equal(decodeEntities('&notanentity; &amp;'), '&notanentity; &');
+  assert.equal(decodeEntities('&toString; &valueOf;'), '&toString; &valueOf;');
 });
 
 test('code blocks keep their content undecorated', () => {
@@ -65,6 +66,11 @@ test('unknown tags are stripped, never printed', () => {
 test('frontmatter escapes quotes and omits absent fields', () => {
   const fm = frontmatter({ title: 'A "quoted" title', url: 'https://x/p' });
   assert.equal(fm, '---\ntitle: "A \\"quoted\\" title"\nurl: "https://x/p"\n---');
+});
+
+test('frontmatter escapes a backslash and a newline, which YAML would read as escapes', () => {
+  const fm = frontmatter({ title: 'C:\\bin\nnext', url: 'https://x/p' });
+  assert.equal(fm.split('\n')[1], 'title: "C:\\\\bin\\nnext"');
 });
 
 test('frontmatter carries the freshness stamp agents need', () => {

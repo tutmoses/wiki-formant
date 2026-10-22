@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { coreBlockGroups, coreBlockShape, leafBlocks, mapBlockTree, mapBlockTreeAsync, renderBlockTree } from 'wiki-formant/blocks';
 import { computeRevisionDiff } from 'wiki-formant/revisions';
-import { linkGridToText, pageListToText, statsToText } from 'wiki-formant/text';
+import { linkGridToText, pageListToText, statsToText, stripHtml } from 'wiki-formant/text';
 
 const leaf = (id, text) => ({ id, type: 'content', text });
 const tree = [
@@ -46,6 +46,10 @@ test('stats, link grids and page lists have prose bodies', () => {
     'Intro\n\nDocs\nStart here\n- Guide (/guide)',
   );
   assert.equal(pageListToText([{ title: 'A' }, { title: 'B' }]), 'A\nB');
+});
+
+test('a list item carrying an id is still a bullet', () => {
+  assert.equal(stripHtml('<ul><li id="ref-1">One</li><li>Two</li></ul>'), '- One\n- Two');
 });
 
 test('every walk reaches a container nested inside another', () => {
