@@ -588,7 +588,13 @@ export function useTypeahead<T>({
     return () => controller.abort();
   }, [debounced, fetch, minLength, cache]);
 
-  const clearItems = useCallback(() => setItems([]), []);
+  // Dismissing the list also drops the search in flight, or its answer would
+  // bring back the list the reader just closed.
+  const clearItems = useCallback(() => {
+    requestId.current++;
+    setItems([]);
+    setIsSearching(false);
+  }, []);
 
   const reset = useCallback(() => {
     requestId.current++;
@@ -601,7 +607,7 @@ export function useTypeahead<T>({
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
-      setItems([]);
+      clearItems();
       onEscape?.();
       return;
     }
@@ -763,8 +769,11 @@ export function useLinkPreview<T>({
     };
 
     const onOut = (e: MouseEvent) => {
-      // Moving into the card itself is not leaving.
-      if ((e.relatedTarget as HTMLElement | null)?.closest(`.${cardClassName}`)) return;
+      // Moving within the link (onto a <code> or <em> in it), or into the card
+      // itself, is not leaving. Leaving cancels the pending show, and re-entering
+      // the same link does not start it again.
+      const to = e.relatedTarget as HTMLElement | null;
+      if (to && ((e.target as HTMLElement | null)?.closest('a')?.contains(to) || to.closest(`.${cardClassName}`))) return;
       clearTimers();
       hide();
     };
