@@ -579,6 +579,9 @@ pre:hover > .code-copy-btn,
 .see-also-item:hover .see-also-title { color: var(--ui-accent); }
 .see-also-detail { font-size: var(--ui-small); color: var(--ui-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .section-card { display: flex; flex-direction: column; gap: 0.5rem; padding: var(--ui-pad); background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); transition: border-color 0.15s; }
+/* A page list as rows (PageRefsView): one panel, a rule between rows. radix-wiki dropped its own rule for this on 0.86 and the package drew none. */
+.page-refs { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; overflow: hidden; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); }
+.page-refs > li + li { border-top: 1px solid var(--ui-border); }
 .section-card:hover { border-color: var(--ui-accent); }
 .facet-summary { margin: 0; font-size: var(--ui-small); color: var(--ui-muted); }
 
