@@ -32,7 +32,7 @@ import {
   resolveSidebarOpen,
   SIDEBAR_ATTRIBUTE,
 } from './sidebar.js';
-import { activateTabGroups, addCopyButtons, hydrateTweetEmbeds, onTweetResize, sizeTweetEmbed, sortTables, startBeacon } from './dom.js';
+import { activateTabGroups, addCopyButtons, hydrateTweetEmbeds, onTweetResize, renderMath, sizeTweetEmbed, sortTables, startBeacon } from './dom.js';
 import type { WikiLinkComponent } from './react-server.js';
 import { comboboxAria, type ComboboxAria } from './combobox.js';
 import {
@@ -1390,8 +1390,8 @@ export type { WikiLinkComponent, WikiLinkProps } from './react-server.js';
 
 /**
  * The `wiki-formant/dom` passes over a rendered article: tab groups, copy
- * buttons, sortable tables, and each post on X hydrated and kept at the height
- * it posts. All three renderers ran the same passes in an effect, and they
+ * buttons, sortable tables, maths typeset, and each post on X hydrated and kept
+ * at the height it posts. All three renderers ran the same passes in an effect, and they
  * disagreed on when: two ran it once on mount, so a page swapped in without a
  * remount kept its old tables unsortable. Each pass is idempotent, so running
  * on every `deps` change is safe.
@@ -1403,6 +1403,7 @@ export function useArticlePasses(ref: RefObject<HTMLElement | null>, deps: Depen
     activateTabGroups(root);
     addCopyButtons(root);
     sortTables(root);
+    void renderMath(root);
     hydrateTweetEmbeds(root);
     return onTweetResize((height, source) => sizeTweetEmbed(root, height, source));
     // eslint-disable-next-line react-hooks/exhaustive-deps

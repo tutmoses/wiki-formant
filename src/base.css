@@ -200,7 +200,6 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
 .tabs-editor .tab-button { display: inline-flex; align-items: center; padding: 0.15em 0.3em; border-bottom: 0; border-radius: 0.3rem; }
 .tabs-editor .tab-button.active { background: color-mix(in srgb, currentColor 10%, transparent); }
 .tab-title { width: 7em; outline: none; }
-.tab-remove, .tab-add { opacity: 0.7; }
 .tabs-content { padding: 1rem; }
 .tabs-editor [data-tab-item] { display: none; }
 [data-tabs][data-active-tab='0'] .tabs-editor [data-tab-item]:nth-of-type(1),
@@ -211,6 +210,9 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
 [data-tabs][data-active-tab='5'] .tabs-editor [data-tab-item]:nth-of-type(6),
 [data-tabs][data-active-tab='6'] .tabs-editor [data-tab-item]:nth-of-type(7),
 [data-tabs][data-active-tab='7'] .tabs-editor [data-tab-item]:nth-of-type(8) { display: block; }
+
+/* ---- maths (renderMath): a display wider than its column scrolls rather than spilling. */
+.katex-display { overflow-x: auto; overflow-y: hidden; }
 
 /* ---- one-line fields (WikiLine) --------------------------------------------- */
 [data-wiki-line] { outline: none; cursor: text; white-space: pre-wrap; }
