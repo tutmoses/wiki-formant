@@ -218,6 +218,10 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
 }
 .infobox { padding: var(--ui-pad); }
 .infobox table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+/* A fixed column cannot grow, so a cell that cannot wrap spills out of it: caper's
+   prose tables keep their labels on one line, and its infobox keys ran into the
+   values. One element more specific than a site's `.typo-prose th`. */
+.infobox table :is(th, td) { white-space: normal; }
 .infobox :is(th, td) { padding: 0.375rem 0.5rem; border: 0; border-bottom: 1px solid var(--ui-border); background: none; text-align: left; vertical-align: top; }
 /* Labels are short and values are the reading: 42% still fits "Published:". */
 .infobox th { width: 42%; font-weight: 600; color: var(--ui-muted); }
