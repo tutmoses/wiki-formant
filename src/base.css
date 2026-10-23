@@ -1,8 +1,7 @@
 /* wiki-formant/base.css — the layout the package's markup does not work without.
 
-   Structure first: the layout the markup needs, no colour and no type scale.
-   Then, at the end, the look: every component drawn from twelve `--ui-*`
-   tokens the importing stylesheet maps from its own palette. That stylesheet
+   Structure only: no colour, no type scale, no design token. Every value that
+   is a look rather than a mechanism is left to the importing stylesheet, which
    loads this first and overrides anything here with an equally specific rule.
 
      @import "wiki-formant/base.css" layer(components);
@@ -175,6 +174,157 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
 .heading-anchor,
 .ref-backlink,
 .reference-link { text-decoration: none; }
+
+/* ---- the look of the package's components ----------------------------------
+   The panels, lists, cards and rails the package's markup produces, drawn once
+   on eight tokens a site maps from its own palette in `:root`. Four
+   stylesheets had restated sixty of these classes with four vocabularies
+   (`--corner`, `--radius`, `--radius-wing`; `--space`, `--spacing-md`,
+   `--space-3`) and four bodies. A site that must differ overrides the rule;
+   one that sets no token gets a readable default off `currentColor`.
+
+     :root {
+       --ui-surface: var(--color-surface-1);   a card's background
+       --ui-surface-2: var(--color-surface-2); a raised or hovered one
+       --ui-border: var(--color-border);
+       --ui-radius: var(--radius);
+       --ui-pad: 1rem;                          a panel's padding
+       --ui-small: var(--text-small);           the small type size
+       --ui-muted: var(--color-text-muted);
+       --ui-accent: var(--color-accent);
+       --ui-on-accent: var(--color-bg);         text on the accent
+       --ui-up: var(--color-success);           a gain, an addition
+       --ui-down: var(--color-error);           a loss, a removal, a warning
+     } */
+:root {
+  --ui-surface: color-mix(in srgb, currentColor 6%, transparent);
+  --ui-surface-2: color-mix(in srgb, currentColor 12%, transparent);
+  --ui-border: color-mix(in srgb, currentColor 20%, transparent);
+  --ui-radius: 0.5rem;
+  --ui-pad: 1rem;
+  --ui-small: 0.875rem;
+  --ui-muted: color-mix(in srgb, currentColor 70%, transparent);
+  --ui-accent: currentColor;
+  --ui-on-accent: Canvas;
+  --ui-up: currentColor;
+  --ui-down: currentColor;
+}
+
+/* A panel: the infobox, a section card, a stat card, a chart. */
+.infobox, .section-card, .chart {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+.infobox { padding: var(--ui-pad); }
+.infobox table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+.infobox :is(th, td) { padding: 0.375rem 0.5rem; border: 0; border-bottom: 1px solid var(--ui-border); background: none; text-align: left; vertical-align: top; }
+/* Labels are short and values are the reading: 42% still fits "Published:". */
+.infobox th { width: 42%; font-weight: 600; color: var(--ui-muted); }
+.infobox tr:last-child :is(th, td) { border-bottom: 0; }
+.infobox-facts { margin: 0; }
+.infobox-series { align-items: center; gap: 0.125rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--ui-border); text-align: center; font-size: var(--ui-small); color: var(--ui-muted); }
+.page-with-infobox { gap: 1.5rem; }
+
+.section-card { display: flex; flex-direction: column; gap: 0.5rem; padding: var(--ui-pad); transition: border-color 150ms; }
+.section-card:hover { border-color: var(--ui-accent); }
+
+.page-refs { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; overflow: hidden; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); }
+.page-refs > li + li { border-top: 1px solid var(--ui-border); }
+
+.see-also-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 0.75rem; margin: 0; padding: 0; list-style: none; }
+.see-also-item { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; padding: 0.75rem; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); color: inherit; text-decoration: none; transition: border-color 150ms; }
+.see-also-item:hover { border-color: var(--ui-accent); }
+.see-also-title { font-weight: 600; }
+.see-also-detail { font-size: var(--ui-small); color: var(--ui-muted); }
+
+.link-preview-card { position: fixed; z-index: 50; width: 20rem; max-width: calc(100vw - 1rem); overflow: hidden; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); box-shadow: var(--ui-shadow, 0 8px 24px -4px rgb(0 0 0 / 0.25)); }
+.link-preview-body { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.75rem; }
+.link-preview-title { font-weight: 600; }
+.link-preview-excerpt { display: -webkit-box; margin: 0; overflow: hidden; font-size: var(--ui-small); color: var(--ui-muted); -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+
+.maintenance-queue { display: flex; flex-direction: column; gap: 0.5rem; padding-top: 1.5rem; border-top: 1px solid var(--ui-border); }
+.maintenance-count { margin-left: 0.5rem; font-size: var(--ui-small); font-weight: 400; font-variant-numeric: tabular-nums; color: var(--ui-muted); }
+.maintenance-list { display: grid; gap: 0.375rem; margin: 0; padding: 0; list-style: none; }
+.maintenance-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.5rem; }
+.maintenance-item > a { color: var(--ui-accent); }
+.maintenance-description, .maintenance-detail { font-size: var(--ui-small); color: var(--ui-muted); }
+
+.stat-grid { gap: 0.75rem; }
+.stat-card { gap: 0.25rem; padding: 0.75rem; background: var(--ui-surface); border-radius: var(--ui-radius); }
+.stat-value { font-size: 1.5rem; font-weight: 700; line-height: 1.1; }
+.stat-label { font-size: var(--ui-small); color: var(--ui-muted); }
+.stats-delta { font-size: 0.6em; font-weight: 600; }
+.stats-delta[data-better='true'] { color: var(--ui-up); }
+.stats-delta[data-better='false'] { color: var(--ui-down); }
+
+.chart-canvas { color: var(--ui-accent); font-size: 0.6875rem; --chart-axis: var(--ui-muted); --chart-up: var(--ui-up); --chart-down: var(--ui-down); }
+.chart-status { font-size: var(--ui-small); color: var(--ui-muted); }
+.chart-controls :is(button, a) { border: 1px solid var(--ui-border); border-radius: calc(var(--ui-radius) / 2); font-size: 0.625rem; opacity: 1; transition: background-color 150ms, color 150ms; }
+.chart-controls :is(button, a):hover { background: var(--ui-surface-2); }
+.chart-controls :is(button, a):is([aria-pressed='true'], [aria-current]) { background: var(--ui-accent); border-color: var(--ui-accent); color: var(--ui-on-accent); }
+
+.code-tabs { margin-block: 1rem; border: 1px solid var(--ui-border); border-radius: var(--ui-radius); }
+.code-tabs-list { overflow-x: auto; border-bottom: 1px solid var(--ui-border); background: var(--ui-surface); }
+.code-tabs-btn { padding: 0.5rem 1rem; border: 0; border-bottom: 2px solid transparent; background: transparent; font: inherit; font-size: var(--ui-small); color: var(--ui-muted); transition: color 150ms; }
+.code-tabs-btn:hover { color: inherit; }
+.code-tabs-btn-active { border-bottom-color: var(--ui-accent); color: var(--ui-accent); }
+.code-tabs pre { margin: 0; border: 0; border-radius: 0; }
+.code-copy-btn { padding: 0.375rem; border-radius: calc(var(--ui-radius) / 2); background: var(--ui-surface-2); color: var(--ui-muted); transition: opacity 120ms ease, color 120ms ease; }
+.code-copy-btn:hover { color: inherit; }
+
+.editorial-banner { align-items: flex-start; gap: 0.75rem; margin-block: 0.75rem; padding: 0.75rem; background: var(--ui-surface); border: 1px solid var(--ui-border); border-left-width: 3px; border-radius: var(--ui-radius); font-size: var(--ui-small); }
+.editorial-banner-body { flex: 1; min-width: 0; margin: 0; }
+.editorial-banner-unsourced, .editorial-banner-outdated { border-color: color-mix(in srgb, var(--ui-down) 40%, transparent); background: color-mix(in srgb, var(--ui-down) 10%, transparent); }
+.editorial-banner-unsourced .editorial-banner-icon, .editorial-banner-outdated .editorial-banner-icon { color: var(--ui-down); }
+
+.references-block { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--ui-border); }
+.references-block h2 { margin: 0 0 0.5rem; }
+.references-list { margin: 0; padding-left: 1.5rem; list-style: decimal; font-size: var(--ui-small); color: var(--ui-muted); }
+.reference-item { margin-bottom: 0.25rem; padding-left: 0.25rem; scroll-margin-top: calc(var(--rail-top, 0px) + 1rem); }
+.reference-item a, .ref-backlink { color: var(--ui-accent); }
+.reference-item:target { background: color-mix(in srgb, var(--ui-accent) 15%, transparent); border-radius: calc(var(--ui-radius) / 2); }
+
+:is(h2, h3, h4, h5, h6):has(> .heading-anchor) { position: relative; }
+.heading-anchor { position: absolute; top: 0; left: -1.25rem; font-weight: 400; color: var(--ui-muted); opacity: 0; transition: opacity 150ms; }
+.heading-anchor::before { content: '#'; }
+.heading-anchor:hover { color: var(--ui-accent); }
+:is(h2, h3, h4, h5, h6):hover > .heading-anchor, .heading-anchor:focus-visible { opacity: 1; }
+
+.facet-summary { margin: 0; font-size: var(--ui-small); color: var(--ui-muted); }
+
+.link-grid { display: flex; flex-direction: column; gap: 1rem; margin-block: 1rem; }
+.link-grid-group-description { margin: 0 0 0.75rem; font-size: var(--ui-small); color: var(--ui-muted); }
+.link-grid-group-description p { margin: 0; }
+.link-grid-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.link-grid-pills > a { padding: 0.375rem 0.75rem; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); font-size: var(--ui-small); color: inherit; text-decoration: none; transition: background 150ms, border-color 150ms, color 150ms; }
+.link-grid-pills > a:hover { background: var(--ui-surface-2); border-color: var(--ui-accent); color: var(--ui-accent); }
+
+.revision-change-action { font-weight: 600; }
+.revision-change[data-action='added'] .revision-change-action { color: var(--ui-up); }
+.revision-change[data-action='removed'] .revision-change-action { color: var(--ui-down); }
+.revision-change[data-action='moved'] .revision-change-action { color: var(--ui-accent); }
+.revision-diff { line-height: 1.6; color: var(--ui-muted); }
+.revision-diff del { color: var(--ui-down); }
+.revision-diff ins { padding-inline: 0.125rem; border-radius: 2px; background: color-mix(in srgb, var(--ui-up) 10%, transparent); color: var(--ui-up); text-decoration: none; }
+
+.sort-header { gap: 0.25rem; transition: color 150ms; }
+.sort-header:hover, :is([aria-sort='ascending'], [aria-sort='descending']) > .sort-header { color: inherit; }
+
+.column-view { gap: 1rem; }
+
+.link { color: var(--ui-accent); text-decoration: none; cursor: pointer; }
+.link:hover { text-decoration: underline; }
+
+/* The rail's contents: a label over a group of entries, and the article's contents with the section being read lit. */
+.wiki-sidebar { --rail-border: 1px solid var(--ui-border); }
+.wiki-sidebar__scroll { gap: 1.5rem; padding: 1rem var(--page-pad) 3rem; }
+.wiki-rail__group, .wiki-rail__toc-list { display: flex; flex-direction: column; gap: 1px; }
+.wiki-rail__label { padding: 0 0.5rem 0.25rem; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ui-muted); }
+.wiki-rail__toc-btn, .wiki-rail__toc-item { display: flex; align-items: center; gap: 0.25rem; width: 100%; padding: 0.25rem 0.5rem; border: 0; background: none; font: inherit; color: var(--ui-muted); text-align: left; cursor: pointer; }
+.wiki-rail__toc-item { border-inline-start: 2px solid var(--ui-border); font-size: var(--ui-small); text-decoration: none; transition: color 150ms, border-color 150ms; }
+.wiki-rail__toc-item:hover, .wiki-rail__toc-item--active { border-inline-start-color: var(--ui-accent); color: var(--ui-accent); }
+.wiki-rail__toc-item--active { font-weight: 600; }
 
 /* ---- stored tab groups (activateTabGroups) --------------------------------
    Only the active panel shows. Before the script runs, the first tab's content
@@ -489,144 +639,3 @@ pre:hover > .code-copy-btn,
   max-width: 100%;
   min-height: 200px;
 }
-
-/* ==== the look ================================================================
-   What the components above look like, drawn from twelve tokens a site maps
-   once from its own palette, unlayered so the mapping wins:
-
-     --ui-surface    a card's ground         --ui-muted     secondary text
-     --ui-surface-2  a strip, a label cell   --ui-accent    links, the current item
-     --ui-border     every rule and outline  --ui-on-accent text on the accent
-     --ui-radius     every corner            --ui-up        a good change, an insertion
-     --ui-pad        a card's padding        --ui-down      a bad change, a deletion
-     --ui-small      the small type size     --ui-shadow    a floating card's shadow
-
-   Four sites had each drawn these same components in their own tokens, the
-   same rules restated four ways, and the one that forgot a rule shipped it
-   unstyled. A site still overrides any of it with its own rule after this. */
-
-/* Permalink beside a heading: the glyph comes from here, so a table of contents
-   reading the heading's text never picks it up. */
-:is(h2, h3, h4, h5, h6):has(> .heading-anchor) { position: relative; }
-.heading-anchor { position: absolute; top: 0; left: -1.25rem; font-weight: 400; color: var(--ui-muted); opacity: 0; transition: opacity 0.15s; }
-.heading-anchor::before { content: '#'; }
-.heading-anchor:hover { color: var(--ui-accent); }
-:is(h2, h3, h4, h5, h6):hover > .heading-anchor,
-.heading-anchor:focus-visible { opacity: 1; }
-.link { color: var(--ui-accent); text-decoration: none; cursor: pointer; }
-.link:hover { text-decoration: underline; }
-
-/* Code tabs and the copy button. */
-.code-tabs { margin-block: 1rem; border: 1px solid var(--ui-border); border-radius: var(--ui-radius); }
-.code-tabs-list { overflow-x: auto; background: var(--ui-surface-2); border-bottom: 1px solid var(--ui-border); }
-.code-tabs-btn { padding: 0.5rem 1rem; font: inherit; font-size: var(--ui-small); color: var(--ui-muted); background: transparent; border: 0; border-bottom: 2px solid transparent; transition: color 0.15s; }
-.code-tabs-btn:hover { color: inherit; }
-/* The box clips, so the focus ring goes inside the button. */
-.code-tabs-btn:focus-visible { outline-offset: -2px; }
-.code-tabs-btn-active { color: var(--ui-accent); border-bottom-color: var(--ui-accent); }
-.code-tabs pre { margin: 0; border: 0; border-radius: 0; }
-.code-copy-btn { padding: 0.375rem; color: var(--ui-muted); background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); z-index: 1; }
-.code-copy-btn:hover { color: var(--ui-accent); }
-
-/* Notices. A notice is a claim about the page, so it reads as an aside. */
-.editorial-banner { align-items: flex-start; gap: 0.75rem; margin-block: 0.75rem; padding: 0.75rem; font-size: var(--ui-small); background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); }
-.editorial-banner-icon { flex-shrink: 0; margin-top: 0.125rem; }
-.editorial-banner-body { flex: 1; min-width: 0; margin: 0; }
-:is(.editorial-banner-unsourced, .editorial-banner-outdated, .editorial-banner-promotional, .editorial-banner-coi) { border-color: color-mix(in srgb, var(--ui-down) 35%, transparent); background: color-mix(in srgb, var(--ui-down) 8%, var(--ui-surface)); }
-:is(.editorial-banner-unsourced, .editorial-banner-outdated, .editorial-banner-promotional, .editorial-banner-coi) .editorial-banner-icon { color: var(--ui-down); }
-
-/* References. */
-.references-block { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--ui-border); }
-.references-block h2 { margin: 0 0 0.5rem; }
-.references-list { margin: 0; padding-left: 1.5rem; list-style: decimal; font-size: var(--ui-small); color: var(--ui-muted); }
-.reference-item { margin-block: 0.25rem; padding-left: 0.25rem; scroll-margin-top: 5rem; }
-.reference-item:target { background: color-mix(in srgb, var(--ui-accent) 12%, transparent); border-radius: var(--ui-radius); }
-:is(.reference-item a, .ref-backlink, .reference-link) { color: var(--ui-accent); }
-:is(.reference-item a, .ref-backlink, .reference-link):hover { text-decoration: underline; }
-
-/* The infobox and its facts. Labels are short and values are the reading, so
-   the label column takes 42%, the floor that still fits "Published:". */
-.page-with-infobox { gap: 1.5rem; }
-.infobox { padding: var(--ui-pad); background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); }
-.infobox table { table-layout: fixed; width: 100%; border-collapse: collapse; }
-.infobox :is(th, td) { padding: 0.375rem 0.5rem; font-size: var(--ui-small); text-align: left; vertical-align: top; border: 0; border-bottom: 1px solid var(--ui-border); }
-.infobox th { width: 42%; font-weight: 600; color: var(--ui-muted); }
-.infobox tr:last-child > :is(th, td) { border-bottom: 0; }
-.infobox-facts { margin: 0; }
-.infobox-series { align-items: center; gap: 0.125rem; margin-bottom: 0.75rem; padding-bottom: 0.75rem; text-align: center; font-size: var(--ui-small); color: var(--ui-muted); border-bottom: 1px solid var(--ui-border); }
-
-/* Stats blocks and the figures' change from the window before. */
-.stat-grid { gap: 0.75rem; }
-.stat-card { gap: 0.25rem; padding: var(--ui-pad); background: var(--ui-surface); border-radius: var(--ui-radius); }
-.stat-value { font-weight: 700; line-height: 1.15; }
-.stat-label { font-size: var(--ui-small); color: var(--ui-muted); }
-.stats-delta { font-size: 0.6em; font-weight: 600; }
-.stats-delta[data-better='true'] { color: var(--ui-up); }
-.stats-delta[data-better='false'] { color: var(--ui-down); }
-
-/* Columns, link grids, related pages. */
-.column-view { gap: 1rem; }
-.link-grid { display: flex; flex-direction: column; gap: 1rem; margin-block: 1rem; }
-.link-grid-group-description { margin: 0 0 0.75rem; color: var(--ui-muted); }
-.link-grid-group-description p { margin: 0; }
-.link-grid-pills { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 0.5rem; }
-.link-grid-pills > a { display: block; padding: 0.625rem 0.875rem; font-size: var(--ui-small); text-align: center; text-decoration: none; color: inherit; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); transition: background 0.15s, border-color 0.15s, color 0.15s; }
-.link-grid-pills > a:hover { color: var(--ui-accent); background: var(--ui-surface-2); border-color: var(--ui-accent); }
-.see-also-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 0.75rem; margin: 0; padding: 0; list-style: none; }
-.see-also-item { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; padding: 0.75rem; color: inherit; text-decoration: none; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); transition: border-color 0.15s; }
-.see-also-item:hover { border-color: var(--ui-accent); }
-.see-also-title { font-weight: 600; }
-.see-also-item:hover .see-also-title { color: var(--ui-accent); }
-.see-also-detail { font-size: var(--ui-small); color: var(--ui-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.section-card { display: flex; flex-direction: column; gap: 0.5rem; padding: var(--ui-pad); background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); transition: border-color 0.15s; }
-/* A page list as rows (PageRefsView): one panel, a rule between rows. radix-wiki dropped its own rule for this on 0.86 and the package drew none. */
-.page-refs { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; overflow: hidden; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); }
-.page-refs > li + li { border-top: 1px solid var(--ui-border); }
-.section-card:hover { border-color: var(--ui-accent); }
-.facet-summary { margin: 0; font-size: var(--ui-small); color: var(--ui-muted); }
-
-/* The hover card over a link to another page (useLinkPreview). */
-.link-preview-card { position: fixed; z-index: 50; width: 20rem; max-width: calc(100vw - 1rem); overflow: hidden; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); box-shadow: var(--ui-shadow); }
-.link-preview-body { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.75rem; }
-.link-preview-title { font-weight: 600; }
-.link-preview-excerpt { margin: 0; font-size: var(--ui-small); color: var(--ui-muted); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-
-/* The rail's frame and its table of contents. */
-.wiki-sidebar { --rail-border: 1px solid var(--ui-border); }
-.wiki-rail__group, .wiki-rail__toc-list { display: flex; flex-direction: column; gap: 1px; }
-.wiki-rail__label { padding: 0 0.5rem 0.25rem; font-size: var(--ui-small); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ui-muted); }
-:is(.wiki-rail__toc-btn, .wiki-rail__toc-item) { display: flex; align-items: center; gap: 0.25rem; width: 100%; font: inherit; text-align: left; color: var(--ui-muted); background: none; border: 0; cursor: pointer; }
-.wiki-rail__toc-btn { padding: 0 0.5rem 0.25rem; }
-.wiki-rail__toc-item { padding: 0.25rem 0.75rem; font-size: var(--ui-small); line-height: 1.4; text-decoration: none; border-inline-start: 2px solid var(--ui-border); transition: color 0.15s, border-color 0.15s; }
-.wiki-rail__toc-item:hover, .wiki-rail__toc-item--active { color: var(--ui-accent); border-inline-start-color: var(--ui-accent); }
-.wiki-rail__toc-item--active { font-weight: 600; }
-
-/* Work queues (MaintenanceQueues). */
-.maintenance-queue { display: flex; flex-direction: column; gap: 0.5rem; padding-top: 1.5rem; border-top: 1px solid var(--ui-border); }
-.maintenance-count { margin-left: 0.5rem; font-weight: 400; font-variant-numeric: tabular-nums; color: var(--ui-muted); }
-.maintenance-description, .maintenance-detail { color: var(--ui-muted); }
-.maintenance-detail { font-size: var(--ui-small); }
-.maintenance-list { display: grid; gap: 0.375rem; margin: 0; padding: 0; list-style: none; }
-.maintenance-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.5rem; }
-.maintenance-item > a { color: var(--ui-accent); }
-
-/* A revision's changes and its inline diff. */
-.revision-change-action { font-weight: 600; color: var(--ui-muted); }
-.revision-change[data-action='added'] .revision-change-action { color: var(--ui-up); }
-.revision-change[data-action='removed'] .revision-change-action { color: var(--ui-down); }
-.revision-diff { line-height: 1.6; color: var(--ui-muted); }
-.revision-diff del { color: var(--ui-down); }
-.revision-diff ins { color: var(--ui-up); text-decoration: none; background: color-mix(in srgb, var(--ui-up) 12%, transparent); border-radius: 2px; }
-
-/* Sortable headers: muted until hovered or sorted by. */
-.sort-header { color: var(--ui-muted); transition: color 0.15s; }
-.sort-header:hover,
-:is([aria-sort='ascending'], [aria-sort='descending']) > .sort-header { color: inherit; }
-
-/* Charts. */
-.chart { background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); }
-.chart-canvas { font-size: 0.6875rem; color: var(--ui-accent); --chart-axis: var(--ui-muted); --chart-up: var(--ui-up); --chart-down: var(--ui-down); }
-.chart-status { font-size: var(--ui-small); color: var(--ui-muted); }
-.chart-controls :is(button, a) { font-size: 0.6875rem; border: 1px solid var(--ui-border); border-radius: var(--ui-radius); opacity: 1; }
-.chart-controls :is(button, a):hover { background: var(--ui-surface-2); }
-.chart-controls :is(button, a):is([aria-pressed='true'], [aria-current]) { color: var(--ui-on-accent); background: var(--ui-accent); border-color: var(--ui-accent); }

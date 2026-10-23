@@ -1,155 +1,166 @@
-// scripts.ts — what a wiki's direct-database scripts share: the client, the
-// store over it, the block builders, the shape check and the revision write.
+// scripts.ts — what a wiki's seed and sweep scripts share: a client on the
+// app's database that rolls back on a throw and expires the wiki's cache tag
+// after a write, the store over it, the block builders, and the two writes
+// every script makes: a revision over a page it read, and an upsert.
 //
-// Node-only. A script bypasses the app's write routes, so it bypasses their
-// validation and their cache busting too; both are here so no script can skip
-// them. radix-wiki's seed-utils.mjs and caper's wiki-utils.ts had each written
-// this half, and each had a piece the other lacked: the shape check, the
-// write-tracking pool and the rollback on one side, the upsert that records a
-// revision only when something changed on the other.
+// radix-wiki's `seed-utils.mjs` and caper's `wiki-utils.ts` had each written
+// these, in different languages, with different halves of the same guards.
+// Node-only, like the bins: `pg` is the app's, imported when a client is made.
 
-import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import type { BannerVariant } from './text.js';
+import { execFileSync } from 'node:child_process';
+import { wikiStore, type SaveInput, type WikiPageRow, type WikiStore } from './store.js';
 import { bump, type ChangeType } from './versioning.js';
-import { wikiStore, type PageMetadata, type WikiPageRow } from './store.js';
 import { validateLinkGroups, validateReferenceItems } from './validation.js';
-
-/** The slice of a `pg` client every helper here takes. Prisma fits it with `$queryRawUnsafe`. */
-export interface ScriptClient {
-  query(text: string, values?: unknown[]): Promise<{ rows: unknown[] }>;
-}
-
-type Block = { id: string; type: string };
-
-// ---- block builders ---------------------------------------------------------
+import type { BannerVariant } from './text.js';
 
 export const uid = (): string => randomUUID();
-export const content = (html: string) => ({ id: uid(), type: 'content' as const, text: html });
-/**
- * A notice. Always pass `text`: the variant's standard message lives in the
- * renderer, not the row, so a banner without it is invisible to search.
- */
+export const content = (text: string) => ({ id: uid(), type: 'content' as const, text });
+/** Always pass `text`: the renderer's default message lives in React, and search indexes only what the row holds. */
 export const banner = (variant: BannerVariant, text: string) => ({ id: uid(), type: 'banner' as const, variant, text });
-/** A facts panel leading an article: `table` is the inner `<table>` HTML. */
+/** A facts panel that leads an article: `table` is the inner `<table>` HTML. */
 export const infobox = (table: string) => ({ id: uid(), type: 'infobox' as const, blocks: [content(table)] });
 
-// ---- the shape check --------------------------------------------------------
-
 /**
- * Throw on a link-grid link or reference list whose URL fields are mis-shaped.
- *
- * The app's validator rejects these, and scripts never reach it. The views drop
- * an entry whose URL fails rather than rendering it inert, so a `{ label, url }`
- * link (the shape is `{ label, href }`) shows as a heading with no pills and
- * nothing reports it. A throw inside `withClient` is a rollback and a failed run.
+ * Refuse block content whose URL-bearing leaves are mis-shaped, before it
+ * reaches the database. `LinkGridView` and `ReferencesView` drop an entry whose
+ * URL fails `safeLinkHref` rather than rendering it inert, so a one-field slip
+ * (`url` for a link, whose shape is `{ label, href }`) shows as a heading with
+ * no pills and nothing reports it. Throws, so `withClient` rolls back.
  */
-export function assertLinkShapes(blocks: unknown, where = 'content'): void {
+export function assertLinkShapes(blocks: readonly unknown[], where = 'content'): void {
   const bad: string[] = [];
-  const leaf = (b: Record<string, any> | null | undefined, path: string): void => {
-    if (!b || typeof b !== 'object') return;
-    if (b.type === 'linkGrid')
-      for (const [gi, g] of ((b.groups as any[]) ?? []).entries())
-        for (const [li, l] of ((g?.links as any[]) ?? []).entries())
-          if (!validateLinkGroups([{ id: '', heading: '', links: [l] }]))
+  const leaf = (b: unknown, path: string) => {
+    const block = b as Record<string, unknown> | null;
+    if (!block || typeof block !== 'object') return;
+    if (block.type === 'linkGrid') {
+      for (const [gi, g] of ((block.groups as Record<string, unknown>[]) ?? []).entries()) {
+        for (const [li, l] of ((g?.links as Record<string, unknown>[]) ?? []).entries()) {
+          if (!validateLinkGroups([{ id: '', heading: '', links: [l] }])) {
             bad.push(`${path}.groups[${gi}].links[${li}] "${l?.label ?? '(no label)'}" has fields {${Object.keys(l ?? {}).sort().join(', ')}} -- LinkGridLink is { label, href }`);
-    if (b.type === 'references' && !validateReferenceItems(b.items)) bad.push(`${path}.items -- ReferenceItem is { id, text, url? }`);
+          }
+        }
+      }
+    }
+    if (block.type === 'references' && !validateReferenceItems(block.items)) bad.push(`${path}.items -- ReferenceItem is { id, text, url? }`);
   };
-  ((Array.isArray(blocks) ? blocks : []) as Record<string, any>[]).forEach((b, i) => {
+  blocks.forEach((b, i) => {
     leaf(b, `[${i}]`);
-    if (b?.type === 'infobox') ((b.blocks as any[]) ?? []).forEach((n, j) => leaf(n, `[${i}].blocks[${j}]`));
-    if (b?.type === 'columns')
-      ((b.columns as any[]) ?? []).forEach((c, ci) => ((c?.blocks as any[]) ?? []).forEach((n, j) => leaf(n, `[${i}].columns[${ci}].blocks[${j}]`)));
+    const block = b as Record<string, unknown> | null;
+    if (block?.type === 'infobox') ((block.blocks as unknown[]) ?? []).forEach((n, j) => leaf(n, `[${i}].blocks[${j}]`));
+    if (block?.type === 'columns') {
+      ((block.columns as Record<string, unknown>[]) ?? []).forEach((c, ci) =>
+        ((c?.blocks as unknown[]) ?? []).forEach((n, j) => leaf(n, `[${i}].columns[${ci}].blocks[${j}]`)),
+      );
+    }
   });
   if (bad.length) throw new Error(`${where}: ${bad.length} mis-shaped link(s)\n  ${bad.join('\n  ')}`);
 }
 
-// ---- the client and the cache -----------------------------------------------
-
-/**
- * Mark everything cached under `tag` stale on the project `cwd` is linked to.
- * A script's write reaches no route that would bust it, and pages hold a day.
- */
-export function invalidate(tag: string, cwd = process.cwd()): void {
+/** `vercel cache invalidate --tag`, reported either way. */
+export function invalidate(tag: string, cwd?: string): void {
   try {
-    execFileSync('vercel', ['cache', 'invalidate', '--tag', tag, '--yes'], { cwd, stdio: 'ignore' });
+    execFileSync('vercel', ['cache', 'invalidate', '--tag', tag, '--yes'], { stdio: 'ignore', ...(cwd ? { cwd } : {}) });
     console.log(`cache: ${tag} tag invalidated`);
   } catch (e) {
-    console.warn(`cache: ${tag} tag NOT invalidated (${(e as Error).message}); run \`vercel cache invalidate --tag ${tag}\` from ${cwd}`);
+    console.warn(`cache: ${tag} tag NOT invalidated (${(e as Error).message}); run \`vercel cache invalidate --tag ${tag}\``);
   }
 }
 
+/** The slice of a `pg` client a script uses. */
+export interface ScriptClient {
+  query(text: string, values?: unknown[]): Promise<{ rows: unknown[] }>;
+}
+
+export interface WithClientOptions {
+  /** The cache tag a write expires. Default `wiki`. */
+  tag?: string;
+  /** Where the Vercel project is linked. Default the working directory. */
+  cwd?: string;
+  /** Default `DATABASE_URL`, read from the environment or `./.env`. */
+  url?: string;
+}
+
 /**
- * Run `fn` on a connected client, then release it and its pool. A throw rolls
- * back the open transaction and fails the process: every script writes to the
- * live database, and a half-applied edit must never pass for a success. A run
- * that wrote anything ends by invalidating `tag`.
+ * Run `fn` against a connected client, then release the client and the pool.
+ * A throw rolls back whatever transaction was open and fails the process:
+ * every one of these scripts writes to the live database, so a half-applied
+ * edit must never be left behind and never look like a success. A run that
+ * wrote anything ends by expiring the wiki's cache tag, because a script
+ * bypasses the routes that purge the pages they change.
  */
-export async function withClient<T>(
-  fn: (client: ScriptClient) => Promise<T>,
-  { tag = 'wiki', cwd = process.cwd() }: { tag?: string; cwd?: string } = {},
-): Promise<T | undefined> {
-  const { default: pg } = await import('pg');
-  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1, ssl: { rejectUnauthorized: false } });
-  const conn = await pool.connect();
+export async function withClient<T>(fn: (client: ScriptClient) => Promise<T>, { tag = 'wiki', cwd, url }: WithClientOptions = {}): Promise<T | undefined> {
+  if (!url && !process.env.DATABASE_URL) {
+    try {
+      process.loadEnvFile('.env');
+    } catch {
+      // reported below
+    }
+  }
+  const connectionString = url ?? process.env.DATABASE_URL;
+  if (!connectionString) throw new Error('no DATABASE_URL in the environment or ./.env');
+  const { default: pg } = (await import('pg' as string)) as { default: { Pool: new (o: object) => { connect(): Promise<PoolClient>; end(): Promise<void> } } };
+  type PoolClient = ScriptClient & { release(): void };
+  const pool = new pg.Pool({ connectionString, max: 1, ssl: { rejectUnauthorized: false } });
+  const client = await pool.connect();
   let wrote = false;
-  const client: ScriptClient = {
-    query: (text, values) => {
-      // Anywhere in the text: the store's writes are data-modifying CTEs.
-      if (/\b(insert\s+into|update\s+\S+\s+set|delete\s+from)\b/i.test(text)) wrote = true;
-      return conn.query(text, values);
-    },
+  const query = client.query.bind(client);
+  client.query = (text, values) => {
+    if (/\b(insert\s+into|update\s+\S+\s+set|delete\s+from)\b/i.test(text)) wrote = true;
+    return query(text, values);
   };
   try {
     return await fn(client);
   } catch (e) {
-    await conn.query('ROLLBACK').catch(() => {});
+    await client.query('ROLLBACK').catch(() => {});
     console.error('ERROR:', (e as Error).message);
     process.exitCode = 1;
     return undefined;
   } finally {
-    conn.release();
+    client.release();
     await pool.end();
-    // A run that throws part-way may have committed earlier writes.
     if (wrote) invalidate(tag, cwd);
   }
 }
 
-// ---- reads and writes through the app's store ---------------------------------
+type AnyBlock = { id: string; type: string };
 
-/** The app's own store over a script's client, so a script writes what the editor writes. */
-export const storeFor = (client: ScriptClient, siteId = '') =>
-  wikiStore<Block>({ sql: async (q, ...v) => (await client.query(q, v)).rows as never, siteId });
+/** The app's own store over a script's client, so a script writes exactly what the editor writes. */
+export const storeFor = (client: ScriptClient, siteId = ''): WikiStore<AnyBlock> =>
+  wikiStore<AnyBlock>({ sql: async (q, ...v) => (await client.query(q, v)).rows, siteId });
 
 /** A page row by path, every column: what `writeRevision` takes. Null when there is none. */
-export const readPage = (client: ScriptClient, tagPath: string, slug: string, siteId = '') => storeFor(client, siteId).get(tagPath, slug);
+export const readPage = (client: ScriptClient, tagPath: string, slug: string, siteId?: string): Promise<WikiPageRow<AnyBlock> | null> =>
+  storeFor(client, siteId).get(tagPath, slug);
 
 export interface RevisionOptions {
-  /** The bump, and the revision's change type. Default minor. */
   change?: Exclude<ChangeType, 'none'>;
-  message?: string;
-  /** Stamp `lastVerifiedAt`: the edit re-checked the page's facts. */
+  message?: string | null;
+  /** The writer's word that the page's facts were re-checked. */
   verified?: boolean;
-  /** Write nothing; return the version it would have been. */
+  /** Write nothing; return the version the bump would give. */
   dry?: boolean;
-  metadata?: PageMetadata;
+  metadata?: Record<string, unknown>;
   authorId?: string | null;
+  siteId?: string;
 }
 
 /**
- * Write edited blocks back to a page row from `readPage` as one revision. The
- * save names the version it read, so an edit landing in between is refused
- * (409) rather than overwritten. Returns the new version.
+ * Write edited blocks back to a page from `readPage` as one revision, through
+ * the store: the page and its revision in one statement, the version bumped
+ * from the stored one by `change`. The save names the version it read, so an
+ * edit landing in between is refused (409) instead of overwritten. Returns the
+ * new version.
  */
 export async function writeRevision(
   client: ScriptClient,
-  page: Pick<WikiPageRow, 'tagPath' | 'slug' | 'title' | 'version' | 'siteId'>,
-  blocks: Block[],
-  { change = 'minor', message, verified = false, dry = false, metadata, authorId = null }: RevisionOptions = {},
+  page: WikiPageRow<AnyBlock>,
+  blocks: AnyBlock[],
+  { change = 'minor', message, verified = false, dry = false, metadata, authorId = null, siteId }: RevisionOptions = {},
 ): Promise<string> {
   if (dry) return bump(page.version, change);
   assertLinkShapes(blocks, page.title);
-  const { page: saved } = await storeFor(client, page.siteId).save({
+  const { page: saved } = await storeFor(client, siteId).save({
     tagPath: page.tagPath, slug: page.slug, content: blocks, metadata,
     change, message, verified, authorId, baseVersion: page.version,
   });
@@ -157,27 +168,16 @@ export async function writeRevision(
 }
 
 /**
- * Create a page or update it in place, keyed by site, tag path and slug. A
- * change to its title or blocks writes a revision; a re-run that changes
- * nothing writes none. `change` records that bump instead of the diff's, and
- * always writes one.
+ * Create a page, or replace its title and blocks: a change writes a revision
+ * bumped from the page's own version, a re-run that changes nothing writes
+ * none, and a stated `change` always records one.
  */
 export async function upsertWikiPage(
   client: ScriptClient,
-  input: {
-    tagPath: string;
-    slug: string;
-    title: string;
-    content: Block[];
-    metadata?: PageMetadata;
-    message?: string;
-    change?: Exclude<ChangeType, 'none'>;
-    authorId?: string | null;
-    siteId?: string;
-  },
+  input: SaveInput<AnyBlock> & { content: AnyBlock[]; siteId?: string },
 ): Promise<'created' | 'updated'> {
-  const { siteId = '', ...save } = input;
-  assertLinkShapes(save.content, `${save.tagPath}/${save.slug}`);
+  assertLinkShapes(input.content, `${input.tagPath}/${input.slug}`);
+  const { siteId, ...save } = input;
   const { created } = await storeFor(client, siteId).save(save);
   return created ? 'created' : 'updated';
 }

@@ -1,9 +1,9 @@
 // link-check.ts — the dead-link probe wiki sweep scripts share.
 //
-// Node-only (fetch, AbortSignal, URL). No framework, no database: which pages
-// to walk, which paths are live and what else to report stay with the caller,
-// because that is the half that is genuinely per-wiki. The walk over them and
-// the summary of what broke are `auditLinks` and `printLinkAudit`.
+// Node-only (fetch, AbortSignal, URL). No framework, no database: what a
+// checker does with the verdicts — which pages to walk, what counts as an
+// internal path, how to report — stays with the caller, because that is the
+// half that is genuinely per-wiki.
 //
 // EVERY GUARD BELOW WAS PAID FOR BY A FALSE POSITIVE. npmjs.com 403s scripted
 // requests, an expired certificate is not a dead host, a YouTube /embed/ URL
@@ -389,98 +389,94 @@ export async function mapLimit<T, R>(
   return results;
 }
 
-// ---- the whole walk -----------------------------------------------------------
+// ---- the audit every checker runs ---------------------------------------------
 
-/** A page as `auditLinks` reads it: where it lives, its blocks, its metadata. */
+/** A page as the audit reads it: its site path and its stored blocks. */
 export interface AuditPage {
   path: string;
   content: unknown;
   metadata?: unknown;
 }
 
-export interface AuditOptions {
-  /** Every internal path that resolves: pages, category hubs, routes, assets. */
+export interface AuditOptions<B extends { type: string }> {
+  /** Site-relative paths that exist, with trailing slashes dropped. */
   livePaths: ReadonlySet<string>;
-  /** Default `probeExternal`. A wiki with its own special cases wraps it. */
+  /** The probe for one external URL. Default `probeExternal`. */
   probe?: (url: string) => Promise<Probe>;
-  /**
-   * Whether an internal path is the wiki's to check. One it is not (an app
-   * route, say) is kept in `skipped` and never reported broken. Default all.
-   */
+  /** Whether a site-relative link is this checker's to verify. Default every one. */
   internal?: (path: string) => boolean;
-  /** Default 12. */
   concurrency?: number;
+  containers?: (block: B) => B[][] | null;
 }
-
-export type Referenced<T> = T & { pages: string[] };
 
 export interface LinkAudit {
   externalChecked: number;
-  brokenExternal: Referenced<Probe>[];
-  brokenInternal: Referenced<{ url: string }>[];
-  /** Internal paths `internal` turned away, each with the pages citing it. */
-  skipped: Map<string, string[]>;
-  /** Every embed, unprobed: a status check on one proves little on its own. */
+  brokenExternal: Array<Probe & { pages: string[] }>;
+  brokenInternal: Array<{ url: string; pages: string[] }>;
+  /** Every embed, each with the pages that carry it, for a checker that probes them. */
   embeds: Map<string, { kind: string; pages: string[] }>;
+  /** Internal links `internal` declined, each with its pages. */
+  skipped: Map<string, string[]>;
 }
 
-// A metadata fact (a website, an X handle's URL) renders as a live link and
-// rots like a citation, but lives outside the blocks; a bare domain counts.
+/** A metadata value that names a site: an absolute URL as it is, a bare `www.` or `host.tld` as https. */
 const metadataUrl = (v: unknown): string | null => {
   const s = typeof v === 'string' ? v.trim() : '';
   if (/^https?:\/\//i.test(s)) return s;
   return /^www\./i.test(s) || /^[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(s) ? `https://${s}` : null;
 };
 
+const push = (map: Map<string, string[]>, key: string, value: string): void => {
+  const arr = map.get(key);
+  if (arr) arr.push(value);
+  else map.set(key, [value]);
+};
+
 /**
- * Every link on every page, probed once per URL: externals by `probe`,
- * internals against `livePaths`. A page's own `/history` and `/edit` resolve
- * with it, and a query is a view of the path it rides on. The two checkers had
- * each written this walk, and each had one of those rules and not the other.
+ * Every link on every page, probed once each, with the pages that carry it.
+ * Metadata strings that name a site count as external links: a wiki's facts
+ * panel cites its sources there, sometimes as a bare domain. Two checkers had each written this walk; what
+ * they still do themselves is decide the live paths, the probe and the report.
  */
-export async function auditLinks(pages: readonly AuditPage[], opts: AuditOptions): Promise<LinkAudit> {
-  const { livePaths, probe = probeExternal, internal = () => true, concurrency = 12 } = opts;
+export async function auditLinks<B extends { type: string }>(pages: readonly AuditPage[], opts: AuditOptions<B>): Promise<LinkAudit> {
+  const { livePaths, probe = probeExternal, internal = () => true, concurrency = 12, containers = coreBlockShape<B>().containers } = opts;
   const external = new Map<string, string[]>();
-  const internals = new Map<string, string[]>();
+  const internalLinks = new Map<string, string[]>();
   const skipped = new Map<string, string[]>();
   const embeds = new Map<string, { kind: string; pages: string[] }>();
-  const cite = (map: Map<string, string[]>, key: string, page: string): void => {
-    const refs = map.get(key);
-    if (!refs) map.set(key, [page]);
-    else if (!refs.includes(page)) refs.push(page);
-  };
-
   for (const page of pages) {
-    const links = collectBlockLinks(Array.isArray(page.content) ? (page.content as { type: string }[]) : []);
-    const meta = page.metadata && typeof page.metadata === 'object' ? Object.values(page.metadata) : [];
-    for (const url of [...links.external, ...meta.map(metadataUrl).filter((u): u is string => !!u)]) cite(external, url, page.path);
-    for (const path of links.internal) cite(internal(path) ? internals : skipped, path, page.path);
-    for (const { kind, url } of links.embeds) {
-      const entry = embeds.get(url) ?? { kind, pages: [] };
+    const blocks = Array.isArray(page.content) ? (page.content as B[]) : [];
+    const links = collectBlockLinks(blocks, containers);
+    for (const v of Object.values((page.metadata ?? {}) as Record<string, unknown>)) {
+      const url = metadataUrl(v);
+      if (url) links.external.push(url);
+    }
+    for (const u of new Set(links.external)) push(external, u, page.path);
+    for (const u of new Set(links.internal)) push(internal(u) ? internalLinks : skipped, u, page.path);
+    for (const e of links.embeds) {
+      const entry = embeds.get(e.url) ?? { kind: e.kind, pages: [] };
       if (!entry.pages.includes(page.path)) entry.pages.push(page.path);
-      embeds.set(url, entry);
+      embeds.set(e.url, entry);
     }
   }
-
-  const results = await mapLimit([...external.keys()], concurrency, url => probe(url));
-  const resolves = (url: string): boolean => {
-    const path = url.split('?')[0]!;
-    return livePaths.has(path) || livePaths.has(path.replace(/\/(history|edit)$/, ''));
-  };
+  const urls = [...external.keys()];
+  const results = await mapLimit(urls, concurrency, url => probe(url));
   return {
-    externalChecked: external.size,
+    externalChecked: urls.length,
     brokenExternal: results.filter(r => !r.ok).map(r => ({ ...r, pages: external.get(r.url)! })),
-    brokenInternal: [...internals].filter(([url]) => !resolves(url)).map(([url, refs]) => ({ url, pages: refs })),
-    skipped,
+    brokenInternal: [...internalLinks.entries()]
+      .filter(([u]) => {
+        const p = u.split('?')[0]!;
+        return !livePaths.has(p) && !livePaths.has(p.replace(/\/(history|edit)$/, ''));
+      })
+      .map(([url, pages]) => ({ url, pages })),
     embeds,
+    skipped,
   };
 }
 
-/** The human summary of an audit's broken links, under the scope it covered. */
-export function printLinkAudit(
-  audit: Pick<LinkAudit, 'externalChecked' | 'brokenExternal' | 'brokenInternal'>,
-  { scope, pagesScanned }: { scope: string; pagesScanned: number },
-): void {
+/** The human report's first lines: what was checked, and what is broken. */
+export function printLinkAudit(audit: LinkAudit, { scope = '(entire wiki)', pagesScanned }: { scope?: string; pagesScanned: number }): void {
   console.log(`\nLink check — scope: ${scope}`);
   console.log(`Pages scanned: ${pagesScanned} | external links checked: ${audit.externalChecked}`);
   console.log(`\nBroken external (${audit.brokenExternal.length}):`);

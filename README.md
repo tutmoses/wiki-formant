@@ -321,13 +321,6 @@ export async function GET(request: Request) {
 
 `descriptorResponse` and `descriptorHandler` serve a JSON descriptor (an agent card, a manifest, an OpenAPI document) with its own ETag and `Access-Control-Allow-Origin: *`, since every descriptor is public and browser agents read them; six of nine routes had passed the header by hand.
 
-`wellKnownHandler({ agentCard, mcpManifest, openapi, registryAuth? })` is the whole `/.well-known/[doc]` route: the card at `agent.json` and `agent-card.json`, the manifest at `mcp.json`, the spec at `openapi.json` and the registry's proof at `mcp-registry-auth`, each through `descriptorResponse`, and a 404 for any other name. A rewrite puts `/openapi.json` on it. `registryAuth: null` serves no proof, for a tenant of a host whose namespace is the host's.
-
-```ts
-// src/app/.well-known/[doc]/route.ts
-export const GET = wellKnownHandler({ agentCard: AGENT_CARD, mcpManifest: MCP_MANIFEST, openapi: SPEC });
-```
-
 `corpusValidatorsFrom(seed, stamps)` is that pair from an aggregate: the newest of `stamps` (the epoch when every one is null), appended to `seed` for the tag. `corpusRoute(validators, build)` is the whole handler, and skips the build on a 304.
 
 ```ts
@@ -376,7 +369,7 @@ Four configs had restated these by hand on the grounds that a config could not i
 export default withWikiDefaults<NextConfig>({ async redirects() { /* … */ } }, { csp });
 ```
 
-`contentSecurityPolicy` starts from the policy all four origins shared line for line, and each directive passed replaces its default rather than appending, so the call site reads as the whole list. An empty list drops a directive. A second argument, `{ nonce, inlineScripts }`, makes `script-src` strict where there is a nonce: `'self'`, the nonce and `scriptHash` of each inline script, with no `'unsafe-inline'`. The hash admits a static boot script without the layout reading the nonce, and moves with the script when a bump changes it.
+`contentSecurityPolicy` starts from the policy all four origins shared line for line, and each directive passed replaces its default rather than appending, so the call site reads as the whole list. An empty list drops a directive.
 
 The default `frame-src` is `DEFAULT_IFRAME_HOSTS`, the same list the sanitiser's `iframeHosts` defaults to. The sanitiser's comment had asked every config to keep the two matched by hand, and one did not: its policy lacked the bare `youtube.com` and `youtube-nocookie.com` its sanitiser kept, so those embeds survived cleaning and then rendered blank. A site with its own host list passes it to the sanitiser and states the same hosts in its `frame-src`.
 
@@ -756,21 +749,19 @@ const core = coreAtomicValidator({ pageId: id => /^\d{1,9}$/.test(id) });
 
 `coreAtomicToMarkdown` joins a resolved page's site-relative `href` to `siteUrl`, because a twin is read off-site; a wiki whose lists hold its own page rows keeps those two cases. `coreAtomicValidator` caps `recentPages.limit` and `pageIds` at `MAX_BLOCK_ROWS`, a whole number of rows, because both end in a database `take:`; `blockLimit` is the same bound on the read side.
 
+`defineBlocks` (in `wiki-formant/validation`) is the whole model in one declaration: the shape, the types, `createBlock`, `duplicateBlock`, `validateBlocks` and `blockIssues`, from a record of defaults and the wiki's own leaf checks. A check for a core type narrows the package's: `list: (b, core) => core(b) && isSection(b.under)`. `BlockTree<Atomic>` is the union over the two containers.
+
+```ts
+const model = defineBlocks<Block>({ defaults: { ...coreBlockDefaults(), corpusStats: () => ({ type: 'corpusStats', view: 'sourceTiers' }) }, checks: { corpusStats: b => isCorpusView(b.view) } });
+export const { shape: BLOCK_SHAPE, createBlock, duplicateBlock, validateBlocks, blockIssues } = model;
+```
+
 `createBlockValidator` returns `blockIssues` beside the boolean validators: the same walk, reporting where each failure is.
 
 ```ts
 const issues = blockIssues(body.content);
 if (issues.length) return badRequest(`Invalid content: ${describeBlockIssues(issues)}`);
 // Invalid content: [2].columns[0].blocks[1]: malformed linkGrid block
-```
-
-`defineBlocks<Block>({ defaults, checks?, pageId? })` is a wiki's whole block model from its type set. `defaults` is what inserting each type makes, and its keys are the types the wiki knows; `checks` is the leaf check for each native type, and for a core type the wiki narrows, which gets the core check as its second argument. It returns `types`, `atomicTypes` (all but the two containers), `shape`, `createBlock`, `duplicateBlock`, `validateBlocks` and `blockIssues`. `BlockTree<AtomicBlock>` from `wiki-formant/blocks` is the union it models.
-
-```ts
-export const { shape: BLOCK_SHAPE, createBlock, duplicateBlock, validateBlocks, blockIssues } = defineBlocks<Block>({
-  defaults: { ...coreBlockDefaults({ stats }), corpusStats: () => ({ type: 'corpusStats', view: 'sourceTiers' }) },
-  checks: { corpusStats: b => isCorpusView(b.view), list: (b, core) => core(b) && isSection(b.under) },
-});
 ```
 
 A `codeTabs` tab's `code` is source text in every wiki here, and every view treats it that way: `CodeTabsView` escapes it into a `<pre><code>`, the sanitiser leaves it alone, the markdown twin fences it verbatim. A wiki that escapes and highlights on the server passes `highlighted` to the view. The package used to assume editors stored highlighted markup; none ever had, and every twin printed `Vec<u8>` as `Vec`.
@@ -976,8 +967,10 @@ its readers asked for. The queries that return zero rows are the valuable ones
 `wiki-formant/passkey` is the door to a site's own admin pages: a passkey and
 nothing else, no account, password or email. `createPasskeyGate({ sql, rpName })`
 returns the whole of it. `gate.route` is the sign-in route, `gate.signOut` the
-sign-out route, `gate.signedIn(cookieValue)` is the check a page makes, `gate.allows(request)` the same check over a write route's request, and
-`gate.cookie` is the cookie's name. The two tables (`Passkey`, `PasskeyToken`) ship as Prisma
+sign-out route, `gate.signedIn(cookieValue)` is the check a page makes,
+`gate.allows(request)` the same check for a write route's own request, and
+`gate.cookie` is the cookie's name. An editor with one writer needs no
+other door: acuiq2's wiki editor opens on the passkey that opens its stats. The two tables (`Passkey`, `PasskeyToken`) ship as Prisma
 models in `prisma/passkey.prisma`, and every token is kept only as its hash.
 
 There is no sign-up. Every passkey, the first among them, is saved from a
@@ -1108,26 +1101,15 @@ the site's stylesheet gives them and the box a look.
 
 ## Base stylesheet
 
-`wiki-formant/base.css` is first the layout the package's markup does not work without: columns that stack until there is room, stored tab panels that show one at a time, a copy button pinned to its block's corner and visible on focus and on touch, a table's scroll box, the stats block's grid, the code-tab strip, the banner's row and the infobox's wrapping, the breadcrumb row, the `aria-sort` arrow as a mask over `currentColor`, the stats page's grid and bars, and the chart's height and pinned buttons. It also carries the shape and motion of the primitives every site re-implemented and forked — `.spinner` (a `currentColor` ring sized by `--spinner-size`), `.skeleton`'s pulse, `.empty-state`, the wrap rule for long tokens in inline `code` — and the reduced-motion guard none of them had. That part has no colour and no scale, so a design system's own rules override it at equal specificity. The one set of tokens it declares is the page frame every site lays out by: `--content-width` (72rem, gutters inside), `--sidebar-width` (18rem) and `--page-pad` (16 / 24 / 32px at base / 640 / 1024). They sit in the components layer, so a site never restates them in `@theme`, which would lose; an element that must differ sets its own.
+`wiki-formant/base.css` is the layout the package's markup does not work without, and nothing else: columns that stack until there is room, stored tab panels that show one at a time, a copy button pinned to its block's corner and visible on focus and on touch, a table's scroll box, the stats block's grid, the code-tab strip, the banner's row and the infobox's wrapping, the breadcrumb row, the `aria-sort` arrow as a mask over `currentColor`, the stats page's grid and bars, and the chart's height and pinned buttons. It also carries the shape and motion of the primitives every site re-implemented and forked — `.spinner` (a `currentColor` ring sized by `--spinner-size`), `.skeleton`'s pulse, `.empty-state`, the wrap rule for long tokens in inline `code` — and the reduced-motion guard none of them had. No colour and no scale, so a design system's own rules override it at equal specificity. The one set of tokens it declares is the page frame every site lays out by: `--content-width` (72rem, gutters inside), `--sidebar-width` (18rem) and `--page-pad` (16 / 24 / 32px at base / 640 / 1024). They sit in the components layer, so a site never restates them in `@theme`, which would lose; an element that must differ sets its own.
 
 ```css
 @import "wiki-formant/base.css" layer(components);
 ```
 
+Since 0.86 it also draws the package's components — the infobox, section and stat cards, see-also and page-ref lists, the hover card, the maintenance queues, the chart's frame and buttons, code tabs, the editorial banner, references, heading anchors, link grids, revision diffs and the rail's contents — on eleven `--ui-*` tokens (`--ui-surface`, `--ui-surface-2`, `--ui-border`, `--ui-radius`, `--ui-pad`, `--ui-small`, `--ui-muted`, `--ui-accent`, `--ui-on-accent`, `--ui-up`, `--ui-down`) that a site maps from its own palette in `:root`. Four stylesheets had restated sixty of those classes with four token vocabularies; now a site states the rule only where it differs. The split of a page beside its infobox stays the site's, as does the rail's surface.
+
 No view emits a Tailwind utility any more — `ColumnsView` states its gap and alignment as data attributes, and an inactive code tab is `hidden` — so a site no longer needs its Tailwind to scan this package for the markup to work.
-
-After the structure comes the look: every component the package's markup names (heading anchors, code tabs and the copy button, notices, references, the infobox, stats cards and deltas, link grids, see-also cards, section cards, the link preview, the rail's table of contents, the work queues, revision diffs, sortable headers, charts) drawn from twelve tokens a site maps once, unlayered, from its own palette. Four sites had each drawn the same components in their own tokens. A site's own rule after the import still wins.
-
-```css
-:root {
-  --ui-surface: var(--color-surface-1);   --ui-muted: var(--color-text-muted);
-  --ui-surface-2: var(--color-surface-2); --ui-accent: var(--color-accent);
-  --ui-border: var(--color-border);       --ui-on-accent: var(--color-surface-0);
-  --ui-radius: var(--radius);             --ui-up: var(--color-success);
-  --ui-pad: 1rem;                         --ui-down: var(--color-error);
-  --ui-small: var(--text-small);          --ui-shadow: var(--shadow);
-}
-```
 
 ## API
 
@@ -1170,12 +1152,6 @@ and overwrites any inbound copy — and the leftmost `x-forwarded-for` only wher
 `limitClient(prefix, headers, opts)` is the per-address gate, `rateLimit` over
 `clientKey`, which a dozen call sites had written out.
 
-`wiki-formant/scripts` is what a wiki's direct-database scripts share: `withClient(fn, { tag })` (a pg client that rolls back and fails the run on a throw, and invalidates the cache `tag` through the Vercel CLI when it wrote), `storeFor(client)` and `readPage` over the app's own store, `writeRevision(client, page, blocks, opts)` (one revision, refused if the page moved since it was read), `upsertWikiPage(client, page)` (a revision only when something changed), the block builders `uid`, `content`, `banner` and `infobox`, and `assertLinkShapes`, which throws on the mis-shaped link a script would otherwise store unseen. Its `ScriptClient` is the slice of a pg client they take; Prisma fits it with `$queryRawUnsafe`.
-
-`wiki-formant/link-check`'s `auditLinks(pages, { livePaths, probe?, internal? })` is a checker's whole walk: every link on every page probed once, internals checked against `livePaths` (a page's `/history` and `/edit` resolve with it, and a query rides on its path), metadata facts included, embeds collected for the caller to probe. `printLinkAudit(audit, { scope, pagesScanned })` prints what broke.
-
-`wiki-formant/knip` is the dead-code config every app spreads into its own `knip.ts`: `export default { ...base, ignoreBinaries: [...base.ignoreBinaries, 'ffmpeg'] }`.
-
 ## A bin
 
 `check-classes` fails a build on a `className` token that resolves to nothing, and counts the inverse fault — 3+ Tailwind utilities inline, which is a component class that was never named. Both sets are derived from the emitted stylesheets rather than listed, so nothing has to be maintained per project. Run it from a repo root after a build:
@@ -1212,6 +1188,20 @@ An app that keeps one schema file and writes the models into it by hand, because
 ```sh
 npx prisma-models analytics --check --in prisma/schema.prisma --tenant   # miow
 ```
+
+`wiki-formant/scripts` is what a seed or sweep script shares with the next one: `withClient` (a `pg` client on `DATABASE_URL` that rolls back on a throw and expires the wiki's cache tag after a write), `readPage` and `writeRevision` (one revision over a page the script read, refused if the page moved on), `upsertWikiPage`, the block builders `content`, `banner` and `infobox`, and `assertLinkShapes`, which refuses a link or reference the views would silently drop. radix-wiki and caper had each written it in a different language.
+
+```ts
+import { withClient, readPage, writeRevision } from 'wiki-formant/scripts';
+await withClient(async client => {
+  const page = await readPage(client, 'contents/tech', 'radix-engine');
+  await writeRevision(client, page!, blocks, { change: 'minor', message: 'Why, with the source.' });
+}, { tag: 'wiki' });
+```
+
+`wiki-formant/link-check`'s `auditLinks` is the walk every dead-link checker makes — each link once, with the pages that carry it, probed with `probeExternal` or the checker's own — and `printLinkAudit` its first lines; what a checker keeps is its live paths, its special cases and the rest of its report.
+
+`wiki-formant/knip` is the knip configuration the apps share, spread into each one's `knip.ts` with what is its own.
 
 `fts-ddl <table>` rebuilds a table's `search_tsv` generated column and its GIN index from the expression `wiki-formant/search` queries, over `DIRECT_URL` (else `DATABASE_URL` on 5432). Run it before declaring the column in `schema.prisma`; the bin's header says why. A PascalCase Prisma table goes in quoted, as SQL names it.
 

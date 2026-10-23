@@ -9,7 +9,7 @@
 // As elsewhere in this package, the dispatch stays with the caller so a new
 // block type is a compile error there until it is handled.
 
-import { coreBlockShape, LIST_SOURCES, type BlockTreeShape } from './blocks.js';
+import { coreBlockShape, LIST_SOURCES } from './blocks.js';
 
 /**
  * An href acceptable to persist: http, https, mailto, tel, or a relative path or
@@ -316,60 +316,51 @@ export function duplicateBlockIds<B extends { type: string; id: string }>(
   return { ...block, id: newId() };
 }
 
-// ---- the whole model -------------------------------------------------------
+// ---- a wiki's block model, in one declaration --------------------------------
 
-type Checked = Record<string, unknown>;
+/** A leaf check over the stored record; `core` is the package's check for the core types. */
+export type LeafCheck = (block: Record<string, unknown>, core: (block: Record<string, unknown>) => boolean) => boolean;
 
 export interface BlockModelOptions<B extends { id: string; type: string }> {
-  /** What inserting each type makes. Its keys are the types this wiki knows. */
+  /** A new block of every type, without its id: `{ ...coreBlockDefaults(), daoTimeline: () => … }`. */
   defaults: Record<B['type'], () => Omit<B, 'id'>>;
-  /**
-   * The leaf check for each native type, and for a core type the wiki narrows.
-   * `core` is the core check, for a narrowing that adds to it rather than
-   * replacing it. A type with no entry gets the core check.
-   */
-  checks?: Partial<Record<B['type'], (block: Checked, core: (block: Checked) => boolean) => boolean>>;
-  /** As `coreAtomicValidator`'s. */
+  /** The wiki's own leaf checks, and any core check it narrows (`list: (b, core) => core(b) && isSection(b.under)`). */
+  checks?: Partial<Record<B['type'], LeafCheck>>;
+  /** What `coreAtomicValidator` takes. */
   pageId?: (id: string) => boolean;
   maxRows?: number;
 }
 
-export interface BlockModel<B extends { id: string; type: string }> {
-  /** Every type, in the order `defaults` lists them. */
-  types: B['type'][];
-  /** Every type but the two containers: what may nest inside one. */
-  atomicTypes: B['type'][];
-  shape: BlockTreeShape<B>;
-  createBlock: (type: B['type']) => B;
-  duplicateBlock: (block: B) => B;
-  validateBlocks: (content: unknown) => content is B[];
-  blockIssues: (content: unknown) => BlockIssue[];
-}
-
 /**
- * A wiki's block model from its type set: the new-block factories and the leaf
- * checks are its own, and everything derived from them is this. Each wiki had
- * derived the same seven things by hand, and two kept a list of nestable types
- * that drifted from the types the write path accepted.
+ * Everything a wiki derives from its block set: the shape every tree walk
+ * takes, the types, a new block, a copy with fresh ids, and the validator
+ * with its issues. Three wikis had assembled these from the same seven
+ * primitives, each a hundred lines; a fourth kind of block now costs a default
+ * and a check.
  */
-export function defineBlocks<B extends { id: string; type: string }>(opts: BlockModelOptions<B>): BlockModel<B> {
-  const { defaults, checks = {} as NonNullable<BlockModelOptions<B>['checks']>, pageId, maxRows } = opts;
+export function defineBlocks<B extends { id: string; type: string }>(opts: BlockModelOptions<B>) {
+  const { defaults, checks = {}, pageId, maxRows } = opts;
   const types = Object.keys(defaults) as B['type'][];
-  const atomicTypes = types.filter(t => t !== 'columns' && t !== 'infobox');
-  const core = coreAtomicValidator({ pageId, maxRows });
-  const own = checks as Record<string, ((block: Checked, core: (block: Checked) => boolean) => boolean) | undefined>;
-  const { validateBlocks, blockIssues } = createBlockValidator({
-    isKnownType: t => Object.hasOwn(defaults, t),
-    isAtomicType: t => (atomicTypes as string[]).includes(t),
-    validateAtomic: b => (own[b.type as string] ?? core)(b, core),
+  const core = coreAtomicValidator({ ...(pageId ? { pageId } : {}), ...(maxRows ? { maxRows } : {}) });
+  const isAtomic = (type: string): boolean => type !== 'columns' && type !== 'infobox';
+  const validator = createBlockValidator({
+    isKnownType: t => t in defaults,
+    isAtomicType: isAtomic,
+    validateAtomic: b => {
+      const own = (checks as Record<string, LeafCheck | undefined>)[b.type as string];
+      return own ? own(b, core) : core(b);
+    },
   });
   return {
-    types,
-    atomicTypes,
     shape: coreBlockShape<B>(),
-    createBlock: type => ({ id: crypto.randomUUID(), ...defaults[type]() }) as B,
-    duplicateBlock: block => duplicateBlockIds(block),
-    validateBlocks: (content): content is B[] => validateBlocks(content),
-    blockIssues,
+    types,
+    atomicTypes: types.filter(isAtomic),
+    isAtomic,
+    createBlock: (type: B['type']): B => ({ id: crypto.randomUUID(), ...defaults[type]() }) as B,
+    duplicateBlock: (block: B): B => duplicateBlockIds(block),
+    validateBlocks: (content: unknown): content is B[] => validator.validateBlocks(content),
+    validateBlock: validator.validateBlock,
+    validateAtomicBlock: validator.validateAtomicBlock,
+    blockIssues: validator.blockIssues,
   };
 }

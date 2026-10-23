@@ -1,6 +1,5 @@
 // well-known.ts — the descriptors an agent finds before it knows anything else
-// about an origin: the A2A Agent Card, the MCP manifest and the registry's
-// domain proof, and the one route that serves them.
+// about an origin: the A2A Agent Card and the MCP registry's domain proof.
 //
 // All three apps here serve both, and all three had written them out. The
 // registry-auth handler was identical bar a domain named in a comment; the
@@ -331,46 +330,47 @@ export function descriptorHandler(
 export const serverCardHandler = (manifest: ServerManifest): ((request: Request) => Response) =>
   descriptorHandler(serverCard(manifest, MCP_PROTOCOL_VERSIONS));
 
-// ---- the whole directory ------------------------------------------------------
+// ---- one route for the whole directory --------------------------------------
 
 export interface WellKnownDocs {
-  agentCard: unknown;
-  mcpManifest: unknown;
-  openapi: unknown;
-  /**
-   * The registry's key material, read from the environment by default. `null`
-   * serves no proof: a tenant of a host whose namespace is the host's own.
-   */
-  registryAuth?: { publicKey?: string; keyType?: string } | null;
+  /** Served at both `agent.json` and `agent-card.json`. */
+  agentCard?: unknown;
+  /** `mcp.json`. */
+  mcpManifest?: unknown;
+  /** `openapi.json`. */
+  openapi?: unknown;
+  /** The registry proof, `mcp-registry-auth`: a key, or a handler; defaults to the environment's key. Pass null to serve none. */
+  registryAuth?: { publicKey?: string; keyType?: string } | (() => Response) | null;
 }
 
 /**
- * The `/.well-known/[doc]` route: the agent card at `agent.json` and
- * `agent-card.json` (A2A v0.3 renamed it; older clients ask for the first), the
- * MCP manifest at `mcp.json`, the OpenAPI spec at `openapi.json` and the
- * registry's domain proof at `mcp-registry-auth`. Every other name is a 404.
+ * The whole `/.well-known/` directory as one dynamic route,
+ * `src/app/.well-known/[doc]/route.ts`:
  *
- * Each app served these as five or six one-line routes re-exporting each other;
- * one dynamic segment holds them all, and a rewrite puts `/openapi.json` on it.
+ *   export const GET = wellKnownHandler({ agentCard: CARD, mcpManifest: MANIFEST, openapi: SPEC });
+ *
+ * Four repos carried five one-line route files each, twenty in all, and one
+ * of them answered a path the others 404'd. A document the app does not pass
+ * is a 404 here too, so an origin without an MCP server still serves its card.
  */
 export function wellKnownHandler(
   docs: WellKnownDocs,
-): (request: Request, context: { params: Promise<{ doc: string }> }) => Promise<Response> {
-  const { registryAuth = {} } = docs;
-  const bodies: Record<string, unknown> = {
-    'agent.json': docs.agentCard,
-    'agent-card.json': docs.agentCard,
-    'mcp.json': docs.mcpManifest,
-    'openapi.json': docs.openapi,
+): (request: Request, context: { params: Promise<{ doc: string }> | { doc: string } }) => Promise<Response> {
+  const auth = docs.registryAuth;
+  const registry =
+    auth === null ? null
+    : typeof auth === 'function' ? auth
+    : registryAuthHandler(auth?.publicKey ?? process.env.MCP_REGISTRY_PUBLIC_KEY, auth?.keyType ?? process.env.MCP_REGISTRY_KEY_TYPE);
+  const served: Record<string, ((request: Request) => Response) | undefined> = {
+    'agent.json': docs.agentCard === undefined ? undefined : descriptorHandler(docs.agentCard),
+    'agent-card.json': docs.agentCard === undefined ? undefined : descriptorHandler(docs.agentCard),
+    'mcp.json': docs.mcpManifest === undefined ? undefined : descriptorHandler(docs.mcpManifest),
+    'openapi.json': docs.openapi === undefined ? undefined : descriptorHandler(docs.openapi),
+    'mcp-registry-auth': registry ?? undefined,
   };
   return async (request, { params }) => {
     const { doc } = await params;
-    if (doc === 'mcp-registry-auth' && registryAuth) {
-      return registryAuthHandler(
-        registryAuth.publicKey ?? process.env.MCP_REGISTRY_PUBLIC_KEY,
-        registryAuth.keyType ?? process.env.MCP_REGISTRY_KEY_TYPE,
-      )();
-    }
-    return Object.hasOwn(bodies, doc) ? descriptorResponse(request, bodies[doc]) : new Response('Not found', { status: 404 });
+    const handler = Object.hasOwn(served, doc) ? served[doc] : undefined;
+    return handler ? handler(request) : new Response('Not found', { status: 404 });
   };
 }

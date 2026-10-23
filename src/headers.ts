@@ -11,9 +11,8 @@
 // `youtube-nocookie.com` its sanitiser kept, so those embeds survived cleaning
 // and then rendered blank.
 //
-// One import, node:crypto for a script's hash, so a config pays for nothing
-// else. `withWikiDefaults` is here for the same reason: next.config.ts is its
-// only caller.
+// Zero imports, so a config pays for nothing it does not use. `withWikiDefaults`
+// is here for the same reason: next.config.ts is its only caller.
 
 import { createHash } from 'node:crypto';
 
@@ -70,27 +69,24 @@ export const BASE_CSP: Readonly<Partial<Record<CspDirective, readonly string[]>>
   'frame-src': frameSources(),
 };
 
-/** A `script-src` source admitting exactly this inline script body. */
-export const scriptHash = (body: string): string =>
-  `'sha256-${createHash('sha256').update(body, 'utf8').digest('base64')}'`;
+/** A `'sha256-…'` source for one inline script's body, so a nonced policy still runs it. */
+export const scriptHash = (body: string): string => `'sha256-${createHash('sha256').update(body, 'utf8').digest('base64')}'`;
 
 /**
  * The policy string: `BASE_CSP` with each directive in `directives` replacing
- * its default. An empty list drops the directive.
- *
- * A `nonce` swaps `script-src` for the strict form, `'self'`, the nonce and a
- * hash of each of `inlineScripts`, with no `'unsafe-inline'`. The hashes admit
- * a static boot script without the layout reading the nonce, which would make
- * every route render per request; hashing here means a package bump that
- * changes the script moves its hash too, where a hand-copied one went stale
- * and blanked every nonce route. Without a nonce the baseline stands.
+ * its default. An empty list drops the directive. With a `nonce`, `script-src`
+ * is that nonce and the hashes of `inlineScripts` instead of `'unsafe-inline'`:
+ * the per-request policy an origin sets in its proxy, which Next reads from
+ * the request's `content-security-policy` header to nonce its own scripts.
  */
 export function contentSecurityPolicy(
   directives: Partial<Record<CspDirective, readonly string[]>> = {},
-  { nonce = null, inlineScripts = [] }: { nonce?: string | null; inlineScripts?: readonly string[] } = {},
+  { nonce, inlineScripts = [] }: { nonce?: string | null; inlineScripts?: readonly string[] } = {},
 ): string {
-  const strict = nonce ? { 'script-src': ["'self'", `'nonce-${nonce}'`, ...inlineScripts.map(scriptHash)] } : {};
-  return Object.entries({ ...BASE_CSP, ...directives, ...strict })
+  const scripts = nonce
+    ? { 'script-src': ["'self'", `'nonce-${nonce}'`, ...inlineScripts.map(scriptHash)] }
+    : {};
+  return Object.entries({ ...BASE_CSP, ...directives, ...scripts })
     .filter(([, sources]) => sources?.length)
     .map(([name, sources]) => `${name} ${sources!.join(' ')}`)
     .join('; ');

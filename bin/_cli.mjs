@@ -38,13 +38,4 @@ export async function connect({ direct = false, ...options } = {}) {
   return client;
 }
 
-/** `vercel cache invalidate --tag`, reported either way. */
-export async function invalidate(tag) {
-  const { execFileSync } = await import('node:child_process');
-  try {
-    execFileSync('vercel', ['cache', 'invalidate', '--tag', tag, '--yes'], { stdio: 'ignore' });
-    console.log(`cache: ${tag} tag invalidated`);
-  } catch (e) {
-    console.warn(`cache: ${tag} tag NOT invalidated (${e.message}); run \`vercel cache invalidate --tag ${tag}\``);
-  }
-}
+export { invalidate } from '../dist/scripts.js';
