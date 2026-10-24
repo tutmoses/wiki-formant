@@ -183,3 +183,35 @@ test('defineBlocks derives the model from the defaults and the checks', async ()
   const cols = model.createBlock('columns');
   assert.notEqual(model.duplicateBlock(cols).columns[0].id, cols.columns[0].id);
 });
+
+test('an event is past once its last day is, at the precision it is written', async () => {
+  const { eventBegun, eventEnded, eventEndsBefore, eventWhen, splitEvents, today } = await import('wiki-formant/blocks');
+  assert.equal(today(new Date(2026, 10, 3)), '2026-11-03');
+  // "2026-08" lasts all August, so it is on (not past) on the last of the month.
+  assert.equal(eventEnded({ date: '2026-08' }, '2026-08-31'), false);
+  assert.equal(eventEnded({ date: '2026-08' }, '2026-09-01'), true);
+  assert.equal(eventBegun({ date: '2026-08', end: '2026-10' }, '2026-09-15'), true);
+  assert.equal(eventEndsBefore({ date: '2026-11-12', end: '2026-11' }), false);
+  assert.equal(eventEndsBefore({ date: '2026-11', end: '2026-10-30' }), true);
+  assert.equal(eventWhen({ date: '2026-11' }), 'Nov 2026');
+  assert.equal(eventWhen({ date: '2026-11-12', end: '2026-11-18' }), '12 – 18 Nov 2026');
+  assert.equal(eventWhen({ date: '2026-05', end: '2026-08' }), 'May – Aug 2026');
+  assert.equal(eventWhen({ date: '2025-12-30', end: '2026-01-02' }), '30 Dec 2025 – 2 Jan 2026');
+  const items = [{ date: '2026-01' }, { date: '2027' }, { date: '2025', end: '2026-12' }, { date: '2026-11-01' }, { date: '2024' }];
+  const { upcoming, past } = splitEvents(items, '2026-11-03');
+  assert.deepEqual(upcoming.map(e => e.date), ['2025', '2027']);
+  assert.deepEqual(past.map(e => e.date), ['2026-11-01', '2026-01', '2024']);
+});
+
+test('an events block reads under its headings, split by the day it was drawn', () => {
+  const block = { type: 'events', upcoming: 'Coming up', day: '2026-11-03', items: [{ date: '2026-11', text: 'Open <a href="/s">studios</a>' }, { date: '2026-01', text: 'Group <em>show</em>' }] };
+  assert.equal(coreAtomicToMarkdown(block, { siteUrl: 'https://site.test' }), '## Coming up\n\n- Nov 2026: Open [studios](/s) (now on)\n\n## Past\n\n- Jan 2026: Group _show_');
+  assert.equal(coreAtomicText(block), 'Coming up\nNov 2026: Open studios (/s) (now on)\n\nPast\nJan 2026: Group show');
+  const core = coreAtomicValidator();
+  const row = { id: 'e', date: '2026-11', text: 'x' };
+  assert.equal(core({ id: 'x', type: 'events', items: [row] }), true);
+  assert.equal(core({ id: 'x', type: 'events', items: [{ ...row, date: 'November' }] }), false);
+  assert.equal(core({ id: 'x', type: 'events', items: [{ ...row, end: '2026-10' }] }), false);
+  assert.equal(core({ id: 'x', type: 'events', items: [{ ...row, end: '2026-12-01' }] }), true);
+  assert.equal(core({ id: 'x', ...coreBlockDefaults().events() }), true);
+});

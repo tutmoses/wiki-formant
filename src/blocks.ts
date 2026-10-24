@@ -83,6 +83,17 @@ export interface StatItem {
   suffix?: string | null;
 }
 
+/**
+ * An exhibition, a show, a talk: when it starts and, if later, ends, each as
+ * precisely as it is known (`EVENT_DATE`), and a line of inline HTML saying
+ * what it is and where.
+ */
+export interface EventItem {
+  date: string;
+  end?: string | null;
+  text: string;
+}
+
 export interface LinkGridLink {
   label: string;
   href: string;
@@ -109,6 +120,7 @@ export type EditableCodeTab = CodeTab & { language: string };
 export type EditableStatItem = StatItem & { id: string; value: string };
 export type EditableReferenceItem = ReferenceItem & { id: string; url?: string };
 export type EditableLinkGridGroup = LinkGridGroup & { id: string; links: LinkGridLink[] };
+export type EditableEventItem = EventItem & { id: string; end?: string };
 
 export interface ContentBlock { id: string; type: 'content'; text: string }
 export interface CodeTabsBlock { id: string; type: 'codeTabs'; tabs: EditableCodeTab[] }
@@ -117,6 +129,14 @@ export interface LinkGridBlock { id: string; type: 'linkGrid'; intro?: string; g
 export interface ReferencesBlock { id: string; type: 'references'; title?: string; items: EditableReferenceItem[] }
 /** Someone's words, as they said them, and who they are. */
 export interface TestimonialBlock { id: string; type: 'testimonial'; quote: string; author: string; role?: string; avatarUrl?: string }
+/**
+ * Events in any order, which the page sets under two headings by the day it is
+ * read: `upcoming` (unset, "Upcoming") over those to come or on now, `past`
+ * (unset, "Past") over those that have ended. `day` is never stored: a wiki
+ * whose renderer is a client component fills it when the page is read, with
+ * `today()` on the server, so its hydration splits the block as the server did.
+ */
+export interface EventsBlock { id: string; type: 'events'; upcoming?: string; past?: string; items: EditableEventItem[]; day?: string }
 /** A Wikipedia-style notice. `text` replaces the variant's standard message. */
 export interface BannerBlock { id: string; type: 'banner'; variant: BannerVariant; text?: string }
 /** `A` is the wiki's atomic union: a container never holds another container. */
@@ -397,6 +417,88 @@ export function linkGridToMarkdown(
   return `${lead}${rendered.join('\n\n')}`;
 }
 
+// ---- events -----------------------------------------------------------------
+//
+// Pure, so a server render, a page's twin and the visitor's browser all split a
+// block the same way. miow had them first; every wiki here has the block now.
+
+/** A date as precisely as it is known: a year, a month or a day (`2026`, `2026-11`, `2026-11-12`). */
+export const EVENT_DATE = /^\d{4}(?:-(?:0[1-9]|1[0-2])(?:-(?:0[1-9]|[12]\d|3[01]))?)?$/;
+
+type Dated = { date: string; end?: string | null };
+
+/** A day as an event's date is written, by the clock of whoever reads it: the server's, or the visitor's. */
+export const today = (d = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// A date compares with a day at its own precision, so "2026-08" lasts all August.
+const at = (day: string, when: string) => day.slice(0, when.length);
+const lastDay = (e: Dated) => e.end || e.date;
+export const eventEnded = (e: Dated, day: string) => at(day, lastDay(e)) > lastDay(e);
+export const eventBegun = (e: Dated, day: string) => at(day, e.date) >= e.date;
+
+/** Whether `end` falls before `date`, at the coarser of the two. */
+export const eventEndsBefore = ({ date, end }: Dated) => !!end && end.slice(0, date.length) < date.slice(0, end.length);
+
+/** Those still to come or on, soonest first, and those that have ended, latest first. */
+export function splitEvents<E extends Dated>(items: readonly E[], day: string) {
+  return {
+    upcoming: items.filter(e => !eventEnded(e, day)).sort((a, b) => a.date.localeCompare(b.date)),
+    past: items.filter(e => eventEnded(e, day)).sort((a, b) => lastDay(b).localeCompare(lastDay(a)) || b.date.localeCompare(a.date)),
+  };
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** When it is, as it reads: "Nov 2026", "12 Nov 2026", "May – Aug 2026", "12 – 18 Nov 2026". */
+export function eventWhen({ date, end }: Dated) {
+  const [y, m, d] = date.split('-');
+  const words = (s: string, year = true) => {
+    const [yy, mm, dd] = s.split('-');
+    return [dd && Number(dd), mm && MONTHS[Number(mm) - 1], year && yy].filter(Boolean).join(' ');
+  };
+  if (!end || end === date) return words(date);
+  const [ey, em, ed] = end.split('-');
+  // The year said once where both share it, and the month too where both days fall in it.
+  if (y !== ey || !m || !em) return `${words(date)} – ${words(end)}`;
+  if (m === em && d && ed) return `${Number(d)} – ${words(end)}`;
+  return `${words(date, false)} – ${words(end)}`;
+}
+
+/** The fields an events block's text and twin read. */
+export interface EventsData {
+  upcoming?: string | null;
+  past?: string | null;
+  items: readonly EventItem[];
+  day?: string | null;
+}
+
+/** Each heading with its events, in the order the page shows them, and the day they were split by. */
+function eventSections({ upcoming, past, items, day }: EventsData) {
+  const on = day || today();
+  const split = splitEvents(items, on);
+  return [
+    { heading: upcoming || 'Upcoming', items: split.upcoming, ended: false },
+    { heading: past || 'Past', items: split.past, ended: true },
+  ]
+    .filter(s => s.items.length)
+    .map(s => ({ ...s, now: (e: EventItem) => !s.ended && eventBegun(e, on) }));
+}
+
+/** Events under their headings, split by the day the twin is read, as the page is. */
+export function eventsToMarkdown(block: EventsData): string {
+  return eventSections(block)
+    .map(s => `## ${s.heading}\n\n${s.items.map(e => `- ${eventWhen(e)}: ${inlineToMarkdown(e.text)}${s.now(e) ? ' (now on)' : ''}`).join('\n')}`)
+    .join('\n\n');
+}
+
+/** Events as prose, `12 Nov 2026: Group show, London` a line, under their headings. */
+export function eventsToText(block: EventsData): string {
+  return eventSections(block)
+    .map(s => `${s.heading}\n${s.items.map(e => `${eventWhen(e)}: ${stripHtml(e.text).replace(/\s+/g, ' ')}${s.now(e) ? ' (now on)' : ''}`).join('\n')}`)
+    .join('\n\n');
+}
+
 /** A flat bullet list of links — resolved page lists, feed items, link rails. */
 export function linkList(items: readonly LinkGridLink[]): string {
   return items.map(l => `- [${l.label}](${l.href})`).join('\n');
@@ -423,6 +525,7 @@ export type CoreAtomicBlock<P = ResolvedPageRef> =
   | { type: 'stats'; items: readonly StatItem[] }
   | { type: 'linkGrid'; intro?: string | null; groups: readonly LinkGridGroup[] }
   | { type: 'testimonial'; quote: string; author: string; role?: string | null }
+  | ({ type: 'events' } & EventsData)
   | { type: 'recentPages' | 'pageList'; resolvedPages?: readonly P[] | null }
   | { type: 'list'; items?: readonly P[] | null };
 
@@ -442,6 +545,7 @@ export function coreAtomicText(block: CoreAtomicBlock<{ title: string }>): strin
     case 'stats': return statsToText(block.items);
     case 'linkGrid': return linkGridToText(block.groups, block.intro);
     case 'testimonial': return testimonialToText(block.quote, block.author, block.role);
+    case 'events': return eventsToText(block);
     case 'recentPages':
     case 'pageList': return pageListToText(block.resolvedPages ?? []);
     case 'list': return pageListToText(block.items ?? []);
@@ -468,6 +572,7 @@ export function coreAtomicToMarkdown(block: CoreAtomicBlock, opts: CoreMarkdownO
     case 'stats': return statsToMarkdown(block.items);
     case 'linkGrid': return linkGridToMarkdown(block.groups, block.intro);
     case 'testimonial': return testimonialToMarkdown(block.quote, block.author, block.role);
+    case 'events': return eventsToMarkdown(block);
     case 'recentPages':
     case 'pageList':
     case 'list':
@@ -505,6 +610,7 @@ export interface CoreBlockDefaults {
   references: () => { type: 'references'; title: string; items: never[] };
   banner: () => { type: 'banner'; variant: 'stub' };
   testimonial: () => { type: 'testimonial'; quote: string; author: string };
+  events: () => { type: 'events'; items: { id: string; date: string; text: string }[] };
 }
 
 /**
@@ -545,6 +651,8 @@ export function coreBlockDefaults(opts: CoreBlockDefaultsOptions = {}): CoreBloc
     references: () => ({ type: 'references', title: referencesTitle, items: [] }),
     banner: () => ({ type: 'banner', variant: 'stub' }),
     testimonial: () => ({ type: 'testimonial', quote: '', author: '' }),
+    // Dated this month, so the new row is valid as it stands and reads as coming up.
+    events: () => ({ type: 'events', items: [{ id: newId(), date: today().slice(0, 7), text: '' }] }),
   };
 }
 

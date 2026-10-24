@@ -7,7 +7,7 @@ Object.assign(globalThis, { window, document: window.document, IS_REACT_ACT_ENVI
 
 const { createElement: h, act, useState } = await import('react');
 const { createRoot } = await import('react-dom/client');
-const { BlockEditor, BlockFieldsKit, CodeTabsFields, ColumnsFields, InfoboxFields, LimitField, LinkGridFields, ListFields, PageListFields, ReferencesFields } = await import('wiki-formant/block-editor');
+const { BlockEditor, BlockFieldsKit, CodeTabsFields, ColumnsFields, EventsFields, InfoboxFields, LimitField, LinkGridFields, ListFields, PageListFields, ReferencesFields } = await import('wiki-formant/block-editor');
 
 // A three-type wiki: enough for a container, a single-use type and a leaf.
 let n = 0;
@@ -155,6 +155,20 @@ test('an emptied optional field is stored as absent, not as an empty string', ()
   type($('input[aria-label=Address]'), '');
   assert.equal(state.block.items[0].url, undefined);
   assert.ok(button('Remove reference 1'));
+  unmount();
+});
+
+test('an event says how its dates read, and a new one starts this month', () => {
+  const { state, unmount } = field(EventsFields, { block: { id: 'e', type: 'events', items: [{ id: 'i', date: '2001-05', text: 'Show' }] } });
+  assert.match(document.body.textContent, /May 2001 · past/);
+  type($('input[aria-label="Ends (optional)"]'), 'June');
+  assert.match(document.body.textContent, /A year, month or day/);
+  type($('input[aria-label="Heading over those to come"]'), 'Coming up');
+  assert.equal(state.block.upcoming, 'Coming up');
+  click(button('+Add event'));
+  const d = new Date();
+  assert.equal(state.block.items[1].date, `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  assert.ok(button('Remove event 2'));
   unmount();
 });
 

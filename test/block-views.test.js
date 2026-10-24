@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { BannerView, CodeTabsView, ColumnsView, PageRefsView, ReferencesView } from 'wiki-formant/block-views';
+import { BannerView, CodeTabsView, ColumnsView, EventsView, PageRefsView, ReferencesView } from 'wiki-formant/block-views';
 import { pageRef } from 'wiki-formant/blocks';
 
 const tabs = [{ label: 'Rust', language: 'rust', code: 'fn f<T>() -> Vec<T> { a < b && c > d }' }];
@@ -71,4 +71,14 @@ test('two references blocks given their ids label each section with its own head
   assert.match(page, /aria-labelledby="references-r1"><h2 id="references-r1">References/);
   assert.match(page, /aria-labelledby="references-r2"><h2 id="references-r2">Further reading/);
   assert.match(renderToStaticMarkup(createElement(ReferencesView, { items })), /<h2 id="references-heading">/);
+});
+
+test('events render under the headings that hold any, the dates in a time', () => {
+  const items = [{ id: 'a', date: '2026-11-12', end: '2026-11-18', text: 'Show, <em>London</em>' }, { id: 'b', date: '2027', text: 'Fair' }];
+  const html = renderToStaticMarkup(createElement(EventsView, { items, day: '2026-11-14' }));
+  assert.match(html, /^<section class="events"><h2>Upcoming<\/h2><ol class="event-list"><li><time dateTime="2026-11-12">12 – 18 Nov 2026<\/time><span><span>Show, <em>London<\/em><\/span><small class="event-now">Now on<\/small><\/span><\/li><li><time dateTime="2027">2027<\/time>/);
+  assert.doesNotMatch(html, /Past/);
+  const later = renderToStaticMarkup(createElement(EventsView, { items, day: '2028-01-01', past: 'Earlier' }));
+  assert.match(later, /<h2>Earlier<\/h2>/);
+  assert.doesNotMatch(later, /Upcoming|Now on/);
 });

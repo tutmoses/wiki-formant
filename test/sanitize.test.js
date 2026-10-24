@@ -80,3 +80,10 @@ test('a JSON-LD payload cannot close its own script tag', () => {
   assert.equal(out.includes('<'), false);
   assert.equal(JSON.parse(out).name, '</script><script>alert(1)</script>');
 });
+
+test('an event is cleaned as a reference is', () => {
+  const clean = createHtmlSanitizer();
+  const out = sanitizeCoreLeaf({ type: 'events', items: [{ id: 'e', date: '2026', text: '<b onclick="x()">Show</b><script>1</script>' }] }, clean);
+  assert.doesNotMatch(out.items[0].text, /onclick|script/);
+  assert.equal(out.items[0].date, '2026');
+});

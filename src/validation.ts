@@ -9,7 +9,7 @@
 // As elsewhere in this package, the dispatch stays with the caller so a new
 // block type is a compile error there until it is handled.
 
-import { coreBlockShape, LIST_SOURCES } from './blocks.js';
+import { coreBlockShape, EVENT_DATE, eventEndsBefore, LIST_SOURCES } from './blocks.js';
 
 /**
  * An href acceptable to persist: http, https, mailto, tel, or a relative path or
@@ -104,6 +104,23 @@ export function validateStatItems(items: unknown): boolean {
   );
 }
 
+/** `[{ id, date, end?, text }]` — an events block's events, each dated by `EVENT_DATE` and ending no earlier than it starts. @internal */
+export function validateEventItems(items: unknown): boolean {
+  return (
+    Array.isArray(items) &&
+    items.every(
+      e =>
+        isRecord(e) &&
+        typeof e.id === 'string' &&
+        typeof e.text === 'string' &&
+        typeof e.date === 'string' &&
+        EVENT_DATE.test(e.date) &&
+        (e.end === undefined || (typeof e.end === 'string' && EVENT_DATE.test(e.end))) &&
+        !eventEndsBefore(e as { date: string; end?: string }),
+    )
+  );
+}
+
 // ---- the core leaf set ------------------------------------------------------
 
 /**
@@ -183,6 +200,8 @@ export function coreAtomicValidator(
         return validateLinkGroups(b.groups);
       case 'testimonial':
         return typeof b.quote === 'string' && typeof b.author === 'string' && optionalString(b.role) && optionalString(b.avatarUrl);
+      case 'events':
+        return optionalString(b.upcoming) && optionalString(b.past) && validateEventItems(b.items);
       default:
         return false;
     }

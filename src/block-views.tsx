@@ -5,7 +5,7 @@
 // Behind its own subpath for the reason `react.tsx` is: React is an optional
 // peer, so a consumer that only wants the taxonomy or the MCP transport needs no React.
 //
-// WHY THESE FIVE AND NOT THE SWITCH. The block union is per-repo and staying
+// WHY THE LEAVES AND NOT THE SWITCH. The block union is per-repo and staying
 // that way (see the Block Model note in the workspace CLAUDE.md) — a closed
 // union is what makes `switch (block.type)` exhaustive, so a new block type is
 // a compile error rather than a silent blank. What is NOT per-repo is what a
@@ -18,8 +18,9 @@
 // genuinely differs — the prose of a banner, whether references run through an
 // HTML processor, the router's link — arrives as a prop.
 
-import { Fragment, useState, type ImgHTMLAttributes, type ReactNode } from 'react';
-import type { CodeTab, LinkGridGroup, ReferenceItem, ResolvedPageRef, StatItem } from './blocks.js';
+import { Fragment, useState, useSyncExternalStore, type ImgHTMLAttributes, type ReactNode } from 'react';
+import { eventBegun, eventWhen, splitEvents, today } from './blocks.js';
+import type { CodeTab, EventItem, LinkGridGroup, ReferenceItem, ResolvedPageRef, StatItem } from './blocks.js';
 import { Anchor } from './react-server.js';
 import type { WikiLinkComponent } from './react-server.js';
 import { safeLinkHref } from './validation.js';
@@ -336,6 +337,65 @@ export function TestimonialView({ quote, author, role, avatarUrl, photo }: Testi
         </span>
       </figcaption>
     </figure>
+  );
+}
+
+// ---- events -----------------------------------------------------------------
+
+const still = () => () => {};
+
+export interface EventsViewProps {
+  items: readonly (EventItem & { id?: string })[];
+  /** The heading over those to come or on now. Default `Upcoming`. */
+  upcoming?: string | null;
+  /** The heading over those that have ended. Default `Past`. */
+  past?: string | null;
+  /**
+   * The day the server split them by, `today()` where it rendered. A page is
+   * drawn by that day, so hydration matches it, then by the visitor's own: a
+   * cached page can be a day old, and a show that closed since then is past.
+   * Omitted, the server and the browser each use their own clock.
+   */
+  day?: string | null;
+}
+
+/**
+ * Events under two `h2`s, those to come or on now soonest first and those that
+ * have ended latest first, as `section.events` holding an `ol.event-list` under
+ * each heading. A row is the `<time>` and a `span` of the event's inline HTML,
+ * with `small.event-now` on one that has begun. `base.css` sets every row's
+ * dates in one column shared by both lists. The text is written as HTML, so it
+ * reaches here through `sanitizeCoreLeaf`, as a reference's does.
+ */
+export function EventsView({ items, upcoming, past, day }: EventsViewProps) {
+  const now = useSyncExternalStore(still, today, () => day || today());
+  const split = splitEvents(items, now);
+  return (
+    <section className="events">
+      {(
+        [
+          [upcoming || 'Upcoming', split.upcoming],
+          [past || 'Past', split.past],
+        ] as const
+      ).map(([heading, rows], ended) =>
+        rows.length ? (
+          <Fragment key={ended}>
+            <h2>{heading}</h2>
+            <ol className="event-list">
+              {rows.map((e, i) => (
+                <li key={e.id ?? i}>
+                  <time dateTime={e.date}>{eventWhen(e)}</time>
+                  <span>
+                    <span dangerouslySetInnerHTML={{ __html: e.text }} />
+                    {!ended && eventBegun(e, now) && <small className="event-now">Now on</small>}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </Fragment>
+        ) : null,
+      )}
+    </section>
   );
 }
 

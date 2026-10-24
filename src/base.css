@@ -155,7 +155,10 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
    The structure three or four sites had each restated around this markup;
    padding, gaps, radii and colour stay theirs. A stats block is two columns,
    three or four from 40rem; a code-tab strip is a row of buttons; a banner sets
-   its icon beside its text; a long address in an infobox wraps. */
+   its icon beside its text; a long address in an infobox wraps; an events
+   block sets every row's dates in one column, shared by Upcoming and Past
+   through a subgrid, and stacks them over the words wherever it is narrower
+   than 30rem: a phone, or a narrow column. */
 .stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (min-width: 40rem) {
   .stat-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -171,6 +174,14 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
    sits outside the article's prose box, and on radix.wiki ran 709px. */
 .link-grid-group-description { max-width: var(--measure); }
 .infobox-series { display: flex; flex-direction: column; }
+.events { display: grid; grid-template-columns: auto 1fr; container-type: inline-size; }
+.events > *, .event-list li { grid-column: 1 / -1; }
+.event-list, .event-list li { display: grid; grid-template-columns: subgrid; }
+.event-list { margin: 0; padding: 0; list-style: none; }
+.event-list time { white-space: nowrap; }
+@container (max-width: 30rem) {
+  :is(.event-list, .event-list li, .event-list time) { display: block; }
+}
 .heading-anchor,
 .ref-backlink,
 .reference-link { text-decoration: none; }
@@ -296,6 +307,16 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
 :is(h2, h3, h4, h5, h6):hover > .heading-anchor, .heading-anchor:focus-visible { opacity: 1; }
 
 .facet-summary { margin: 0; font-size: var(--ui-small); color: var(--ui-muted); }
+
+.events { column-gap: 1rem; margin-block: 1rem; }
+.events h2 { margin: 0 0 1rem; }
+.events ol ~ h2 { margin-top: 2.5rem; }
+.event-list { row-gap: 0.75rem; }
+.event-list time { color: var(--ui-muted); font-variant-numeric: tabular-nums; }
+@container (max-width: 30rem) {
+  .event-list li + li { margin-top: 0.75rem; }
+}
+.event-now { margin-left: 0.5em; padding: 0.1em 0.55em; border-radius: 999px; background: var(--ui-accent); color: var(--ui-on-accent); font-size: 0.8em; white-space: nowrap; }
 
 .link-grid { display: flex; flex-direction: column; gap: 1rem; margin-block: 1rem; }
 .link-grid-group-description { margin: 0 0 0.75rem; font-size: var(--ui-small); color: var(--ui-muted); }

@@ -37,11 +37,17 @@ import { BlockActions, useBlockOperations } from './react.js';
 import {
   CODE_LANGS,
   DEFAULT_LANG,
+  EVENT_DATE,
+  eventBegun,
+  eventEnded,
+  eventWhen,
   LIST_SOURCES,
+  today,
   type ListSource,
   type BannerBlock,
   type CodeTabsBlock,
   type ColumnsBlock,
+  type EventsBlock,
   type InfoboxBlock,
   type LinkGridBlock,
   type ReferencesBlock,
@@ -547,6 +553,44 @@ export function StatsFields({ block, onUpdate, hint }: { block: StatsBlock; onUp
       ))}
       <Add onPress={() => set([...items, { id: newId(), value: '', label: '' }])}>Add figure</Add>
       {hint && <small className={c.muted}>{hint}</small>}
+    </div>
+  );
+}
+
+/**
+ * Events in the order they were written, each with how its dates read and
+ * where the page sets it today: the page sorts them itself, and moves each on
+ * once it ends. `text` is inline HTML, as a reference's is.
+ */
+export function EventsFields({ block, onUpdate, hint }: { block: EventsBlock; onUpdate: (block: EventsBlock) => void; hint?: string }) {
+  const c = useEditorContext().kit.classNames;
+  const items = block.items;
+  const set = (next: EventsBlock['items']) => onUpdate({ ...block, items: next });
+  const day = today();
+  return (
+    <div className={c.stack}>
+      <div className={c.row}>
+        <TextInput label="Heading over those to come" placeholder="Upcoming" optional value={block.upcoming} onChange={upcoming => onUpdate({ ...block, upcoming })} />
+        <TextInput label="Heading over those that have ended" placeholder="Past" optional value={block.past} onChange={past => onUpdate({ ...block, past })} />
+      </div>
+      {items.map((e, i) => {
+        const dated = EVENT_DATE.test(e.date) && (!e.end || EVENT_DATE.test(e.end));
+        return (
+          <div key={e.id} className={c.stack}>
+            <div className={c.row}>
+              <TextInput label="Starts" placeholder="Starts, e.g. 2026-11" value={e.date} onChange={date => set(replaceAt(items, i, { ...e, date: date ?? '' }))} />
+              <TextInput label="Ends (optional)" optional value={e.end} onChange={end => set(replaceAt(items, i, { ...e, end }))} />
+              <Remove label={`Remove event ${i + 1}`} onPress={() => set(removeAt(items, i))} />
+            </div>
+            <TextInput label="What it is and where" placeholder="What it is and where, e.g. Group show, Park Royal Gallery, London" value={e.text} onChange={text => set(replaceAt(items, i, { ...e, text: text ?? '' }))} />
+            <small className={c.muted}>
+              {dated ? `${eventWhen(e)} · ${eventEnded(e, day) ? 'past' : eventBegun(e, day) ? 'now on' : 'upcoming'}` : 'A year, month or day: 2026, 2026-11 or 2026-11-12'}
+            </small>
+          </div>
+        );
+      })}
+      <Add onPress={() => set([...items, { id: newId(), date: day.slice(0, 7), text: '' }])}>Add event</Add>
+      <small className={c.muted}>{hint ?? 'Readers see those to come soonest first and those that have ended latest first, each moving on its own once it ends.'}</small>
     </div>
   );
 }
