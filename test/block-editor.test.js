@@ -7,7 +7,7 @@ Object.assign(globalThis, { window, document: window.document, IS_REACT_ACT_ENVI
 
 const { createElement: h, act, useState } = await import('react');
 const { createRoot } = await import('react-dom/client');
-const { BlockEditor, BlockFieldsKit, CodeTabsFields, ColumnsFields, EventsFields, InfoboxFields, LimitField, LinkGridFields, ListFields, PageListFields, ReferencesFields } = await import('wiki-formant/block-editor');
+const { BlockEditor, BlockFieldsKit, CodeTabsFields, ColumnsFields, EventsFields, InfoboxFields, TestimonialFields, LimitField, LinkGridFields, ListFields, PageListFields, ReferencesFields } = await import('wiki-formant/block-editor');
 
 // A three-type wiki: enough for a container, a single-use type and a leaf.
 let n = 0;
@@ -155,6 +155,16 @@ test('an emptied optional field is stored as absent, not as an empty string', ()
   type($('input[aria-label=Address]'), '');
   assert.equal(state.block.items[0].url, undefined);
   assert.ok(button('Remove reference 1'));
+  unmount();
+});
+
+test('a testimonial keeps its words as typed and stores an emptied role as absent', () => {
+  const { state, unmount } = field(TestimonialFields, { block: { id: 't', type: 'testimonial', quote: '', author: 'Ada', role: 'Engineer' } });
+  type($('textarea[aria-label="Their words"]'), 'Line one\nline two');
+  assert.equal(state.block.quote, 'Line one\nline two');
+  type($('input[aria-label="Their role (optional)"]'), '');
+  assert.equal(state.block.role, undefined);
+  assert.equal(state.block.author, 'Ada');
   unmount();
 });
 

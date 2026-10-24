@@ -155,7 +155,8 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
    The structure three or four sites had each restated around this markup;
    padding, gaps, radii and colour stay theirs. A stats block is two columns,
    three or four from 40rem; a code-tab strip is a row of buttons; a banner sets
-   its icon beside its text; a long address in an infobox wraps; an events
+   its icon beside its text; a long address in an infobox wraps; a testimonial
+   sets its photo, round, beside who said it; an events
    block sets every row's dates in one column, shared by Upcoming and Past
    through a subgrid, and stacks them over the words wherever it is narrower
    than 30rem: a phone, or a narrow column. */
@@ -174,6 +175,9 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
    sits outside the article's prose box, and on radix.wiki ran 709px. */
 .link-grid-group-description { max-width: var(--measure); }
 .infobox-series { display: flex; flex-direction: column; }
+.testimonial figcaption { display: flex; align-items: center; gap: 0.75rem; }
+.testimonial figcaption img { width: 2.5rem; height: 2.5rem; border-radius: 50%; object-fit: cover; }
+.testimonial figcaption > span { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 0.5rem; }
 .events { display: grid; grid-template-columns: auto 1fr; container-type: inline-size; }
 .events > *, .event-list li { grid-column: 1 / -1; }
 .event-list, .event-list li { display: grid; grid-template-columns: subgrid; }
@@ -307,6 +311,10 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
 :is(h2, h3, h4, h5, h6):hover > .heading-anchor, .heading-anchor:focus-visible { opacity: 1; }
 
 .facet-summary { margin: 0; font-size: var(--ui-small); color: var(--ui-muted); }
+
+.testimonial { margin: 1.5rem 0; }
+.testimonial > blockquote { margin: 0 0 0.75rem; font-size: 1.125rem; }
+.testimonial figcaption small { color: var(--ui-muted); }
 
 .events { column-gap: 1rem; margin-block: 1rem; }
 .events h2 { margin: 0 0 1rem; }

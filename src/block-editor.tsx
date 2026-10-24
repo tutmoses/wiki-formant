@@ -52,6 +52,7 @@ import {
   type LinkGridBlock,
   type ReferencesBlock,
   type StatsBlock,
+  type TestimonialBlock,
 } from './blocks.js';
 import { BANNER_VARIANTS } from './text.js';
 import { MAX_BLOCK_ROWS } from './validation.js';
@@ -553,6 +554,23 @@ export function StatsFields({ block, onUpdate, hint }: { block: StatsBlock; onUp
       ))}
       <Add onPress={() => set([...items, { id: newId(), value: '', label: '' }])}>Add figure</Add>
       {hint && <small className={c.muted}>{hint}</small>}
+    </div>
+  );
+}
+
+/** Someone's words exactly, and who they are: their name, and optionally their role and photo. */
+export function TestimonialFields({ block, onUpdate }: { block: TestimonialBlock; onUpdate: (block: TestimonialBlock) => void }) {
+  const c = useEditorContext().kit.classNames;
+  return (
+    <div className={c.stack}>
+      <Field label="Their words">
+        <textarea aria-label="Their words" placeholder="Their words, exactly as they said them" rows={3} className={c.input} value={block.quote} onChange={e => onUpdate({ ...block, quote: e.target.value })} />
+      </Field>
+      <div className={c.row}>
+        <TextInput label="Who said them" value={block.author} onChange={author => onUpdate({ ...block, author: author ?? '' })} />
+        <TextInput label="Their role (optional)" optional value={block.role} onChange={role => onUpdate({ ...block, role })} />
+      </div>
+      <TextInput label="Photo address (optional)" type="url" placeholder="https://" optional value={block.avatarUrl} onChange={avatarUrl => onUpdate({ ...block, avatarUrl })} />
     </div>
   );
 }

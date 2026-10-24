@@ -139,6 +139,16 @@ export interface TestimonialBlock { id: string; type: 'testimonial'; quote: stri
 export interface EventsBlock { id: string; type: 'events'; upcoming?: string; past?: string; items: EditableEventItem[]; day?: string }
 /** A Wikipedia-style notice. `text` replaces the variant's standard message. */
 export interface BannerBlock { id: string; type: 'banner'; variant: BannerVariant; text?: string }
+/**
+ * The leaves every wiki here stores alike, as one union: a repo builds its own
+ * atomic union from it, `CoreLeafBlock | ListBlock | its native types`, so a
+ * leaf added here reaches every repo with the release, and every record keyed
+ * by its block types and every exhaustive switch over them fails to compile
+ * there until it is drawn, edited and labelled. The list is left out because
+ * each repo resolves its `items` to its own rows.
+ */
+export type CoreLeafBlock = ContentBlock | CodeTabsBlock | StatsBlock | LinkGridBlock | ReferencesBlock | BannerBlock | TestimonialBlock | EventsBlock;
+export type CoreLeafType = CoreLeafBlock['type'];
 /** `A` is the wiki's atomic union: a container never holds another container. */
 export interface ColumnsBlock<A> {
   id: string;
