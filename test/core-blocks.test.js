@@ -215,3 +215,33 @@ test('an events block reads under its headings, split by the day it was drawn', 
   assert.equal(core({ id: 'x', type: 'events', items: [{ ...row, end: '2026-12-01' }] }), true);
   assert.equal(core({ id: 'x', ...coreBlockDefaults().events() }), true);
 });
+
+test('hours read as grouped rows, and a place says whether it is open by its own week', async () => {
+  const { clock, hoursRows, openState } = await import('wiki-formant/hours');
+  const week = [{ days: ['mon', 'tue', 'wed', 'thu', 'fri'], opens: '08:00', closes: '18:00' }, { days: ['sat'], opens: '09:00', closes: '12:30' }];
+  assert.deepEqual(hoursRows(week).map(r => `${r.label} ${r.times}`), ['Mon–Fri 8am–6pm', 'Sat 9am–12:30pm', 'Sun Closed']);
+  assert.deepEqual(hoursRows([{ days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'], opens: '00:00', closes: '00:00' }]).map(r => `${r.label} ${r.times}`), ['Every day Open 24 hours']);
+  const at = (day, hm) => day * 1440 + Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3));
+  assert.deepEqual(openState(week, at(0, '10:00')), { open: true, words: 'Open · closes 6pm' });
+  assert.deepEqual(openState(week, at(5, '13:00')), { open: false, words: 'Closed · opens Mon 8am' });
+  assert.deepEqual(openState(week, at(1, '07:00')), { open: false, words: 'Closed · opens 8am' });
+  // Friday's late opening runs past midnight into Saturday.
+  assert.equal(openState([{ days: ['fri'], opens: '18:00', closes: '02:00' }], at(5, '01:00')).words, 'Open · closes 2am');
+  assert.deepEqual(clock(new Date('2026-11-02T09:30:00Z'), 'Europe/London'), { day: 'mon', minute: at(0, '09:30') });
+});
+
+test('a locations block reads as its places, and must give each its address or its hours', () => {
+  const block = { type: 'locations', heading: 'Visit', items: [{ id: 'p', name: 'Covent Garden', address: '27 Monmouth Street\nLondon WC2H 9EU', phone: '020 7232 3010', hours: [{ days: ['mon', 'tue', 'wed', 'thu', 'fri'], opens: '08:00', closes: '18:00' }], note: 'Closed on <em>bank holidays</em>' }] };
+  assert.equal(
+    coreAtomicToMarkdown(block, { siteUrl: 'https://site.test' }),
+    '## Visit\n\n### Covent Garden\n\n[27 Monmouth Street, London WC2H 9EU](https://www.google.com/maps/search/?api=1&query=27%20Monmouth%20Street%2C%20London%20WC2H%209EU)\n\n- Mon–Fri: 8am–6pm\n- Sat, Sun: Closed\n\nClosed on _bank holidays_\n\n[020 7232 3010](tel:02072323010)',
+  );
+  assert.equal(coreAtomicText(block), 'Visit\n\nCovent Garden\n27 Monmouth Street, London WC2H 9EU\nMon–Fri 8am–6pm\nSat, Sun Closed\nClosed on bank holidays\n020 7232 3010');
+  const core = coreAtomicValidator();
+  assert.equal(core({ id: 'x', ...block }), true);
+  assert.equal(core({ id: 'x', type: 'locations', items: [{ id: 'p', name: 'Nowhere' }] }), false);
+  assert.equal(core({ id: 'x', type: 'locations', items: [{ id: 'p', hours: [{ days: ['mon'], opens: '9am', closes: '17:00' }] }] }), false);
+  assert.equal(core({ id: 'x', type: 'locations', items: [{ id: 'p', address: 'Here', timeZone: 'Mars/Olympus' }] }), false);
+  assert.equal(core({ id: 'x', type: 'locations', items: [{ id: 'p', address: 'Here', map: 'javascript:alert(1)' }] }), false);
+  assert.equal(core({ id: 'x', ...coreBlockDefaults().locations() }), true);
+});

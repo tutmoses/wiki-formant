@@ -87,3 +87,9 @@ test('an event is cleaned as a reference is', () => {
   assert.doesNotMatch(out.items[0].text, /onclick|script/);
   assert.equal(out.items[0].date, '2026');
 });
+
+test("a place's note is cleaned as an event's text is", () => {
+  const out = sanitizeCoreLeaf({ type: 'locations', items: [{ id: 'p', address: 'Here', note: '<img src=x onerror=alert(1)>Closed Sundays' }] }, createHtmlSanitizer());
+  assert.doesNotMatch(out.items[0].note, /onerror/);
+  assert.equal(out.items[0].address, 'Here');
+});

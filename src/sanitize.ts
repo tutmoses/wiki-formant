@@ -197,7 +197,7 @@ const str = (v: unknown): v is string => typeof v === 'string';
 
 /**
  * The core leaf types' HTML fields, cleaned: `content.text`, `linkGrid` group
- * descriptions, and `references` and `events` item text. Every other field those blocks
+ * descriptions, `references` and `events` item text, and a place's note. Every other field those blocks
  * carry renders as a React text node and is escaped already.
  *
  * Returns any other block untouched, so it drops straight into a
@@ -219,6 +219,8 @@ export function sanitizeCoreLeaf<B extends { type: string }>(block: B, clean: (h
     case 'references':
     case 'events':
       return { ...b, items: each(b.items, i => (str(i.text) ? { ...i, text: clean(i.text) } : i)) } as unknown as B;
+    case 'locations':
+      return { ...b, items: each(b.items, p => (str(p.note) ? { ...p, note: clean(p.note) } : p)) } as unknown as B;
     default:
       return block;
   }

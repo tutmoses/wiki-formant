@@ -20,7 +20,8 @@
 
 import { Fragment, useState, useSyncExternalStore, type ImgHTMLAttributes, type ReactNode } from 'react';
 import { eventBegun, eventWhen, splitEvents, today } from './blocks.js';
-import type { CodeTab, EventItem, LinkGridGroup, ReferenceItem, ResolvedPageRef, StatItem } from './blocks.js';
+import type { CodeTab, EventItem, LinkGridGroup, PlaceItem, ReferenceItem, ResolvedPageRef, StatItem } from './blocks.js';
+import { clock, DEFAULT_ZONE, hoursRows, mapEmbed, mapHref, openState, type Hours } from './hours.js';
 import { Anchor } from './react-server.js';
 import type { WikiLinkComponent } from './react-server.js';
 import { safeLinkHref } from './validation.js';
@@ -395,6 +396,104 @@ export function EventsView({ items, upcoming, past, day }: EventsViewProps) {
           </Fragment>
         ) : null,
       )}
+    </section>
+  );
+}
+
+// ---- locations --------------------------------------------------------------
+
+const everyMinute = (tick: () => void) => {
+  const timer = setInterval(tick, 60_000);
+  return () => clearInterval(timer);
+};
+
+/**
+ * A place's week of hours, with whether it is open and today's row marked by
+ * its own clock. A cached page cannot know the moment it is read, so the
+ * server draws the hours alone and the visitor's browser says the rest.
+ */
+export function PlaceHours({ hours, timeZone = DEFAULT_ZONE }: { hours: readonly Hours[]; timeZone?: string }) {
+  const now = useSyncExternalStore(everyMinute, () => clock(new Date(), timeZone).minute, () => null);
+  const state = now === null ? null : openState([...hours], now);
+  const day = now === null ? null : clock(new Date(), timeZone).day;
+  return (
+    <>
+      {state && (
+        <p className="place-state" data-open={state.open || undefined}>
+          {state.words}
+        </p>
+      )}
+      <table className="place-hours">
+        <tbody>
+          {hoursRows([...hours]).map(r => (
+            <tr key={r.label} aria-current={day && r.days.includes(day) ? 'date' : undefined}>
+              <th scope="row">{r.label}</th>
+              <td>{r.times}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+export interface LocationsViewProps {
+  /** An h2 over the places, whose names are then h3s; unset, each name is an h2. */
+  heading?: string | null;
+  /** A map of each address under it. */
+  map?: boolean | null;
+  /**
+   * The places. `photo` is a picture's sized `<img>` attributes, for a site
+   * with an image pipeline: data, not a function, since a server component
+   * renders this client view.
+   */
+  items: readonly (PlaceItem & { id?: string; photo?: Pick<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'srcSet' | 'sizes'> })[];
+}
+
+/**
+ * Where a business is and when it is open, as `section.locations` holding
+ * `ul.places`, a `li.place` for each: its picture (`.place-picture`), its name,
+ * its `address` (linked to its map), whether it is open now
+ * (`.place-state[data-open]`) over its week of hours (`table.place-hours`,
+ * today's row `aria-current`), its note, its phone and email
+ * (`.place-contact`) and, with `map`, an embedded map (`.place-map`). The note
+ * is written as HTML, so it reaches here through `sanitizeCoreLeaf`.
+ */
+export function LocationsView({ heading, map, items }: LocationsViewProps) {
+  const Name = heading ? 'h3' : 'h2';
+  return (
+    <section className="locations">
+      {heading && <h2>{heading}</h2>}
+      <ul className="places">
+        {items.map((p, i) => {
+          const link = safeLinkHref(mapHref(p));
+          const image = p.image && safeLinkHref(p.image);
+          return (
+            <li key={p.id ?? i} className="place">
+              {image && <img src={image} {...p.photo} alt="" className="place-picture" loading="lazy" />}
+              {p.name && <Name>{p.name}</Name>}
+              {p.address && <address>{link ? <a href={link}>{p.address.trim()}</a> : p.address.trim()}</address>}
+              {!!p.hours?.length && <PlaceHours hours={p.hours} timeZone={p.timeZone} />}
+              {p.note && <p dangerouslySetInnerHTML={{ __html: p.note }} />}
+              {(p.phone || p.email) && (
+                <p className="place-contact">
+                  {p.phone && <a href={`tel:${p.phone.replace(/[^\d+]/g, '')}`}>{p.phone}</a>}
+                  {p.email && <a href={`mailto:${p.email}`}>{p.email}</a>}
+                </p>
+              )}
+              {map && p.address && (
+                <iframe
+                  className="place-map"
+                  src={mapEmbed({ address: p.address, map: p.map })}
+                  title={`Map of ${p.name || p.address.split('\n')[0]}`}
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }

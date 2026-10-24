@@ -7,7 +7,7 @@ Object.assign(globalThis, { window, document: window.document, IS_REACT_ACT_ENVI
 
 const { createElement: h, act, useState } = await import('react');
 const { createRoot } = await import('react-dom/client');
-const { BlockEditor, BlockFieldsKit, CodeTabsFields, ColumnsFields, EventsFields, InfoboxFields, TestimonialFields, LimitField, LinkGridFields, ListFields, PageListFields, ReferencesFields } = await import('wiki-formant/block-editor');
+const { BlockEditor, BlockFieldsKit, CodeTabsFields, ColumnsFields, EventsFields, InfoboxFields, LocationsFields, TestimonialFields, LimitField, LinkGridFields, ListFields, PageListFields, ReferencesFields } = await import('wiki-formant/block-editor');
 
 // A three-type wiki: enough for a container, a single-use type and a leaf.
 let n = 0;
@@ -165,6 +165,20 @@ test('a testimonial keeps its words as typed and stores an emptied role as absen
   type($('input[aria-label="Their role (optional)"]'), '');
   assert.equal(state.block.role, undefined);
   assert.equal(state.block.author, 'Ada');
+  unmount();
+});
+
+test('a place sets its hours day by day, with how the week reads', () => {
+  const { state, unmount } = field(LocationsFields, { block: { id: 'l', type: 'locations', items: [{ id: 'p', hours: [{ days: ['mon', 'tue'], opens: '09:00', closes: '17:00' }] }] } });
+  assert.match(document.body.textContent, /Mon, Tue 9am–5pm/);
+  click($('input[aria-label=Wednesday]'));
+  assert.deepEqual(state.block.items[0].hours[0].days, ['mon', 'tue', 'wed']);
+  type($('textarea[aria-label=Address]'), '1 High St');
+  assert.equal(state.block.items[0].address, '1 High St');
+  click($('input[type=checkbox]:not([aria-label])'));
+  assert.equal(state.block.map, true);
+  click(button('+Add place'));
+  assert.equal(state.block.items.length, 2);
   unmount();
 });
 

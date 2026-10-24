@@ -48,6 +48,7 @@ import {
   type CodeTabsBlock,
   type ColumnsBlock,
   type EventsBlock,
+  type LocationsBlock,
   type InfoboxBlock,
   type LinkGridBlock,
   type ReferencesBlock,
@@ -55,6 +56,7 @@ import {
   type TestimonialBlock,
 } from './blocks.js';
 import { BANNER_VARIANTS } from './text.js';
+import { DAY_NAMES, DAYS, DEFAULT_ZONE, hoursRows, TIME, type Hours } from './hours.js';
 import { MAX_BLOCK_ROWS } from './validation.js';
 import { cx } from './html.js';
 
@@ -609,6 +611,90 @@ export function EventsFields({ block, onUpdate, hint }: { block: EventsBlock; on
       })}
       <Add onPress={() => set([...items, { id: newId(), date: day.slice(0, 7), text: '' }])}>Add event</Add>
       <small className={c.muted}>{hint ?? 'Readers see those to come soonest first and those that have ended latest first, each moving on its own once it ends.'}</small>
+    </div>
+  );
+}
+
+/** A place's hours, a row for each set of days that keeps the same times, with how the week will read under them. */
+function HoursFields({ hours, onChange }: { hours: Hours[]; onChange: (hours: Hours[]) => void }) {
+  const c = useEditorContext().kit.classNames;
+  const valid = hours.filter(h => h.days.length && TIME.test(h.opens) && TIME.test(h.closes));
+  return (
+    <div className={c.stack}>
+      {hours.map((h, i) => (
+        <div key={i} className={c.row}>
+          <span role="group" aria-label="Days">
+            {DAYS.map((d, j) => (
+              <label key={d} title={DAY_NAMES[j]}>
+                <input
+                  type="checkbox"
+                  aria-label={DAY_NAMES[j]}
+                  checked={h.days.includes(d)}
+                  onChange={() => onChange(replaceAt(hours, i, { ...h, days: DAYS.filter(x => (x === d ? !h.days.includes(d) : h.days.includes(x))) }))}
+                />
+                {DAY_NAMES[j]!.slice(0, 3)}
+              </label>
+            ))}
+          </span>
+          <input type="time" aria-label="Opens" className={c.input} value={h.opens} onChange={e => onChange(replaceAt(hours, i, { ...h, opens: e.target.value }))} />
+          <input type="time" aria-label="Closes" className={c.input} value={h.closes} onChange={e => onChange(replaceAt(hours, i, { ...h, closes: e.target.value }))} />
+          <Remove label={`Remove hours ${i + 1}`} onPress={() => onChange(removeAt(hours, i))} />
+        </div>
+      ))}
+      <Add onPress={() => onChange([...hours, { days: hours.length ? [] : ['mon', 'tue', 'wed', 'thu', 'fri'], opens: '09:00', closes: '17:00' }])}>Add opening hours</Add>
+      {valid.length > 0 && <small className={c.muted}>{hoursRows(valid).map(r => `${r.label} ${r.times}`).join(' · ')}</small>}
+    </div>
+  );
+}
+
+/**
+ * Places, each with its address or its hours: its name where there are
+ * several, a picture, the address a line to a line, a map link, its hours day
+ * by day, its clock, a note and how to reach it. The page says whether each is
+ * open by its own clock.
+ */
+export function LocationsFields({ block, onUpdate }: { block: LocationsBlock; onUpdate: (block: LocationsBlock) => void }) {
+  const c = useEditorContext().kit.classNames;
+  const items = block.items;
+  const set = (next: LocationsBlock['items']) => onUpdate({ ...block, items: next });
+  return (
+    <div className={c.stack}>
+      <TextInput label="Heading over the places (optional)" placeholder="Our shops" optional value={block.heading} onChange={heading => onUpdate({ ...block, heading })} />
+      {items.map((p, i) => {
+        const setPlace = (patch: Partial<typeof p>) => set(replaceAt(items, i, { ...p, ...patch }));
+        return (
+          <div key={p.id} className={cx(c.nest, c.stack)}>
+            <div className={c.row}>
+              <TextInput label="Which one (optional)" placeholder="Covent Garden" optional value={p.name} onChange={name => setPlace({ name })} />
+              <Remove label={`Remove place ${p.name || i + 1}`} onPress={() => set(removeAt(items, i))} />
+            </div>
+            <Field label="Address, a line to a line">
+              <textarea
+                aria-label="Address"
+                rows={3}
+                className={c.input}
+                placeholder={'27 Monmouth Street\nLondon WC2H 9EU'}
+                value={p.address ?? ''}
+                onChange={e => setPlace({ address: e.target.value.trim() ? e.target.value : undefined })}
+              />
+            </Field>
+            <TextInput label="Map link (optional)" type="url" placeholder="Unset, a search for the address" optional value={p.map} onChange={map => setPlace({ map })} />
+            <HoursFields hours={p.hours ?? []} onChange={hours => setPlace({ hours: hours.length ? hours : undefined })} />
+            {!!p.hours?.length && <TextInput label="Time zone" placeholder={DEFAULT_ZONE} optional value={p.timeZone} onChange={timeZone => setPlace({ timeZone })} />}
+            <TextInput label="What the hours do not say (optional)" placeholder="Closed on bank holidays" optional value={p.note} onChange={note => setPlace({ note })} />
+            <div className={c.row}>
+              <TextInput label="Phone (optional)" placeholder="020 7232 3010" optional value={p.phone} onChange={phone => setPlace({ phone })} />
+              <TextInput label="Email (optional)" placeholder="hello@example.com" optional value={p.email} onChange={email => setPlace({ email })} />
+            </div>
+            <TextInput label="Picture address (optional)" type="url" placeholder="https://" optional value={p.image} onChange={image => setPlace({ image })} />
+          </div>
+        );
+      })}
+      <Add onPress={() => set([...items, { id: newId(), hours: [{ days: ['mon', 'tue', 'wed', 'thu', 'fri'], opens: '09:00', closes: '17:00' }] }])}>Add place</Add>
+      <label>
+        <input type="checkbox" checked={!!block.map} onChange={e => onUpdate({ ...block, map: e.target.checked || undefined })} /> Show a map of each address
+      </label>
+      <small className={c.muted}>Readers see the days grouped, today's marked, and whether each place is open now by its own clock.</small>
     </div>
   );
 }

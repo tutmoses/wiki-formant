@@ -13,6 +13,7 @@
 
 import { htmlToMarkdown, inlineToMarkdown } from './markdown.js';
 import { relativeTime, type RelativeTimeStyle } from './freshness.js';
+import { hoursRows, mapHref, type Hours } from './hours.js';
 import type { BlockGroup } from './revisions.js';
 import {
   BANNER_LABELS,
@@ -94,6 +95,25 @@ export interface EventItem {
   text: string;
 }
 
+/**
+ * One place a business is: which one (`name`, where it has several), a
+ * picture, its address a line to a line, a map link, a phone, an email, its
+ * regular hours (`wiki-formant/hours`), the IANA zone its clock is in, and a
+ * line of inline HTML for what the hours do not say. It has its address or its
+ * hours, or both.
+ */
+export interface PlaceItem {
+  name?: string;
+  image?: string;
+  address?: string;
+  map?: string;
+  phone?: string;
+  email?: string;
+  hours?: Hours[];
+  timeZone?: string;
+  note?: string;
+}
+
 export interface LinkGridLink {
   label: string;
   href: string;
@@ -121,6 +141,7 @@ export type EditableStatItem = StatItem & { id: string; value: string };
 export type EditableReferenceItem = ReferenceItem & { id: string; url?: string };
 export type EditableLinkGridGroup = LinkGridGroup & { id: string; links: LinkGridLink[] };
 export type EditableEventItem = EventItem & { id: string; end?: string };
+export type EditablePlaceItem = PlaceItem & { id: string };
 
 export interface ContentBlock { id: string; type: 'content'; text: string }
 export interface CodeTabsBlock { id: string; type: 'codeTabs'; tabs: EditableCodeTab[] }
@@ -137,6 +158,8 @@ export interface TestimonialBlock { id: string; type: 'testimonial'; quote: stri
  * `today()` on the server, so its hydration splits the block as the server did.
  */
 export interface EventsBlock { id: string; type: 'events'; upcoming?: string; past?: string; items: EditableEventItem[]; day?: string }
+/** Where a business is and when it is open: `heading` an h2 over the places, whose names are then h3s, and `map` a map under each address. */
+export interface LocationsBlock { id: string; type: 'locations'; heading?: string; map?: true; items: EditablePlaceItem[] }
 /** A Wikipedia-style notice. `text` replaces the variant's standard message. */
 export interface BannerBlock { id: string; type: 'banner'; variant: BannerVariant; text?: string }
 /**
@@ -147,7 +170,7 @@ export interface BannerBlock { id: string; type: 'banner'; variant: BannerVarian
  * there until it is drawn, edited and labelled. The list is left out because
  * each repo resolves its `items` to its own rows.
  */
-export type CoreLeafBlock = ContentBlock | CodeTabsBlock | StatsBlock | LinkGridBlock | ReferencesBlock | BannerBlock | TestimonialBlock | EventsBlock;
+export type CoreLeafBlock = ContentBlock | CodeTabsBlock | StatsBlock | LinkGridBlock | ReferencesBlock | BannerBlock | TestimonialBlock | EventsBlock | LocationsBlock;
 export type CoreLeafType = CoreLeafBlock['type'];
 /** `A` is the wiki's atomic union: a container never holds another container. */
 export interface ColumnsBlock<A> {
@@ -509,6 +532,53 @@ export function eventsToText(block: EventsData): string {
     .join('\n\n');
 }
 
+// ---- locations --------------------------------------------------------------
+
+/** The fields a locations block's text and twin read. */
+export interface LocationsData {
+  heading?: string | null;
+  items: readonly PlaceItem[];
+}
+
+const tel = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`;
+const addressLine = (address?: string) => address?.trim().split(/\n+/).join(', ');
+
+/** Each place under its name, its hours as rows, and none of whether it is open: a twin is read at no particular moment. */
+export function locationsToMarkdown({ heading, items }: LocationsData): string {
+  const level = heading ? '###' : '##';
+  const place = (p: PlaceItem) => {
+    const map = mapHref(p);
+    const address = addressLine(p.address);
+    return [
+      p.name && `${level} ${p.name}`,
+      p.image && `![](${p.image})`,
+      address && (map ? `[${address}](${map})` : address),
+      p.hours?.length && hoursRows(p.hours).map(r => `- ${r.label}: ${r.times}`).join('\n'),
+      p.note && inlineToMarkdown(p.note),
+      [p.phone && `[${p.phone}](${tel(p.phone)})`, p.email && `[${p.email}](mailto:${p.email})`].filter(Boolean).join(' · '),
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+  };
+  return [heading && `## ${heading}`, ...items.map(place)].filter(Boolean).join('\n\n');
+}
+
+/** Each place as prose: its name, address, hours a row to a line, note, phone and email. */
+export function locationsToText({ heading, items }: LocationsData): string {
+  const place = (p: PlaceItem) =>
+    [
+      p.name,
+      addressLine(p.address),
+      ...(p.hours?.length ? hoursRows(p.hours).map(r => `${r.label} ${r.times}`) : []),
+      p.note && stripHtml(p.note).replace(/\s+/g, ' '),
+      p.phone,
+      p.email,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  return [heading, ...items.map(place)].filter(Boolean).join('\n\n');
+}
+
 /** A flat bullet list of links — resolved page lists, feed items, link rails. */
 export function linkList(items: readonly LinkGridLink[]): string {
   return items.map(l => `- [${l.label}](${l.href})`).join('\n');
@@ -536,6 +606,7 @@ export type CoreAtomicBlock<P = ResolvedPageRef> =
   | { type: 'linkGrid'; intro?: string | null; groups: readonly LinkGridGroup[] }
   | { type: 'testimonial'; quote: string; author: string; role?: string | null }
   | ({ type: 'events' } & EventsData)
+  | ({ type: 'locations' } & LocationsData)
   | { type: 'recentPages' | 'pageList'; resolvedPages?: readonly P[] | null }
   | { type: 'list'; items?: readonly P[] | null };
 
@@ -556,6 +627,7 @@ export function coreAtomicText(block: CoreAtomicBlock<{ title: string }>): strin
     case 'linkGrid': return linkGridToText(block.groups, block.intro);
     case 'testimonial': return testimonialToText(block.quote, block.author, block.role);
     case 'events': return eventsToText(block);
+    case 'locations': return locationsToText(block);
     case 'recentPages':
     case 'pageList': return pageListToText(block.resolvedPages ?? []);
     case 'list': return pageListToText(block.items ?? []);
@@ -583,6 +655,7 @@ export function coreAtomicToMarkdown(block: CoreAtomicBlock, opts: CoreMarkdownO
     case 'linkGrid': return linkGridToMarkdown(block.groups, block.intro);
     case 'testimonial': return testimonialToMarkdown(block.quote, block.author, block.role);
     case 'events': return eventsToMarkdown(block);
+    case 'locations': return locationsToMarkdown(block);
     case 'recentPages':
     case 'pageList':
     case 'list':
@@ -621,6 +694,7 @@ export interface CoreBlockDefaults {
   banner: () => { type: 'banner'; variant: 'stub' };
   testimonial: () => { type: 'testimonial'; quote: string; author: string };
   events: () => { type: 'events'; items: { id: string; date: string; text: string }[] };
+  locations: () => { type: 'locations'; items: { id: string; hours: Hours[] }[] };
 }
 
 /**
@@ -663,6 +737,8 @@ export function coreBlockDefaults(opts: CoreBlockDefaultsOptions = {}): CoreBloc
     testimonial: () => ({ type: 'testimonial', quote: '', author: '' }),
     // Dated this month, so the new row is valid as it stands and reads as coming up.
     events: () => ({ type: 'events', items: [{ id: newId(), date: today().slice(0, 7), text: '' }] }),
+    // Open on weekdays, so the new place is valid before it has its address.
+    locations: () => ({ type: 'locations', items: [{ id: newId(), hours: [{ days: ['mon', 'tue', 'wed', 'thu', 'fri'], opens: '09:00', closes: '17:00' }] }] }),
   };
 }
 

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { BannerView, CodeTabsView, ColumnsView, EventsView, PageRefsView, ReferencesView } from 'wiki-formant/block-views';
+import { BannerView, CodeTabsView, ColumnsView, EventsView, LocationsView, PageRefsView, ReferencesView } from 'wiki-formant/block-views';
 import { pageRef } from 'wiki-formant/blocks';
 
 const tabs = [{ label: 'Rust', language: 'rust', code: 'fn f<T>() -> Vec<T> { a < b && c > d }' }];
@@ -81,4 +81,13 @@ test('events render under the headings that hold any, the dates in a time', () =
   const later = renderToStaticMarkup(createElement(EventsView, { items, day: '2028-01-01', past: 'Earlier' }));
   assert.match(later, /<h2>Earlier<\/h2>/);
   assert.doesNotMatch(later, /Upcoming|Now on/);
+});
+
+test('a place is drawn with its address linked to its map and its hours, the open state left to the browser', () => {
+  const html = renderToStaticMarkup(createElement(LocationsView, { heading: 'Visit', map: true, items: [{ id: 'p', name: 'Shop', address: '1 High St\nLondon', phone: '+44 20 7232 3010', hours: [{ days: ['mon'], opens: '09:00', closes: '17:00' }] }] }));
+  assert.match(html, /<section class="locations"><h2>Visit<\/h2><ul class="places"><li class="place"><h3>Shop<\/h3><address><a href="https:\/\/www\.google\.com\/maps\/search\/\?api=1&amp;query=1%20High%20St%2C%20London">1 High St\nLondon<\/a><\/address>/);
+  assert.match(html, /<th scope="row">Mon<\/th><td>9am–5pm<\/td>/);
+  assert.doesNotMatch(html, /place-state|aria-current/);
+  assert.match(html, /<a href="tel:\+442072323010">/);
+  assert.match(html, /<iframe class="place-map" src="https:\/\/maps\.google\.com\/maps\?q=1%20High%20St%2C%20London&amp;z=15&amp;output=embed"/);
 });

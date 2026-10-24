@@ -10,6 +10,7 @@
 // block type is a compile error there until it is handled.
 
 import { coreBlockShape, EVENT_DATE, eventEndsBefore, LIST_SOURCES } from './blocks.js';
+import { DAYS, isZone, TIME } from './hours.js';
 
 /**
  * An href acceptable to persist: http, https, mailto, tel, or a relative path or
@@ -121,6 +122,43 @@ export function validateEventItems(items: unknown): boolean {
   );
 }
 
+/** `[{ days, opens, closes }]` — a place's regular hours, each row one day or more and two times of day. @internal */
+export function validateHours(hours: unknown): boolean {
+  return (
+    Array.isArray(hours) &&
+    hours.length <= 21 &&
+    hours.every(
+      h =>
+        isRecord(h) &&
+        Array.isArray(h.days) &&
+        h.days.length > 0 &&
+        h.days.every(d => (DAYS as readonly unknown[]).includes(d)) &&
+        typeof h.opens === 'string' &&
+        TIME.test(h.opens) &&
+        typeof h.closes === 'string' &&
+        TIME.test(h.closes),
+    )
+  );
+}
+
+/** `[{ id, name?, image?, address?, map?, phone?, email?, hours?, timeZone?, note? }]` — a locations block's places, each with its address or its hours. @internal */
+export function validatePlaces(items: unknown): boolean {
+  return (
+    Array.isArray(items) &&
+    items.every(
+      p =>
+        isRecord(p) &&
+        typeof p.id === 'string' &&
+        [p.name, p.address, p.phone, p.email, p.note].every(optionalString) &&
+        (p.image === undefined || okUrl(p.image)) &&
+        (p.map === undefined || okUrl(p.map)) &&
+        (p.hours === undefined || validateHours(p.hours)) &&
+        (p.timeZone === undefined || (typeof p.timeZone === 'string' && isZone(p.timeZone))) &&
+        (!!(p.address as string | undefined)?.trim() || (Array.isArray(p.hours) && p.hours.length > 0)),
+    )
+  );
+}
+
 // ---- the core leaf set ------------------------------------------------------
 
 /**
@@ -202,6 +240,8 @@ export function coreAtomicValidator(
         return typeof b.quote === 'string' && typeof b.author === 'string' && optionalString(b.role) && optionalString(b.avatarUrl);
       case 'events':
         return optionalString(b.upcoming) && optionalString(b.past) && validateEventItems(b.items);
+      case 'locations':
+        return optionalString(b.heading) && (b.map === undefined || b.map === true) && validatePlaces(b.items);
       default:
         return false;
     }
