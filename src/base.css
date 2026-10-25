@@ -290,7 +290,9 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
 
 .chart-canvas { color: var(--ui-accent); font-size: 0.6875rem; --chart-axis: var(--ui-muted); --chart-up: var(--ui-up); --chart-down: var(--ui-down); }
 .chart-status { font-size: var(--ui-small); color: var(--ui-muted); }
-.chart-controls :is(button, a) { border: 1px solid var(--ui-border); border-radius: calc(var(--ui-radius) / 2); font-size: 0.625rem; opacity: 1; transition: background-color 150ms, color 150ms; }
+/* On the row, not the buttons, whose layout rule below resets their font to inherit it. */
+.chart-controls { font-size: 0.625rem; }
+.chart-controls :is(button, a) { border: 1px solid var(--ui-border); border-radius: calc(var(--ui-radius) / 2); opacity: 1; transition: background-color 150ms, color 150ms; }
 .chart-controls :is(button, a):hover { background: var(--ui-surface-2); }
 .chart-controls :is(button, a):is([aria-pressed='true'], [aria-current]) { background: var(--ui-accent); border-color: var(--ui-accent); color: var(--ui-on-accent); }
 
