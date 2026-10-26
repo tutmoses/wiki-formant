@@ -1011,8 +1011,8 @@ total, a rate's mean), every non-empty
 ranked list, and `?days=` links between windows, all time among them, pinned in
 the chart's frame as its own buttons are (`TimeChart`'s `controls`). Each
 figure is a button that charts it: visitors, page views, bounce rate,
-visit length and clicks to X. Visitors count agents; `?agents=apart`, a pair
-of links beside the windows, splits them into people and agents, and every
+visit length and clicks to X. Visitors count agents; `?agents=apart`, a switch
+beside the windows, splits them into people and agents, and every
 other link on the page keeps the choice. `digest`'s `by_day` carries every
 one of those per UTC day, a visit on the day it began, so the days add up to the
 totals. A day with no visits has no bounce rate or visit length and is left out

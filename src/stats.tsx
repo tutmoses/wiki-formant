@@ -128,7 +128,7 @@ export function Stats({ digest: d, days, filter = {}, apart = false, ranges = ST
   const to = (k: keyof StatsFilter) => (v: string) => at({ ...filter, [k]: v });
 
   // Each window is another digest, so a link rather than a button, pinned
-  // with the chart's own controls, and so is whether agents count apart.
+  // with the chart's own controls, and so is the switch that counts agents apart.
   const controls = (
     <>
       <div role="group" aria-label="Window">
@@ -138,12 +138,9 @@ export function Stats({ digest: d, days, filter = {}, apart = false, ranges = ST
           </a>
         ))}
       </div>
-      <div role="group" aria-label="Agents">
-        <a href={at(filter, days, false)} aria-current={apart ? undefined : 'page'} title="Visitors count agents">
-          With agents
-        </a>
-        <a href={at(filter, days, true)} aria-current={apart ? 'page' : undefined} title="People and agents counted apart">
-          Apart
+      <div>
+        <a href={at(filter, days, !apart)} role="switch" aria-checked={apart} title="People and agents counted apart">
+          Agents apart
         </a>
       </div>
     </>

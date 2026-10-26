@@ -156,18 +156,18 @@ test('the stats page leaves out empty lists and marks the window shown', () => {
   assert.match(out, /--share:0\.3333/);
   assert.doesNotMatch(out, /Entry pages|Clicks to X/);
   assert.match(out, /<figure class="chart stats-chart"><div class="chart-canvas" role="img" aria-label="Visitors"><\/div>/);
-  // Agents follow the windows in a group of their own, the steps follow them, and a week of days makes only one week.
-  assert.match(out, /<a href="\?days=all">All<\/a><\/div><div role="group" aria-label="Agents"><a href="\?days=7" aria-current="page" title="Visitors count agents">With agents<\/a><a href="\?days=7&amp;agents=apart" title="People and agents counted apart">Apart<\/a><\/div><div role="group" aria-label="Step"><button type="button" aria-pressed="true" title="One point per day">D<\/button><button type="button" aria-pressed="false" disabled="" title="One point per week">W<\/button><button type="button" aria-pressed="false" disabled="" title="One point per month">M<\/button><\/div><\/div><\/figure>/);
+  // The agents switch follows the windows, the steps follow them, and a week of days makes only one week.
+  assert.match(out, /<a href="\?days=all">All<\/a><\/div><div><a href="\?days=7&amp;agents=apart" role="switch" aria-checked="false" title="People and agents counted apart">Agents apart<\/a><\/div><div role="group" aria-label="Step"><button type="button" aria-pressed="true" title="One point per day">D<\/button><button type="button" aria-pressed="false" disabled="" title="One point per week">W<\/button><button type="button" aria-pressed="false" disabled="" title="One point per month">M<\/button><\/div><\/div><\/figure>/);
 });
 
-test('apart, people and agents are two figures, and every link keeps them apart', () => {
+test('apart, people and agents are two figures, and every link but the switch keeps them apart', () => {
   const out = renderToStaticMarkup(createElement(Stats, { digest: DIGEST, days: 7, apart: true, filter: { device: 'phone' } }));
   assert.match(out, /<button type="button" aria-pressed="true"><span>People<\/span><strong>12<small class="stats-delta" data-better="true">\+20%<\/small><\/strong><\/button><button type="button" aria-pressed="false"><span>Agents<\/span><strong>3<\/strong><\/button>/);
   assert.doesNotMatch(out, /<span>Visitors<\/span>/);
   assert.match(out, /<a href="\?days=90&amp;agents=apart&amp;device=phone">90D<\/a>/);
   assert.match(out, /<a href="\?days=7&amp;agents=apart&amp;country=GB&amp;device=phone">United Kingdom<\/a>/);
   assert.match(out, /<a href="\?days=7&amp;agents=apart" title="Remove">Device: phone ×<\/a>/);
-  assert.match(out, /<a href="\?days=7&amp;device=phone" title="Visitors count agents">With agents<\/a><a href="\?days=7&amp;agents=apart&amp;device=phone" aria-current="page"/);
+  assert.match(out, /<a href="\?days=7&amp;device=phone" role="switch" aria-checked="true" title="People and agents counted apart">Agents apart<\/a>/);
 });
 
 test('no change from the window before is unsigned', () => {
