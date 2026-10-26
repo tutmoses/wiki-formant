@@ -158,10 +158,15 @@ function useCollapsibleSidebar(options: SidebarOptions = {}): SidebarState {
   const toggle = useCallback(() => setOpen(!open), [open, setOpen]);
 
   // One source of truth either side of hydration: the boot script writes this
-  // attribute before first paint, and from here on the hook owns it.
+  // attribute before first paint, and once storage has been read the hook owns
+  // it. Not before: this effect runs in the same commit as the read above, with
+  // `open` still the server's `true`, and writing "open" there over a stamped
+  // "closed" widened a remembered-closed rail for one frame and then slid it
+  // shut — the very slide the boot script exists to prevent.
   useEffect(() => {
+    if (!ready) return;
     document.documentElement.setAttribute(SIDEBAR_ATTRIBUTE, open ? 'open' : 'closed');
-  }, [open]);
+  }, [open, ready]);
 
   return { open, setOpen, toggle, isMobile, ready };
 }
