@@ -274,6 +274,30 @@ test('array items with no one type, a zod union, are left to the tool', async ()
   assert.match(bad.result.content[0].text, /"content" must be an array; received string/);
 });
 
+test('a parameter with no one type, a zod union, is left to the tool', async () => {
+  const cfg = {
+    serverInfo: { name: 't', version: '1' },
+    tools: [{
+      name: 'insert',
+      description: 'Insert a block.',
+      inputSchema: {
+        type: 'object',
+        properties: { block: { oneOf: [{ type: 'object' }, { type: 'object' }] } },
+        required: ['block'],
+      },
+      handler: async args => ({ type: args.block.type }),
+    }],
+  };
+  const send = args => mcpResponse(
+    new Request('https://x', { method: 'POST', body: JSON.stringify(rpc('tools/call', { name: 'insert', arguments: args })) }),
+    cfg,
+  );
+  const ok = await (await send({ block: { type: 'content', text: '<p>a</p>' } })).json();
+  assert.equal(ok.result.isError, undefined, 'a well-formed union is not compared to undefined');
+  const missing = await (await send({})).json();
+  assert.match(missing.result.content[0].text, /Missing required parameter "block"/);
+});
+
 // --- protocol negotiation ----------------------------------------------------
 
 test('initialize echoes a version we speak, and offers the newest otherwise', async () => {

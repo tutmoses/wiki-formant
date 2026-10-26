@@ -104,7 +104,8 @@ export type JsonSchema = {
 };
 
 export type ToolParam = {
-  type: 'string' | 'number' | 'boolean' | 'array' | 'object';
+  /** Unset for a union (`oneOf`, `anyOf`), which the handler checks itself. */
+  type?: 'string' | 'number' | 'boolean' | 'array' | 'object';
   description: string;
   enum?: string[];
   items?: JsonSchema;
@@ -499,6 +500,9 @@ function validateArgs(tool: McpTool, args: Record<string, unknown>): string | nu
       } else if (itemType && (value as unknown[]).some(item => typeOf(item) !== itemType)) {
         problems.push(`Parameter "${key}" must contain only ${itemType}s.`);
       }
+    } else if (!spec.type) {
+      // No one type (a `oneOf` of shapes, as a zod union emits) is the tool's own
+      // to check, as with array items: compared to undefined, every call was refused.
     } else if (actual !== spec.type) {
       problems.push(
         `Parameter "${key}" must be a ${spec.type}; received ${actual} (${JSON.stringify(value)}).`,
