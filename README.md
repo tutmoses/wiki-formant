@@ -859,14 +859,13 @@ export const GET = resolveMapHandler({ authorize: async () => !!(await currentUs
 
 ## Block editor
 
-`wiki-formant/block-editor` is the block list an author edits and the fields of the core types. Three wikis had written it, 500 to 700 lines each, and had drifted: one dropped a stored code language its list did not name, one let a typed count run past the row cap, one named every remove button "Remove", one never marked the block being edited. The behaviour is here once; the look arrives as a kit.
+`wiki-formant/block-editor` is the block list an author edits and the fields of the core types. Three wikis had written it, 500 to 700 lines each, and had drifted: one dropped a stored code language its list did not name, one let a typed count run past the row cap, one named every remove button "Remove", one never marked the block being edited. The behaviour is here once, and so is the chrome: each block is a card with a toolbar (its name, then add below, move, duplicate and delete, shown while the block is in hand and always on a touch screen), and every add menu is two tight columns of names, each type's `hint` its tooltip, drawn by `base.css` on the `--ui-*` tokens. The fields' look arrives as a kit.
 
 ```tsx
 const KIT: BlockEditorKit = {
-  classNames: { list: 'stack', card: 'block-card', action: 'icon-btn', input: 'input', row: 'row', … },
+  classNames: { action: 'icon-btn', input: 'input', row: 'row', stack: 'stack-sm', … },
   icons: { add: <Plus />, up: <ChevronUp />, down: <ChevronDown />, duplicate: <Copy />, remove: <Trash2 /> },
   Choice: ToggleGroup,   // optional: a <select> otherwise
-  Menu: PopoverMenu,     // optional: an inline panel otherwise
 };
 const SCHEMA: BlockSchema<Block> = {
   meta: type => BLOCK_META[type], create: createBlock, duplicate: duplicateBlock,
@@ -885,7 +884,7 @@ const SCHEMA: BlockSchema<Block> = {
 
 The dispatch stays a `switch` over the wiki's own union, so a new type is a compile error there. `CodeTabsFields`, `StatsFields`, `TestimonialFields`, `EventsFields`, `LocationsFields`, `ReferencesFields`, `LinkGridFields`, `BannerFields`, `PageListFields`, `ListFields`, `ColumnsFields` and `InfoboxFields` take the core blocks `wiki-formant/blocks` declares; the two containers hold the same list, offering `nestedTypes`. `Field`, `Choice` and `LimitField` are exported for a wiki's own editors, so its native types wear the same kit. A card is marked `data-selected` while it is being edited and `data-nested` inside a container; a type the build does not know is shown by its raw type and carried through untouched. Keep the kit and the schema stable — a module constant or a `useMemo` — since both reach every card through context, and a fresh one re-renders every card on every keystroke.
 
-An editor that draws each block in place, with a list of its own (miow's), hosts the same fields in `<BlockFieldsKit kit={KIT}>`, without `<BlockEditor>`. Only the two container fields need the full editor, since they hold a block list.
+An editor that draws each block in place, with a list of its own (miow's), hosts the same fields in `<BlockFieldsKit kit={KIT}>`, without `<BlockEditor>`. Only the two container fields need the full editor, since they hold a block list. It wears the same chrome: `<BlockToolbar>` over each block (an editor's own controls go in as `children`, before add below) and `<AddBlockMenu>` at a list's foot, each offering `BlockOption`s.
 
 A `testimonial` is `{ quote, author, role?, avatarUrl? }`, drawn by `TestimonialView` as `figure.testimonial`: the words in a `blockquote`, then a `figcaption` holding the photo and a `span` of `strong` (who) and `small` (their role). radix-wiki and miow each had one under its own field names; a site with sized images passes `photo`, the `<img>` attributes (`src`, `srcSet`, `sizes`) it made from `avatarUrl`. They are data, because a server component renders the view.
 

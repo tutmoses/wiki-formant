@@ -7,10 +7,11 @@
 // drifted the way copies do: one dropped a stored code language that was not
 // in its list, one let a typed count run past the row cap, one named every
 // remove button "Remove", one never highlighted the block being edited. The
-// behaviour lives here once. The look does not: each wiki draws its inputs,
-// toggles and menus with its own design system, so those arrive as a KIT —
-// class names, icons, and four optional components — and the markup here is
-// bare semantic HTML wearing whatever the kit says.
+// behaviour lives here once, and so does the chrome every editor wears: a
+// block's toolbar and the add menu, drawn by base.css. The fields' look does
+// not: each wiki draws its inputs and toggles with its own design system, so
+// those arrive as a KIT — class names, icons, and three optional components —
+// and the markup here is bare semantic HTML wearing whatever the kit says.
 //
 // The dispatch stays with the wiki. `renderBody` is a `switch` over its own
 // closed union, as S4 of the workspace's STRUCTURE.md requires, so a new block
@@ -28,12 +29,13 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   type ComponentType,
   type ReactElement,
   type ReactNode,
 } from 'react';
-import { BlockActions, useBlockOperations } from './react.js';
+import { BlockActions, useBlockOperations, useClickOutside, type BlockActionsProps } from './react.js';
 import {
   CODE_LANGS,
   DEFAULT_LANG,
@@ -63,29 +65,10 @@ import { cx } from './html.js';
 // ---- the kit ----------------------------------------------------------------
 
 export interface BlockEditorClassNames {
-  /** A page's block list. */
-  list?: string;
-  /** A column's or an infobox's. */
-  nestedList?: string;
-  /** The line an empty list shows. */
-  empty?: string;
-  /** A block. It carries `data-selected` while it is the one being edited, and `data-nested` inside a container. */
-  card?: string;
-  cardHead?: string;
-  cardLabel?: string;
-  cardActions?: string;
-  /** Every icon button: a card's actions, add-below, remove. */
+  /** A field's icon button: remove a row, a tab, a column. */
   action?: string;
-  /** The Add block button at the foot of a list. */
-  addBlock?: string;
   /** The default `Add` button: Add tab, Add link. */
   add?: string;
-  /** The default `Menu`'s wrapper and panel. */
-  menuAnchor?: string;
-  menu?: string;
-  menuItem?: string;
-  menuText?: string;
-  menuHint?: string;
   /** A vertical group of fields. */
   stack?: string;
   /** A row of inputs ending in a remove button. */
@@ -131,19 +114,6 @@ export interface ChoiceProps {
   onChange: (value: string) => void;
 }
 
-/**
- * The add-block menu around its trigger. `trigger` is the button the editor
- * drew; a popover takes it as its anchor, an inline panel renders it first.
- */
-export interface MenuProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  trigger: ReactElement;
-  /** The icon in a block's head that adds under it, rather than the list's foot button. */
-  below: boolean;
-  children: ReactNode;
-}
-
 export interface AddProps {
   onPress: () => void;
   children: ReactNode;
@@ -154,7 +124,6 @@ export interface BlockEditorKit {
   icons: BlockEditorIcons;
   Field?: ComponentType<FieldProps>;
   Choice?: ComponentType<ChoiceProps>;
-  Menu?: ComponentType<MenuProps>;
   Add?: ComponentType<AddProps>;
 }
 
@@ -165,7 +134,7 @@ export type EditableBlock = { id: string; type: string };
 export interface BlockMeta {
   label: string;
   icon?: ReactNode;
-  /** The line under the label in the add menu. */
+  /** What it is for: the add menu's tooltip on it. */
   hint?: string;
 }
 
@@ -247,18 +216,17 @@ export function BlockEditor<B extends EditableBlock>({ blocks, onChange, schema,
 
 function BlockList({ blocks, onChange, nested = false }: { blocks: EditableBlock[]; onChange: (blocks: EditableBlock[]) => void; nested?: boolean }) {
   const { kit, schema } = useEditorContext();
-  const c = kit.classNames;
   const ops = useBlockOperations(blocks, onChange, schema);
   const base = nested ? schema.nestedTypes : schema.types;
   // A string, so the offer is recomputed — and every card re-rendered — only
   // when a single-use type comes or goes, not on every keystroke.
   const held = (schema.single ?? []).filter(t => blocks.some(b => b.type === t)).join(' ');
-  const offered = useMemo(() => base.filter(t => !held.split(' ').includes(t)), [base, held]);
+  const offered = useMemo(() => base.filter(t => !held.split(' ').includes(t)).map(type => blockOption(schema, type)), [base, held, schema]);
   const insertNew = useCallback((type: string) => ops.insert(schema.create(type)), [ops.insert, schema]);
 
   return (
-    <div className={nested ? c.nestedList : c.list}>
-      {blocks.length === 0 && <p className={c.empty}>{nested ? 'Empty.' : 'Nothing here yet. Add the first block.'}</p>}
+    <div className="block-list" data-nested={nested || undefined}>
+      {blocks.length === 0 && <p className="block-list__empty">{nested ? 'Empty.' : 'Nothing here yet. Add the first block.'}</p>}
       {blocks.map((block, i) => (
         <BlockCard
           key={block.id}
@@ -276,9 +244,14 @@ function BlockList({ blocks, onChange, nested = false }: { blocks: EditableBlock
           select={ops.setSelectedIndex}
         />
       ))}
-      <InsertMenu types={offered} onPick={insertNew} />
+      <AddBlockMenu options={offered} onPick={insertNew} icon={kit.icons.add} />
     </div>
   );
+}
+
+function blockOption(schema: BlockSchema<EditableBlock>, type: string): BlockOption {
+  const meta = schema.meta(type);
+  return { type, label: meta?.label ?? type, icon: meta?.icon, hint: meta?.hint };
 }
 
 interface BlockCardProps {
@@ -287,7 +260,7 @@ interface BlockCardProps {
   total: number;
   selected: boolean;
   nested: boolean;
-  offered: readonly string[];
+  offered: readonly BlockOption[];
   update: (i: number, block: EditableBlock) => void;
   move: (from: number, to: number) => void;
   duplicate: (i: number) => void;
@@ -300,82 +273,131 @@ interface BlockCardProps {
 // not re-render every other block's editor.
 const BlockCard = memo(function BlockCard({ block, index, total, selected, nested, offered, update, move, duplicate, remove, insert, select }: BlockCardProps) {
   const { kit, schema } = useEditorContext();
-  const c = kit.classNames;
   const onUpdate = useCallback((next: EditableBlock) => update(index, next), [update, index]);
   const onSelect = useCallback(() => select(index), [select, index]);
+  const onAdd = useCallback((type: string) => insert(schema.create(type), index + 1), [insert, schema, index]);
   const meta = schema.meta(block.type);
   const label = meta?.label ?? block.type;
   const body = meta ? schema.renderBody(block, onUpdate) : null;
 
   return (
-    <section className={c.card} data-selected={selected || undefined} data-nested={nested || undefined} onFocusCapture={onSelect} onClick={onSelect}>
-      <div className={c.cardHead}>
-        <span className={c.cardLabel}>
-          {meta?.icon}
-          {label}
-        </span>
-        <span className={c.cardActions}>
-          <InsertMenu below types={offered} onPick={type => insert(schema.create(type), index + 1)} />
-          <BlockActions index={index} total={total} ops={{ move, duplicate, remove }} icons={kit.icons} className={c.cardActions} buttonClassName={c.action} blockLabel={label} />
-        </span>
-      </div>
+    <section className="block-card" data-selected={selected || undefined} data-nested={nested || undefined} onFocusCapture={onSelect} onClick={onSelect}>
+      <BlockToolbar label={label} icon={meta?.icon} index={index} total={total} ops={{ move, duplicate, remove }} icons={kit.icons} options={offered} onAdd={onAdd} />
       {/* A type this build cannot edit is carried through untouched. */}
-      {body ?? <p className={c.muted}>Kept as it is – this editor has no fields for it.</p>}
+      {body ?? <p className={kit.classNames.muted}>Kept as it is – this editor has no fields for it.</p>}
     </section>
   );
 });
 
-function InsertMenu({ types, onPick, below = false }: { types: readonly string[]; onPick: (type: string) => void; below?: boolean }) {
-  const { kit, schema } = useEditorContext();
-  const c = kit.classNames;
+// ---- the toolbar and the add menu -------------------------------------------
+// What a block wears in every wiki's editor: its name, then add-below, move,
+// duplicate and delete, shown while the block is in hand; and the add menu,
+// two tight columns of names with what each is for as its tooltip. base.css
+// draws both. Neither reads the context, so an editor that draws each block in
+// place, with a list of its own (miow's), wears them too.
+
+/** A type an add menu offers. */
+export interface BlockOption {
+  type: string;
+  label: string;
+  icon?: ReactNode;
+  /** What it is for: the item's tooltip. */
+  hint?: string;
+}
+
+export interface AddBlockMenuProps {
+  options: readonly BlockOption[];
+  onPick: (type: string) => void;
+  icon: ReactNode;
+  /** The icon in a block's toolbar that adds under it, rather than the button at a list's foot. */
+  below?: boolean;
+  /** The foot button's words. */
+  label?: string;
+}
+
+/** An add button and its menu, which closes on a pick, a click outside it or Escape. Nothing to offer, no button. */
+export function AddBlockMenu({ options, onPick, icon, below = false, label = 'Add block' }: AddBlockMenuProps) {
   const [open, setOpen] = useState(false);
-  const Menu = kit.Menu ?? InlineMenu;
-  const toggle = () => setOpen(o => !o);
-  const trigger = below ? (
-    <button type="button" className={c.action} title="Add a block below" aria-label="Add a block below" aria-expanded={open} onClick={toggle}>
-      {kit.icons.add}
-    </button>
-  ) : (
-    <button type="button" className={c.addBlock} aria-expanded={open} onClick={toggle}>
-      {kit.icons.add}
-      Add block
-    </button>
-  );
+  const close = useCallback(() => setOpen(false), []);
+  const ref = useClickOutside<HTMLSpanElement>(close);
+  const trigger = useRef<HTMLButtonElement>(null);
+  if (options.length === 0) return null;
   return (
-    <Menu open={open} onOpenChange={setOpen} trigger={trigger} below={below}>
-      {types.map(type => {
-        const meta = schema.meta(type);
-        return (
-          <button
-            key={type}
-            type="button"
-            className={c.menuItem}
-            onClick={e => {
-              // Inside a card, a pick is not also a click on the card.
-              e.stopPropagation();
-              onPick(type);
-              setOpen(false);
-            }}
-          >
-            {meta?.icon}
-            <span className={c.menuText}>
-              <span>{meta?.label ?? type}</span>
-              {meta?.hint && <span className={c.menuHint}>{meta.hint}</span>}
-            </span>
-          </button>
-        );
-      })}
-    </Menu>
+    <span
+      ref={ref}
+      className="block-menu"
+      data-below={below || undefined}
+      onKeyDown={e => {
+        if (e.key !== 'Escape' || !open) return;
+        e.stopPropagation();
+        close();
+        trigger.current?.focus();
+      }}
+    >
+      <button
+        ref={trigger}
+        type="button"
+        className={below ? 'block-toolbar__button' : 'block-add'}
+        title={below ? 'Add a block below' : undefined}
+        aria-label={below ? 'Add a block below' : undefined}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen(o => !o)}
+      >
+        {icon}
+        {!below && label}
+      </button>
+      {open && (
+        <span className="block-menu__panel" role="menu">
+          {options.map(o => (
+            <button
+              key={o.type}
+              type="button"
+              role="menuitem"
+              className="block-menu__item"
+              title={o.hint}
+              onClick={e => {
+                // Inside a card, a pick is not also a click on the card.
+                e.stopPropagation();
+                close();
+                onPick(o.type);
+              }}
+            >
+              {o.icon}
+              <span>{o.label}</span>
+            </button>
+          ))}
+        </span>
+      )}
+    </span>
   );
 }
 
-function InlineMenu({ open, trigger, children }: MenuProps) {
-  const c = useEditorContext().kit.classNames;
+export interface BlockToolbarProps extends Pick<BlockActionsProps, 'index' | 'total' | 'ops'> {
+  label: string;
+  icon?: ReactNode;
+  icons: BlockEditorIcons;
+  /** What add-below offers; without them, no add-below. */
+  options?: readonly BlockOption[];
+  onAdd?: (type: string) => void;
+  /** An editor's own controls, before add-below. */
+  children?: ReactNode;
+}
+
+/** A block's name and its controls: add below, move up and down, duplicate, delete. */
+export function BlockToolbar({ label, icon, index, total, ops, icons, options, onAdd, children }: BlockToolbarProps) {
   return (
-    <span className={c.menuAnchor}>
-      {trigger}
-      {open && <span className={c.menu}>{children}</span>}
-    </span>
+    <div className="block-toolbar">
+      <span className="block-toolbar__label">
+        {icon}
+        {label}
+      </span>
+      <span className="block-toolbar__tools">
+        {children}
+        {options && onAdd && <AddBlockMenu below options={options} onPick={onAdd} icon={icons.add} />}
+        <BlockActions index={index} total={total} ops={ops} icons={icons} className="block-toolbar__actions" buttonClassName="block-toolbar__button" blockLabel={label} />
+      </span>
+    </div>
   );
 }
 
@@ -843,8 +865,8 @@ function PagePicker({ ids, onChange: set, pages }: { ids: string[]; onChange: (i
               total={ids.length}
               ops={ops}
               icons={{ up: kit.icons.up, down: kit.icons.down, remove: kit.icons.remove }}
-              className={c.cardActions}
-              buttonClassName={c.action}
+              className="block-toolbar__actions"
+              buttonClassName="block-toolbar__button"
               blockLabel="page"
             />
           </div>
@@ -982,8 +1004,8 @@ export function ColumnsFields<A extends EditableBlock>({ block, onUpdate }: { bl
       <div className={c.columns}>
         {columns.map((column, ci) => (
           <div key={column.id} className={cx(c.nest, c.stack)}>
-            <div className={c.cardHead}>
-              <span className={c.cardLabel}>Column {ci + 1}</span>
+            <div className="block-toolbar">
+              <span className="block-toolbar__label">Column {ci + 1}</span>
               {columns.length > 1 && <Remove label={`Remove column ${ci + 1}`} onPress={() => onUpdate({ ...block, columns: removeAt(columns, ci) })} />}
             </div>
             <BlockList
