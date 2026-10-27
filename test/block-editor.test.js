@@ -37,7 +37,7 @@ const schema = {
   nestedTypes: ['codeTabs', 'recentPages'],
   single: ['infobox'],
 };
-const kit = { classNames: { card: 'card' }, icons: { add: '+', up: '↑', down: '↓', duplicate: '⧉', remove: '×' } };
+const kit = { classNames: {}, icons: { add: '+', up: '↑', down: '↓', duplicate: '⧉', remove: '×' } };
 
 function mount(initial) {
   const root = createRoot(document.getElementById('root'));
@@ -60,19 +60,21 @@ const type = (el, value) =>
     el.dispatchEvent(new window.Event(el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
   });
 const button = label => $$('button').find(b => b.textContent === label || b.getAttribute('aria-label') === label);
+const items = () => $$('.block-menu__item');
+const key = (el, k) => act(() => el.dispatchEvent(new window.KeyboardEvent('keydown', { key: k, bubbles: true })));
 
 test('the foot menu adds a block, and a single-use type leaves the menu once held', () => {
   const { state, unmount } = mount([]);
   assert.match(document.body.textContent, /Nothing here yet/);
   click(button('+Add block'));
-  click($$('button').find(b => b.textContent.startsWith('Infobox')));
+  click(items().find(b => b.textContent === 'Infobox'));
   assert.equal(state.blocks.length, 1);
+  assert.equal(items().length, 0);
   assert.equal(state.blocks[0].type, 'infobox');
   // The page's foot menu, opened again, no longer offers a second infobox.
   const foot = $$('button').filter(b => b.textContent === '+Add block').at(-1);
   click(foot);
-  assert.ok(!$$('button').some(b => b.textContent === 'InfoboxInfobox hint'));
-  assert.ok($$('button').some(b => b.textContent === 'Code tabsCode tabs hint'));
+  assert.deepEqual(items().map(b => b.textContent), ['Code tabs', 'Columns', 'Recent pages']);
   unmount();
 });
 
@@ -80,9 +82,9 @@ test('a nested list offers only the nested types and edits through its container
   const { state, unmount } = mount([create('columns')]);
   const firstColumnAdd = $$('button').filter(b => b.textContent === '+Add block')[0];
   click(firstColumnAdd);
-  const offered = $$('button').filter(b => / hint$/.test(b.textContent)).map(b => b.textContent);
-  assert.deepEqual(offered, ['Code tabsCode tabs hint', 'Recent pagesRecent pages hint']);
-  click($$('button').find(b => b.textContent.startsWith('Recent pages')));
+  // Names only; what each is for is its tooltip.
+  assert.deepEqual(items().map(b => [b.textContent, b.title]), [['Code tabs', 'Code tabs hint'], ['Recent pages', 'Recent pages hint']]);
+  click(items().find(b => b.textContent === 'Recent pages'));
   assert.equal(state.blocks[0].columns[0].blocks[0].type, 'recentPages');
   assert.equal(state.blocks[0].columns[1].blocks.length, 0);
   unmount();
@@ -90,12 +92,25 @@ test('a nested list offers only the nested types and edits through its container
 
 test('the card being edited is marked, and its actions name the block', () => {
   const { unmount } = mount([create('recentPages'), create('recentPages')]);
-  const cards = $$('section.card');
+  const cards = $$('section.block-card');
   assert.ok(!cards[1].hasAttribute('data-selected'));
   click(cards[1]);
-  assert.ok($$('section.card')[1].hasAttribute('data-selected'));
+  assert.ok($$('section.block-card')[1].hasAttribute('data-selected'));
   const ups = $$('button[aria-label="Move Recent pages up"]');
   assert.deepEqual(ups.map(b => b.disabled), [true, false]);
+  unmount();
+});
+
+test("a block's add-below inserts under it, and Escape closes the menu onto its button", () => {
+  const { state, unmount } = mount([create('recentPages'), create('recentPages')]);
+  const below = $$('button[aria-label="Add a block below"]')[0];
+  click(below);
+  key(items()[0], 'Escape');
+  assert.equal(items().length, 0);
+  assert.equal(document.activeElement, below);
+  click(below);
+  click(items().find(b => b.textContent === 'Code tabs'));
+  assert.deepEqual(state.blocks.map(b => b.type), ['recentPages', 'codeTabs', 'recentPages']);
   unmount();
 });
 
