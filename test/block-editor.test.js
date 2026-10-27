@@ -7,7 +7,7 @@ Object.assign(globalThis, { window, document: window.document, IS_REACT_ACT_ENVI
 
 const { createElement: h, act, useState } = await import('react');
 const { createRoot } = await import('react-dom/client');
-const { BlockEditor, BlockFieldsKit, CodeTabsFields, ColumnsFields, EventsFields, InfoboxFields, LocationsFields, TestimonialFields, LimitField, LinkGridFields, ListFields, PageListFields, ReferencesFields } = await import('wiki-formant/block-editor');
+const { AddBlockMenu, BlockEditor, BlockFieldsKit, CodeTabsFields, ColumnsFields, EventsFields, InfoboxFields, LocationsFields, TestimonialFields, LimitField, LinkGridFields, ListFields, PageListFields, ReferencesFields } = await import('wiki-formant/block-editor');
 
 // A three-type wiki: enough for a container, a single-use type and a leaf.
 let n = 0;
@@ -111,6 +111,47 @@ test("a block's add-below inserts under it, and Escape closes the menu onto its 
   click(below);
   click(items().find(b => b.textContent === 'Code tabs'));
   assert.deepEqual(state.blocks.map(b => b.type), ['recentPages', 'codeTabs', 'recentPages']);
+  unmount();
+});
+
+test('a long menu lists its groups under headings and finds a type by name', () => {
+  const root = createRoot(document.getElementById('root'));
+  const picked = [];
+  const words = ['Text', 'Heading', 'Quote', 'Banner', 'Picture', 'Gallery', 'Video', 'Product', 'Locations', 'Events'];
+  const groupOf = w => (['Picture', 'Gallery', 'Video'].includes(w) ? 'Pictures' : w === 'Product' ? 'Selling' : ['Locations', 'Events'].includes(w) ? 'Places & times' : 'Words');
+  const options = words.map(w => ({ type: w.toLowerCase(), label: w, group: groupOf(w) }));
+  // Out of order: a group keeps the place it first appears in.
+  options.push({ type: 'divider', label: 'Divider', group: 'Words' });
+  act(() => root.render(h(AddBlockMenu, { options, onPick: t => picked.push(t), icon: '+' })));
+  click(button('+Add block'));
+  const find = $('input[aria-label="Find a block"]');
+  assert.equal(document.activeElement, find);
+  assert.deepEqual($$('.block-menu__heading').map(e => e.textContent), ['Words', 'Pictures', 'Selling', 'Places & times']);
+  assert.deepEqual(items().slice(0, 5).map(b => b.textContent), ['Text', 'Heading', 'Quote', 'Banner', 'Divider']);
+  type(find, 'ti');
+  assert.deepEqual(items().map(b => b.textContent), ['Locations']);
+  assert.deepEqual($$('.block-menu__heading').map(e => e.textContent), ['Places & times']);
+  type(find, 'zz');
+  assert.equal(items().length, 0);
+  assert.match(document.body.textContent, /No block by that name/);
+  type(find, 'e');
+  key(find, 'Enter');
+  assert.deepEqual(picked, ['text']);
+  assert.equal(items().length, 0);
+  // Opened again, it starts unfiltered; Escape in the box closes it.
+  click(button('+Add block'));
+  assert.equal($('input[aria-label="Find a block"]').value, '');
+  key($('input[aria-label="Find a block"]'), 'Escape');
+  assert.equal(items().length, 0);
+  assert.equal(document.activeElement, button('+Add block'));
+  act(() => root.unmount());
+});
+
+test('a short menu has no box and no headings', () => {
+  const { unmount } = mount([]);
+  click(button('+Add block'));
+  assert.equal($('input[aria-label="Find a block"]'), null);
+  assert.equal($$('.block-menu__heading').length, 0);
   unmount();
 });
 

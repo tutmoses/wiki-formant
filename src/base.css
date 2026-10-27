@@ -722,7 +722,8 @@ pre:hover > .code-copy-btn,
 /* ---- the block editor (BlockEditor, BlockToolbar, AddBlockMenu) -------------
    Every wiki's editor wears the same chrome: a card per block, its name and its
    controls in a toolbar above its fields, and an add menu of two tight columns,
-   names only, with what each type is for as its tooltip. The four had drawn it
+   names only, with what each type is for as its tooltip, under their groups'
+   headings, and a box to find one by name at the top of a long menu. The four had drawn it
    four ways, one a 16-row list a screen tall. A block's controls show while it
    is in hand (hovered, focused, picked, or with its menu open), and always on a
    screen with no hover. The fields inside are the site's kit. */
@@ -800,9 +801,12 @@ pre:hover > .code-copy-btn,
   position: absolute;
   top: calc(100% + 0.25rem);
   z-index: 50;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-direction: column;
   width: min(24rem, calc(100vw - 2rem));
+  max-height: min(28rem, calc(100dvh - 2rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0.25rem;
   background: var(--ui-surface);
   border: 1px solid var(--ui-border);
@@ -818,6 +822,35 @@ pre:hover > .code-copy-btn,
   /* As specific as the two placements above, and after them. */
   .block-menu:is(:not([data-below]), [data-below]) > .block-menu__panel { position: fixed; inset: auto 1rem 1rem; width: auto; translate: none; }
 }
+.block-menu__group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.block-menu__group + .block-menu__group { margin-top: 0.25rem; }
+.block-menu__heading {
+  grid-column: 1 / -1;
+  padding: 0.375rem 0.5rem 0.125rem;
+  font-size: var(--ui-small);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ui-muted);
+}
+/* The box stays in view as a long menu scrolls under it. */
+.block-menu__find {
+  position: sticky;
+  top: -0.25rem;
+  z-index: 1;
+  margin: -0.25rem -0.25rem 0.25rem;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  border-bottom: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius) var(--ui-radius) 0 0;
+  background: var(--ui-surface);
+  font: inherit;
+  font-size: var(--ui-small);
+  color: inherit;
+  outline: none;
+}
+.block-menu__find:focus-visible { border-bottom-color: var(--ui-accent); }
+.block-menu__none { padding: 0.375rem 0.5rem; font-size: var(--ui-small); color: var(--ui-muted); }
 .block-menu__item {
   display: flex;
   align-items: center;

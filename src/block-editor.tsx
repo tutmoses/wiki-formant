@@ -28,6 +28,7 @@ import {
   memo,
   useCallback,
   useContext,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -293,7 +294,8 @@ const BlockCard = memo(function BlockCard({ block, index, total, selected, neste
 // ---- the toolbar and the add menu -------------------------------------------
 // What a block wears in every wiki's editor: its name, then add-below, move,
 // duplicate and delete, shown while the block is in hand; and the add menu,
-// two tight columns of names with what each is for as its tooltip. base.css
+// two tight columns of names with what each is for as its tooltip, under their
+// groups' headings, with a box to find one by name in a long menu. base.css
 // draws both. Neither reads the context, so an editor that draws each block in
 // place, with a list of its own (miow's), wears them too.
 
@@ -304,6 +306,8 @@ export interface BlockOption {
   icon?: ReactNode;
   /** What it is for: the item's tooltip. */
   hint?: string;
+  /** The heading it is listed under; groups keep the order they first appear in. */
+  group?: string;
 }
 
 export interface AddBlockMenuProps {
@@ -318,14 +322,41 @@ export interface AddBlockMenuProps {
 
 /** The least gap, in px, between an open menu and the window's side. */
 const MENU_MARGIN = 8;
+/** A menu longer than this opens with a box to find a type by name. */
+const FIND_OVER = 8;
 
-/** An add button and its menu, which closes on a pick, a click outside it or Escape. Nothing to offer, no button. */
+/** Options under their headings, in the order each group first appears. */
+function grouped(options: readonly BlockOption[]): [string, BlockOption[]][] {
+  const groups = new Map<string, BlockOption[]>();
+  for (const o of options) {
+    const key = o.group ?? '';
+    groups.set(key, [...(groups.get(key) ?? []), o]);
+  }
+  return [...groups];
+}
+
+/**
+ * An add button and its menu, which closes on a pick, a click outside it or
+ * Escape. A long menu opens on a box that finds a type by name, Enter taking
+ * the first found. Nothing to offer, no button.
+ */
 export function AddBlockMenu({ options, onPick, icon, below = false, label = 'Add block' }: AddBlockMenuProps) {
   const [open, setOpen] = useState(false);
-  const close = useCallback(() => setOpen(false), []);
+  const [query, setQuery] = useState('');
+  const close = useCallback(() => {
+    setOpen(false);
+    setQuery('');
+  }, []);
   const ref = useClickOutside<HTMLSpanElement>(close);
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLSpanElement>(null);
+  const find = useRef<HTMLInputElement>(null);
+  // A touch screen is left without its keyboard until the box is tapped, so
+  // the sheet is not half hidden behind it.
+  useEffect(() => {
+    const el = find.current;
+    if (open && el && !el.ownerDocument.defaultView?.matchMedia?.('(hover: none)').matches) el.focus();
+  }, [open]);
   // Hung off a button deep in a column, the panel can run past the window's
   // edge: it moves back in by what it overhangs. A phone's sheet is fixed and
   // already fits.
@@ -341,6 +372,12 @@ export function AddBlockMenu({ options, onPick, icon, below = false, label = 'Ad
     if (nudge) el.style.setProperty('--nudge', `${nudge}px`);
   }, [open]);
   if (options.length === 0) return null;
+  const words = query.trim().toLowerCase();
+  const found = words ? options.filter(o => o.label.toLowerCase().includes(words)) : options;
+  const pick = (type: string) => {
+    close();
+    onPick(type);
+  };
   return (
     <span
       ref={ref}
@@ -361,30 +398,56 @@ export function AddBlockMenu({ options, onPick, icon, below = false, label = 'Ad
         aria-label={below ? 'Add a block below' : undefined}
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen(o => !o)}
+        onClick={() => (open ? close() : setOpen(true))}
       >
         {icon}
         {!below && label}
       </button>
       {open && (
         <span ref={panel} className="block-menu__panel" role="menu">
-          {options.map(o => (
-            <button
-              key={o.type}
-              type="button"
-              role="menuitem"
-              className="block-menu__item"
-              title={o.hint}
-              onClick={e => {
-                // Inside a card, a pick is not also a click on the card.
-                e.stopPropagation();
-                close();
-                onPick(o.type);
+          {options.length > FIND_OVER && (
+            <input
+              ref={find}
+              type="search"
+              className="block-menu__find"
+              placeholder="Find a block"
+              aria-label="Find a block"
+              enterKeyHint="go"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => {
+                if (e.key !== 'Enter' || !found[0]) return;
+                e.preventDefault();
+                pick(found[0].type);
               }}
-            >
-              {o.icon}
-              <span>{o.label}</span>
-            </button>
+            />
+          )}
+          {found.length === 0 && <span className="block-menu__none">No block by that name.</span>}
+          {grouped(found).map(([group, items]) => (
+            <span key={group} className="block-menu__group" role="group" aria-label={group || undefined}>
+              {group && (
+                <span className="block-menu__heading" aria-hidden>
+                  {group}
+                </span>
+              )}
+              {items.map(o => (
+                <button
+                  key={o.type}
+                  type="button"
+                  role="menuitem"
+                  className="block-menu__item"
+                  title={o.hint}
+                  onClick={e => {
+                    // Inside a card, a pick is not also a click on the card.
+                    e.stopPropagation();
+                    pick(o.type);
+                  }}
+                >
+                  {o.icon}
+                  <span>{o.label}</span>
+                </button>
+              ))}
+            </span>
           ))}
         </span>
       )}
