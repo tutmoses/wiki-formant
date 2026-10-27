@@ -28,6 +28,7 @@ import {
   memo,
   useCallback,
   useContext,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -315,12 +316,29 @@ export interface AddBlockMenuProps {
   label?: string;
 }
 
+/** The least gap, in px, between an open menu and the window's side. */
+const MENU_MARGIN = 8;
+
 /** An add button and its menu, which closes on a pick, a click outside it or Escape. Nothing to offer, no button. */
 export function AddBlockMenu({ options, onPick, icon, below = false, label = 'Add block' }: AddBlockMenuProps) {
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
   const ref = useClickOutside<HTMLSpanElement>(close);
   const trigger = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLSpanElement>(null);
+  // Hung off a button deep in a column, the panel can run past the window's
+  // edge: it moves back in by what it overhangs. A phone's sheet is fixed and
+  // already fits.
+  useLayoutEffect(() => {
+    const el = panel.current;
+    if (!el) return;
+    el.style.removeProperty('--nudge');
+    if (getComputedStyle(el).position === 'fixed') return;
+    const { left, right } = el.getBoundingClientRect();
+    const edge = document.documentElement.clientWidth - MENU_MARGIN;
+    const nudge = left < MENU_MARGIN ? MENU_MARGIN - left : right > edge ? edge - right : 0;
+    if (nudge) el.style.setProperty('--nudge', `${nudge}px`);
+  }, [open]);
   if (options.length === 0) return null;
   return (
     <span
@@ -348,7 +366,7 @@ export function AddBlockMenu({ options, onPick, icon, below = false, label = 'Ad
         {!below && label}
       </button>
       {open && (
-        <span className="block-menu__panel" role="menu">
+        <span ref={panel} className="block-menu__panel" role="menu">
           {options.map(o => (
             <button
               key={o.type}

@@ -756,7 +756,8 @@ pre:hover > .code-copy-btn,
   color: var(--ui-muted);
 }
 .block-toolbar__tools, .block-toolbar__actions { display: flex; align-items: center; gap: 0.125rem; }
-.block-toolbar__tools { opacity: 0; transition: opacity 150ms; }
+/* Kept right when an editor lets the toolbar wrap, as miow's narrow tab does. */
+.block-toolbar__tools { margin-left: auto; opacity: 0; transition: opacity 150ms; }
 :is(:hover, :focus-within, [data-selected]) > .block-toolbar > .block-toolbar__tools,
 .block-toolbar__tools:has([aria-expanded='true']) { opacity: 1; }
 @media (hover: none) { .block-toolbar__tools { opacity: 1; } }
@@ -779,7 +780,8 @@ pre:hover > .code-copy-btn,
 :is(.block-toolbar, .block-menu) svg { flex: none; width: 1rem; height: 1rem; }
 
 .block-menu { position: relative; display: inline-flex; }
-.block-list > .block-menu { align-self: center; }
+/* A list's foot button is centred under it, in a flex list or a plain one. */
+.block-menu:not([data-below]) { display: flex; width: fit-content; margin-inline: auto; }
 .block-add {
   display: inline-flex;
   align-items: center;
@@ -800,15 +802,16 @@ pre:hover > .code-copy-btn,
   z-index: 50;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  width: min(22rem, calc(100vw - 2rem));
+  width: min(24rem, calc(100vw - 2rem));
   padding: 0.25rem;
   background: var(--ui-surface);
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius);
   box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.25);
 }
-.block-menu:not([data-below]) > .block-menu__panel { left: 50%; translate: -50% 0; }
-.block-menu[data-below] > .block-menu__panel { right: 0; }
+.block-menu:not([data-below]) > .block-menu__panel { left: 50%; translate: calc(-50% + var(--nudge, 0px)) 0; }
+/* `--nudge` is what AddBlockMenu moves it by to keep it in the window. */
+.block-menu[data-below] > .block-menu__panel { right: 0; translate: var(--nudge, 0px) 0; }
 /* A phone has no room to hang it off a button deep in a column: it is a sheet
    along the foot of the screen. */
 @media (max-width: 40rem) {
@@ -826,10 +829,12 @@ pre:hover > .code-copy-btn,
   background: none;
   font: inherit;
   font-size: var(--ui-small);
+  line-height: 1.25;
   color: inherit;
   text-align: left;
   cursor: pointer;
 }
-.block-menu__item > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A long name takes a second line rather than losing its end. */
+.block-menu__item > span { min-width: 0; overflow-wrap: anywhere; }
 .block-menu__item svg { color: var(--ui-muted); }
 .block-menu__item:is(:hover, :focus-visible) { background: var(--ui-surface-2); outline: none; }
