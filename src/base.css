@@ -203,7 +203,7 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
 
 /* ---- the look of the package's components ----------------------------------
    The panels, lists, cards and rails the package's markup produces, drawn once
-   on eight tokens a site maps from its own palette in `:root`. Four
+   on the tokens a site maps from its own palette in `:root`. Four
    stylesheets had restated sixty of these classes with four vocabularies
    (`--corner`, `--radius`, `--radius-wing`; `--space`, `--spacing-md`,
    `--space-3`) and four bodies. A site that must differ overrides the rule;
@@ -212,6 +212,7 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
      :root {
        --ui-surface: var(--color-surface-1);   a card's background
        --ui-surface-2: var(--color-surface-2); a raised or hovered one
+       --ui-stripe: color-mix(in srgb, var(--color-text) 5%, transparent);  every other table row, over its cells
        --ui-border: var(--color-border);
        --ui-radius: var(--radius);
        --ui-pad: 1rem;                          a panel's padding
@@ -225,6 +226,7 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
 :root {
   --ui-surface: color-mix(in srgb, currentColor 6%, transparent);
   --ui-surface-2: color-mix(in srgb, currentColor 12%, transparent);
+  --ui-stripe: color-mix(in srgb, currentColor 5%, transparent);
   --ui-border: color-mix(in srgb, currentColor 20%, transparent);
   --ui-radius: 0.5rem;
   --ui-pad: 1rem;
@@ -252,6 +254,11 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
 /* Labels are short and values are the reading: 42% still fits "Published:". */
 .infobox th { width: 42%; font-weight: 600; color: var(--ui-muted); }
 .infobox tr:last-child :is(th, td) { border-bottom: 0; }
+/* Every table's body rows alternate, so a row reads across, the infobox's
+   included. The stripe is an image laid over the cell rather than a colour, so
+   it shows on whatever background a site gives its cells, and under a hover's.
+   The chart lays itself out in a table, and is not one. */
+tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linear-gradient(var(--ui-stripe), var(--ui-stripe)); }
 .infobox-facts { margin: 0; }
 .infobox-series { align-items: center; gap: 0.125rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--ui-border); text-align: center; font-size: var(--ui-small); color: var(--ui-muted); }
 .page-with-infobox { gap: 1.5rem; }
@@ -597,11 +604,15 @@ pre:hover > .code-copy-btn,
    `TimeChart`: the canvas, a loading or empty state over it, and the range and
    step buttons pinned to its top-left corner. A site gives the buttons and the
    box their look; pressed is all this marks. */
-.chart { position: relative; margin: 0; overflow: hidden; }
+.chart { position: relative; display: flex; flex-direction: column; margin: 0; overflow: hidden; container-type: inline-size; }
 /* Its own stacking context: the library's canvases stack themselves, and the buttons go over them. */
 .chart-canvas { position: relative; z-index: 0; height: var(--chart-height, 15rem); }
 /* The chart lays itself out in a <table>; a site's table styles are not for it. */
 .chart-canvas :is(table, tr, td) { background: none; border: 0; border-radius: 0; }
+/* It sizes the plot and leaves the axis column to fit its labels. The infobox's
+   fixed layout split what was left between the axis and an empty column, and
+   cut the axis to half its labels. */
+.chart-canvas table { table-layout: auto; }
 .chart-status { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; }
 .chart-controls {
   position: absolute;
@@ -622,6 +633,12 @@ pre:hover > .code-copy-btn,
 .chart-controls :is(button, a):is([aria-pressed='true'], [aria-checked='true'], [aria-current]) { opacity: 1; }
 /* A step the range cannot make stays in its place, and dims. */
 .chart-controls button:disabled { opacity: 0.3; cursor: default; pointer-events: none; }
+/* A narrow chart has no room over its plot: in the 306px of radix-wiki's
+   infobox the buttons ran across the price axis and wrapped onto the line. There
+   they take a row of their own above it, still over the loading and empty state. */
+@container (max-width: 30rem) {
+  .chart-controls { position: relative; top: auto; left: auto; order: -1; padding: 0.5rem 0.5rem 0; }
+}
 
 /* ---- Stats ----------------------------------------------------------------
    `--share` is a row's value over the largest in its list, 0 to 1. Bars take
