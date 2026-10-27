@@ -331,11 +331,12 @@ export function AddBlockMenu({ options, onPick, icon, below = false, label = 'Ad
   // already fits.
   useLayoutEffect(() => {
     const el = panel.current;
-    if (!el) return;
+    const view = el?.ownerDocument.defaultView;
+    if (!el || !view) return;
     el.style.removeProperty('--nudge');
-    if (getComputedStyle(el).position === 'fixed') return;
+    if (view.getComputedStyle(el).position === 'fixed') return;
     const { left, right } = el.getBoundingClientRect();
-    const edge = document.documentElement.clientWidth - MENU_MARGIN;
+    const edge = el.ownerDocument.documentElement.clientWidth - MENU_MARGIN;
     const nudge = left < MENU_MARGIN ? MENU_MARGIN - left : right > edge ? edge - right : 0;
     if (nudge) el.style.setProperty('--nudge', `${nudge}px`);
   }, [open]);
