@@ -300,7 +300,7 @@ export interface DigestDay {
   visitors: number;
   pageviews: number;
   visits: number;
-  /** Visits that saw one page. */
+  /** Visits that saw one page and did nothing else: a search, a click out or any reader event makes it a visit. */
   bounces: number;
   /** Seconds from each visit's first view to its last, summed. */
   seconds: number;
@@ -313,7 +313,7 @@ export interface DigestDay {
 export interface Digest {
   visitors: number;
   pageviews: number;
-  /** Percent of visits that saw one page; null with no visits. */
+  /** Percent of visits that are bounces (`DigestDay.bounces`); null with no visits. */
   bounce_rate: number | null;
   /** Mean seconds from a visit's first view to its last; null with no visits. */
   visit_duration: number | null;
@@ -415,6 +415,10 @@ export async function digest(
     ), e${s} AS (
       SELECT name, props, visitor, "createdAt" AS at FROM "Event" WHERE "siteId" = $1 AND ${at}
       ${tests.length ? `AND visitor IN (SELECT visitor FROM v${s})` : ''}
+    ), bounced${s} AS (
+      SELECT * FROM visits${s} b WHERE views = 1 AND NOT EXISTS (
+        SELECT 1 FROM e${s} x WHERE x.visitor = b.visitor AND x.name NOT IN ('AI Bot Visit', 'MCP Call')
+        AND x.at >= b.at AND x.at < b.at + interval '30 minutes')
     ), ag${s} AS (
       SELECT visitor, at, ${AGENT_NAME} AS agent FROM e${s}
       WHERE name IN ('AI Bot Visit', 'MCP Call') AND visitor IS NOT NULL AND NOT ${ours}
@@ -422,7 +426,7 @@ export async function digest(
       SELECT * FROM "ViewDay" WHERE "siteId" = $1 AND day >= ${dayAgo(back + 1)}${back ? ` AND day < ${dayAgo(back)}` : ''}${tests.length ? ' AND false' : ''}
     ), sessions${s} AS (
       SELECT sum(bounces) AS bounces, sum(visits) AS visits, sum(seconds) AS seconds FROM (
-        SELECT count(*) FILTER (WHERE views = 1), count(*), coalesce(sum(seconds), 0) FROM visits${s}
+        SELECT (SELECT count(*) FROM bounced${s}), count(*), coalesce(sum(seconds), 0) FROM visits${s}
         UNION ALL SELECT coalesce(sum(bounces), 0), coalesce(sum(visits), 0), coalesce(sum(seconds), 0) FROM a${s}
       ) t(bounces, visits, seconds)
     ), archived${s} AS (
@@ -457,7 +461,8 @@ export async function digest(
         `SELECT date, sum(visitors) AS visitors, sum(pageviews) AS pageviews, sum(visits) AS visits, sum(bounces) AS bounces,
           sum(seconds) AS seconds, sum(agents) AS agents, sum(everyone) AS visitors_incl_agents, sum(follows) AS follow_clicks FROM (
           SELECT ${day('at')}, count(DISTINCT visitor), count(*), 0, 0, 0, 0, 0, 0 FROM v GROUP BY 1
-          UNION ALL SELECT ${day('at')}, 0, 0, count(*), count(*) FILTER (WHERE views = 1), coalesce(sum(seconds), 0), 0, 0, 0 FROM visits GROUP BY 1
+          UNION ALL SELECT ${day('at')}, 0, 0, count(*), 0, coalesce(sum(seconds), 0), 0, 0, 0 FROM visits GROUP BY 1
+          UNION ALL SELECT ${day('at')}, 0, 0, 0, count(*), 0, 0, 0, 0 FROM bounced GROUP BY 1
           UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, count(DISTINCT visitor), 0, 0 FROM ag GROUP BY 1
           UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, 0, count(DISTINCT visitor), 0 FROM (SELECT at, visitor FROM v UNION ALL SELECT at, visitor FROM ag) u GROUP BY 1
           ${follows ? `UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, 0, 0, count(*) FROM e WHERE ${follows} GROUP BY 1` : ''}

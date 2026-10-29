@@ -389,7 +389,10 @@ export function scrollTables(html: string): string {
 let beaconEndpoint = '/api/view';
 let beaconStarted = false;
 
-const sendBeacon = (body: object) => navigator.sendBeacon?.(beaconEndpoint, JSON.stringify(body));
+// A browser under automation (Puppeteer, Playwright, Selenium) sets
+// `navigator.webdriver`: a crawler that runs scripts, whose user agent the bot
+// pattern cannot tell from a reader's, so it sends nothing at all.
+const sendBeacon = (body: object) => navigator.webdriver || navigator.sendBeacon?.(beaconEndpoint, JSON.stringify(body));
 
 /**
  * Report each page view to the site's own `endpoint`, whose route hands it to

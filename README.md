@@ -957,7 +957,10 @@ An agent is counted as a visitor is, one address and user agent a day, from its
 `AI Bot Visit` and `MCP Call` events; it runs no page script, so it is never
 among the visitors, and `visitors_incl_agents` counts the two at once.
 `ownAgents` leaves the site's own out of both. A visit is a run of one
-visitor's views with no gap over 30 minutes. A multi-tenant app passes a `site`
+visitor's views with no gap over 30 minutes, and a bounce is a visit of one view
+with no event of the reader's inside it: a search that keeps the path, a click
+out or a share makes the visit count. A browser under automation
+(`navigator.webdriver`) sends no beacon at all. A multi-tenant app passes a `site`
 key to every call and a `site` resolver to `collect`.
 
 Instrumenting the agent lane and not the human one is the easy mistake: it
