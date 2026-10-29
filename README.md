@@ -1084,7 +1084,8 @@ which no total makes sense of. A stepped range starts on a whole week or month,
 so its first point is not a few days of one; the week in progress is its total
 so far. `fromZero` starts a count's axis at zero and stops it there, with
 no negative ticks under it. A single range draws no range buttons and shows every point.
-`chartSteps` is exported for a chart drawn elsewhere.
+No step is finer than the points' own spacing, so weekly readings offer W and M
+and draw on the days they were taken. `chartSteps` is exported for a chart drawn elsewhere.
 
 `format` writes the axis and the crosshair label. An axis tick also gets the
 spacing between ticks as a second argument, so a formatter can write every tick
@@ -1093,13 +1094,15 @@ decimal places that takes, and `formatChartValue`, the default, uses it.
 
 `markers` are events, `{ time, label }`, each drawn as an arrow on the last
 point at or before it, so one mid-week lands on its week and two on one point
-share it. `step` opens on a step where the
-range can make it, and `onView` hears the range and step on mount and on every
-change, for a page that keeps them in its URL:
+share it. No words go on the plot: the label is a tooltip (`.chart-tip`) while
+the crosshair is on the point, one line an event, so it can be the event's full
+name. `step` opens on a step where the range can make it, and `onView` hears the
+range, and the step the reader picked (null while the chart picks its own), once
+the points are in and on every change, for a page that keeps them in its URL:
 
 ```tsx
 <TimeChart series={days} label="Transactions" aggregate="sum" fromZero
-  markers={[{ time: haltAt, label: 'Halt' }]} step="month" onView={v => keep(v)} />
+  markers={[{ time: haltAt, label: 'Network halt' }]} step="month" onView={v => keep(v)} />
 ```
 `base.css` pins the buttons (`.chart-controls button[aria-pressed]`) to the
 canvas's top-left corner, rules a line between groups and dims a disabled step;

@@ -8,8 +8,9 @@
 // loaded on mount, so the page paints without it. Every colour is the canvas
 // box's own `color`, its axis `--chart-axis`, and a candle `--chart-up` or
 // `--chart-down`, each if set. A count's line is curved; a price's is straight,
-// since a curve between two closes draws prices nobody paid. Events are markers
-// on the point they fall in, so a spike carries the reason for it.
+// since a curve between two closes draws prices nobody paid. Events are marks
+// on the point they fall in, named in a tooltip over it, so a spike carries the
+// reason for it without words across the plot.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AutoscaleInfo, IChartApi, ISeriesApi, ISeriesMarkersPluginApi, LineType, SeriesMarker, Time, UTCTimestamp } from 'lightweight-charts';
@@ -26,9 +27,9 @@ export type ChartResolution = 'hour' | '4h' | 'day';
 export type ChartStep = 'day' | 'week' | 'month';
 /** Points by resolution, from `from` (Unix seconds, 0 for all time), oldest first. */
 export type ChartLoader = (resolution: ChartResolution, from: number) => Promise<readonly ChartPoint[]>;
-/** Something that happened at a time, in Unix seconds, drawn on the point that holds it. */
+/** Something that happened at a time, in Unix seconds, marked on the point that holds it; `label` is its tooltip. */
 export type ChartMarker = { time: number; label: string };
-/** The range and step a reader has picked, for a page that keeps them in its URL. */
+/** The range and step a reader has picked, for a page that keeps them in its URL; `step` is null while the chart picks its own. */
 export type ChartView = { range: ChartRange; step: ChartStep | null };
 /** How a week or month is made from its days: a price's last, a count's total, a rate's mean. */
 export type ChartAggregate = 'last' | 'sum' | 'mean';
@@ -54,10 +55,22 @@ const STEPS: readonly ChartStep[] = ['day', 'week', 'month'];
 export const CHART_RANGES: readonly ChartRange[] = ['24h', '7d', '30d', '90d', '1y', 'all'];
 const DAILY_RANGES: readonly ChartRange[] = ['30d', '90d', '1y', 'all'];
 
-/** A step is offered once it makes four points, and the default is the finest that makes 200 or fewer. */
-export function chartSteps(span: number): { steps: ChartStep[]; fallback: ChartStep } {
-  const steps = STEPS.filter(s => s === 'day' || span / STEP[s].span >= 4);
+/**
+ * A step is offered once it makes four points, and the default is the finest that
+ * makes 200 or fewer. None is finer than the points' own `spacing`: weekly readings
+ * have no day.
+ */
+export function chartSteps(span: number, spacing = DAY): { steps: ChartStep[]; fallback: ChartStep } {
+  const fine = STEPS.filter(s => STEP[s].span >= spacing * 0.9);
+  const finest = fine[0] ?? 'month';
+  const steps = STEPS.filter(s => s === finest || (fine.includes(s) && span / STEP[s].span >= 4));
   return { steps, fallback: steps.find(s => span / STEP[s].span <= 200) ?? steps.at(-1)! };
+}
+
+/** The points' own spacing: the median gap, so a missing day or a skipped week does not change it. */
+function spacing(points: readonly ChartPoint[]): number {
+  const gaps = points.slice(1).map((p, i) => p.time - points[i]!.time).sort((a, b) => a - b);
+  return gaps[Math.floor(gaps.length / 2)] ?? DAY;
 }
 
 /** The UTC day, Monday or first of the month a time falls in. */
@@ -101,7 +114,7 @@ export function bucketChart(points: readonly ChartPoint[], step: ChartStep, aggr
 
 /**
  * Markers on the points drawn: each on the last point at or before it, so one
- * mid-week sits on its week. Markers on one point share it, labels joined; one
+ * mid-week sits on its week. Markers on one point share it, a label a line; one
  * before the first point or after the last point's step is left off.
  *
  * @internal
@@ -119,7 +132,7 @@ export function placeMarkers(markers: readonly ChartMarker[], shown: readonly Ch
     const time = shown[i]!.time;
     placed.set(time, [...(placed.get(time) ?? []), m.label]);
   }
-  return [...placed].map(([time, labels]) => ({ time, label: labels.join(' · ') }));
+  return [...placed].map(([time, labels]) => ({ time, label: labels.join('\n') }));
 }
 
 const isCandle = (p: ChartPoint) => p.open !== undefined && p.high !== undefined && p.low !== undefined;
@@ -193,7 +206,7 @@ export interface TimeChartProps {
    * window links, which load another digest rather than slice this one.
    */
   controls?: ReactNode;
-  /** Events drawn on the points that hold them. */
+  /** Events marked on the points that hold them, each named in a tooltip. */
   markers?: readonly ChartMarker[];
   /** The step shown first, where the range can make it. */
   step?: ChartStep;
@@ -251,6 +264,9 @@ export function TimeChart({
   const [step, setStep] = useState<ChartStep | null>(initialStep ?? null);
   const [candles, setCandles] = useState(initialCandles);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  // The marker under the crosshair, at the cursor, in the box's pixels.
+  const [tip, setTip] = useState<{ x: number; y: number; label: string } | null>(null);
+  const placed = useRef(new Map<number, string>());
   const resolution = RANGE[range].resolution;
 
   useEffect(() => {
@@ -313,6 +329,10 @@ export function TimeChart({
         wickUpColor: up,
         wickDownColor: down,
         priceFormat,
+      });
+      api.subscribeCrosshairMove(({ time, point }) => {
+        const label = time === undefined || !point ? undefined : placed.current.get(time as number);
+        setTip(label ? { x: point!.x, y: point!.y, label } : null);
       });
       // The chart cannot be scrolled or zoomed, so every size it takes shows every point,
       // the first included: data drawn before autoSize has measured the box fits nothing.
@@ -391,9 +411,10 @@ export function TimeChart({
       volume: shown.some(p => p.volume !== undefined),
     });
     if (resolution !== 'day' || !windowed.length) return drawn(windowed, [], null);
-    const { steps, fallback } = chartSteps(end - windowed[0]!.time);
+    const { steps, fallback } = chartSteps(end - windowed[0]!.time, spacing(points));
     const chosen = step && steps.includes(step) ? step : fallback;
-    if (chosen === 'day') return drawn(windowed, steps, chosen);
+    // The points' own step draws them as they are: a Sunday's reading stays on its Sunday.
+    if (chosen === steps[0]) return drawn(windowed, steps, chosen);
     // A stepped range starts on a whole week or month, so its first total is not a few days of one.
     const from = bucketStart(windowed[0]!.time, chosen);
     return drawn(bucketChart(points.filter(p => p.time >= from), chosen, aggregate), steps, chosen);
@@ -429,22 +450,20 @@ export function TimeChart({
         return { time: time(p), value: p.volume ?? 0, color: (rising ? c.up : c.down).replace(/[\d.]+\)$/, '0.5)') };
       }),
     );
-    const drawn: SeriesMarker<Time>[] = placeMarkers(markers ?? [], shown, view?.step ?? null).map(m => ({
-      time: time(m),
-      position: 'aboveBar',
-      shape: 'arrowDown',
-      color: c.ink,
-      text: m.label,
-    }));
+    const marks = placeMarkers(markers ?? [], shown, view?.step ?? null);
+    placed.current = new Map(marks.map(m => [m.time, m.label]));
+    const drawn: SeriesMarker<Time>[] = marks.map(m => ({ time: time(m), position: 'aboveBar', shape: 'arrowDown', color: c.ink }));
     c.areaMarkers.setMarkers(asCandles ? [] : drawn);
     c.candleMarkers.setMarkers(asCandles ? drawn : []);
     c.api.timeScale().fitContent();
   }, [ready, source, view, candles, markers]);
 
-  const shownStep = view?.step ?? null;
+  // Reported once there are points to step, so a step read from a URL is not cleared while they load.
+  const shown = !!view;
+  const picked = step && step === view?.step ? step : null;
   useEffect(() => {
-    onViewRef.current?.({ range, step: shownStep });
-  }, [range, shownStep]);
+    if (shown) onViewRef.current?.({ range, step: picked });
+  }, [shown, range, picked]);
 
   // The steps always show where a range is drawn by day, so the buttons do not jump about; one
   // the range cannot make (any, under 24H and 7D) is disabled.
@@ -454,6 +473,20 @@ export function TimeChart({
   return (
     <figure className={className ? `chart ${className}` : 'chart'}>
       <div ref={box} className="chart-canvas" role="img" aria-label={label} style={height ? { height } : undefined} />
+      {tip && box.current && (
+        // Over the cursor, or under it near the top; growing away from the nearer side.
+        <span
+          className="chart-tip"
+          role="tooltip"
+          style={{
+            top: box.current.offsetTop + tip.y,
+            ...(tip.x < box.current.clientWidth / 2 ? { left: tip.x } : { right: box.current.clientWidth - tip.x }),
+            translate: tip.y < 48 ? '0 1rem' : '0 calc(-100% - 0.75rem)',
+          }}
+        >
+          {tip.label}
+        </span>
+      )}
       {(!ready || (!points && !status)) && <div className="chart-status skeleton" aria-hidden />}
       {status && <p className="chart-status">{status}</p>}
       {(controls || ranges.length > 1 || daily || view?.ohlc) && (

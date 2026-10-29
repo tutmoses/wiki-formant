@@ -614,6 +614,20 @@ pre:hover > .code-copy-btn,
    cut the axis to half its labels. */
 .chart-canvas table { table-layout: auto; }
 .chart-status { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; }
+/* An event's name, over the mark the crosshair is on, in the colours of the axis labels. */
+.chart-tip {
+  position: absolute;
+  z-index: 2;
+  max-width: 50%;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  white-space: pre-line;
+  color: var(--ui-on-accent);
+  background: var(--ui-accent);
+  border-radius: calc(var(--ui-radius) / 2);
+  pointer-events: none;
+}
 .chart-controls {
   position: absolute;
   top: 0.5rem;

@@ -46,6 +46,12 @@ test('a step is offered once it makes four points; the default makes 200 or fewe
   assert.deepEqual(chartSteps(5 * 365 * DAY), { steps: ['day', 'week', 'month'], fallback: 'month' });
 });
 
+test('no step is finer than the points: weekly readings have no day', () => {
+  assert.deepEqual(chartSteps(70 * DAY, 7 * DAY), { steps: ['week'], fallback: 'week' });
+  assert.deepEqual(chartSteps(21 * DAY, 7 * DAY), { steps: ['week'], fallback: 'week' });
+  assert.deepEqual(chartSteps(365 * DAY, 7 * DAY), { steps: ['week', 'month'], fallback: 'week' });
+});
+
 test('values are compact from a thousand and four figures below', () => {
   assert.equal(formatChartValue(1234567), '1.23M');
   assert.equal(formatChartValue(0.012345), '0.01235');
@@ -79,7 +85,7 @@ test('a marker sits on the point that holds it; two on one point share it', () =
     { time: at('2026-09-29'), label: 'B' },
     { time: at('2026-10-05'), label: 'C' },
   ], weekly, 'week'), [
-    { time: at('2026-09-28'), label: 'B · A' },
+    { time: at('2026-09-28'), label: 'B\nA' },
     { time: at('2026-10-05'), label: 'C' },
   ]);
 });
