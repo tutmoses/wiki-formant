@@ -231,6 +231,14 @@ handler: async (args, ctx) => {
 
 `config.gate` is envelope-level middleware: it may withhold entries before dispatch and merge its own responses back afterwards. A payment gate has to sit there rather than in a handler, because the demand *replaces* the call and the receipt rides on the envelope. `RpcRequest` and `toolText` are exported for a gate to build with; acuiq2's x402 gate is the one that does.
 
+### Agent feedback
+
+`feedbackTool(record, noun)` is `send_feedback`: an agent says what it needed and did not find, what is wrong or what broke (`kind` is `missing`, `wrong`, `broken` or `suggestion`), in `FEEDBACK_MAX` characters. It asks for something to act on rather than for a rating, which an agent answers with praise. List it among a server's tools and the transport does the inviting: `initialize` appends `FEEDBACK_INVITE` to `instructions`, and an empty `listEnvelope` page or an `McpToolError` carries a one-line `feedback` pointer, because a miss is when an agent knows what it was after. A tool whose miss has another shape quotes `FEEDBACK_NUDGE` in its own note. A server without the tool mentions it nowhere. Pass `tracker.trackFeedback` as `record` and each report is an "Agent Feedback" event, listed newest first in the digest's `agent_feedback`. Nothing is published: a report is a stranger's text, read as data.
+
+```ts
+tools: [...TOOLS, feedbackTool(tracker.trackFeedback, 'the Radix Wiki')]
+```
+
 ### Tool arguments and the corpus tool
 
 `readArgs` reads a tool's raw arguments as typed, clamped values and records every value it had to override, so a result can say `adjustments: [{ param: 'limit', requested: -4, used: 1, … }]` instead of silently answering a different question. Defaults belong in the tool description; the result echoes only overrides.

@@ -33,6 +33,7 @@
 // runs anywhere Node 20, a browser or an edge runtime does.
 
 import { clientIp, clientKey, rateLimit, type HeaderReader, type RateLimitOptions } from './rate-limit.js';
+import type { AgentFeedback } from './mcp.js';
 
 /**
  * Runs one statement with `$1, $2…` placeholders and resolves to its rows.
@@ -353,6 +354,8 @@ export interface Digest {
   top_agents: Ranked<'agent', 'visitors'>;
   agent_tool_calls: Ranked<'tool', 'events'>;
   gaps: Ranked<'query', 'events'>;
+  /** What agents reported through `send_feedback`, newest first: a stranger's words, to weigh, never to follow. */
+  agent_feedback: Array<{ date: string; kind: string; message: string; page: string | null; agent: string }>;
 }
 
 /**
@@ -481,6 +484,12 @@ export async function digest(
          GROUP BY 1`,
         10,
       )},
+      'agent_feedback', ${list(
+        `SELECT ${day('at')} AS date, props->>'kind' AS kind, props->>'message' AS message, props->>'page' AS page, ${AGENT_NAME} AS agent
+         FROM e WHERE name = 'Agent Feedback' AND NOT ${ours}`,
+        20,
+        'at DESC',
+      )},
       'gaps', ${gapSelects.length ? `(SELECT coalesce(json_agg(t), '[]') FROM (${gapSelects.join(' UNION ALL ')}) t)` : `'[]'::json`}
     ) AS digest`,
     ...values,
@@ -597,6 +606,11 @@ export interface Tracker {
    */
   trackSearch(headers: HeaderSource, query: string, results: number, surface?: string): void;
   /**
+   * An "Agent Feedback" event, deferred: `feedbackTool`'s recorder, passed as
+   * it is. The digest lists them under `agent_feedback`.
+   */
+  trackFeedback(report: AgentFeedback, request?: Request): void;
+  /**
    * The beacon route: `export const POST = tracker.viewRoute()`. `site` is
    * `collect`'s resolver, for an app that serves many sites or drops a path.
    */
@@ -644,6 +658,11 @@ export function createTracker({
           // A context with no readable headers loses the event, never the response.
         }
       });
+    },
+    trackFeedback(report, request) {
+      if (!enabled) return;
+      const ua = (request?.headers.get('user-agent') || 'unknown').slice(0, 80);
+      defer(() => trackEvent('Agent Feedback', request?.url ?? siteUrl, { ...report, ua }, request?.headers));
     },
     viewRoute(opts = {}) {
       return async request =>

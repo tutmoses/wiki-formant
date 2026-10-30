@@ -336,6 +336,23 @@ test('a tracker defers the MCP and search events and files a search under its re
   ]);
 });
 
+test('a feedback report is an Agent Feedback event, with the agent that sent it', async () => {
+  const { sql, inserts } = fakeSql();
+  const tasks = [];
+  const t = createTracker({ sql, defer: f => tasks.push(f), enabled: true });
+  t.trackFeedback({ kind: 'missing', message: 'no page on fees', page: 'dev/fees' }, new Request('https://a.test/api/mcp', { headers: headers() }));
+  for (const f of tasks) await f();
+  const [event] = inserts('Event').map(e => [e.values[1], e.values[2], JSON.parse(e.values[3])]);
+  assert.deepEqual(event, ['Agent Feedback', '/api/mcp', { kind: 'missing', message: 'no page on fees', page: 'dev/fees', ua: 'Mozilla/5.0 (iPhone) Mobile' }]);
+});
+
+test('the digest lists agent feedback newest first, the site\'s own left out', async () => {
+  const { sql, calls } = fakeSql();
+  await digest(sql, { days: 7 });
+  const { query } = calls.at(-1);
+  assert.match(query, /'agent_feedback', \(SELECT coalesce\(json_agg\(t\), '\[\]'\) FROM \(SELECT .* FROM e WHERE name = 'Agent Feedback' AND NOT coalesce\(props->>'ua', ''\) ILIKE ANY\(\$\d+::text\[\]\)\s+ORDER BY at DESC LIMIT 20\) t\)/s);
+});
+
 test('the view route passes a site resolver through to collect', async () => {
   const { sql } = fakeSql();
   const tasks = [];

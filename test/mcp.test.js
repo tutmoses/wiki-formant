@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  mcpResponse, mcpGet, mcpOptions, handleMcp, McpToolError,
+  mcpResponse, mcpGet, mcpOptions, handleMcp, McpToolError, feedbackTool, FEEDBACK_INVITE, FEEDBACK_MAX,
   MCP_LEGACY_PROTOCOL_VERSION, MCP_META, MCP_MODERN_VERSIONS, MCP_PROTOCOL_VERSIONS,
 } from 'wiki-formant/mcp';
 import { resetRateLimits } from 'wiki-formant/rate-limit';
@@ -646,4 +646,50 @@ test('a handler that returns nothing still answers with text', async () => {
   const quiet = { ...config, tools: [{ name: 'noop', description: 'd', inputSchema: { type: 'object', properties: {} }, handler: async () => undefined }] };
   const { result } = await handleMcp(rpc('tools/call', { name: 'noop', arguments: {} }), quiet);
   assert.equal(result.content[0].text, 'null');
+});
+
+test('send_feedback records a report, and a server listing it invites one on every miss', async () => {
+  const reports = [];
+  const heard = {
+    ...config,
+    tools: [
+      ...config.tools,
+      { name: 'find', description: 'An empty listing.', inputSchema: { type: 'object', properties: {} }, handler: async () => ({ total: 0, page: 1, pages: [] }) },
+      feedbackTool((report, request) => reports.push({ report, url: request?.url }), 'the test wiki'),
+    ],
+  };
+  const call = body => mcpResponse(new Request('https://x/api/mcp', { method: 'POST', body: JSON.stringify(body) }), heard).then(r => r.json());
+
+  const { result: init } = await call(rpc('initialize'));
+  assert.equal(init.instructions, `Call search first.\n\n${FEEDBACK_INVITE}`);
+
+  const { result: miss } = await call(rpc('tools/call', { name: 'find', arguments: {} }));
+  assert.match(miss.structuredContent.feedback, /send_feedback/);
+  const { result: refused } = await call(rpc('tools/call', { name: 'boom', arguments: {} }));
+  assert.match(JSON.parse(refused.content[0].text).feedback, /send_feedback/);
+  const { result: found } = await call(rpc('tools/call', { name: 'search', arguments: { q: 'x' } }));
+  assert.equal(found.structuredContent.feedback, undefined);
+
+  const long = 'a  b '.repeat(100);
+  const { result: sent } = await call(rpc('tools/call', { name: 'send_feedback', arguments: { kind: 'missing', message: long, page: 'dev/x' } }));
+  assert.deepEqual(sent.structuredContent, { recorded: true, keptChars: FEEDBACK_MAX });
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].url, 'https://x/api/mcp');
+  assert.equal(reports[0].report.kind, 'missing');
+  assert.equal(reports[0].report.page, 'dev/x');
+  assert.equal(reports[0].report.message.length, FEEDBACK_MAX);
+  assert.doesNotMatch(reports[0].report.message, /  /);
+
+  const { result: bad } = await call(rpc('tools/call', { name: 'send_feedback', arguments: { kind: 'praise', message: 'great' } }));
+  assert.equal(bad.isError, true);
+  assert.match(bad.content[0].text, /missing.*wrong.*broken.*suggestion/);
+  const { result: empty } = await call(rpc('tools/call', { name: 'send_feedback', arguments: { kind: 'wrong', message: '  ' } }));
+  assert.equal(empty.isError, true);
+  assert.equal(JSON.parse(empty.content[0].text).feedback, undefined);
+  assert.equal(reports.length, 1);
+});
+
+test('a server without send_feedback mentions it nowhere', async () => {
+  const { result } = await (await post(rpc('tools/call', { name: 'boom', arguments: {} }))).json();
+  assert.equal(JSON.parse(result.content[0].text).feedback, undefined);
 });

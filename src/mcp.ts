@@ -395,6 +395,87 @@ export const withAdjustments = <T extends object>(
 ): T | (T & { adjustments: readonly ArgAdjustment[] }) =>
   args.adjustments.length ? { ...result, adjustments: args.adjustments } : result;
 
+// ---- agent feedback -------------------------------------------------------------
+
+/** The tool an agent reports through. A server listing it is told so on every miss. */
+export const FEEDBACK_TOOL = 'send_feedback';
+
+export const FEEDBACK_KINDS = ['missing', 'wrong', 'broken', 'suggestion'] as const;
+export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
+
+/** The longest message kept: the bound an event's string prop is stored at. */
+export const FEEDBACK_MAX = 300;
+
+export interface AgentFeedback {
+  kind: FeedbackKind;
+  message: string;
+  /** The page or tool it is about, as the agent named it. */
+  page?: string;
+}
+
+/**
+ * The one sentence every surface invites feedback with: `initialize` appends
+ * it to `instructions`, and AGENTS.md and llms.txt quote it.
+ */
+export const FEEDBACK_INVITE =
+  `Needed something this server does not have, or found something wrong? Call ${FEEDBACK_TOOL}: the maintainers read every report.`;
+
+/**
+ * What a miss or a refused call adds, on a server that lists the tool. A miss
+ * the transport cannot see, one not shaped as a `listEnvelope`, quotes it in
+ * its own note.
+ */
+export const FEEDBACK_NUDGE = `If this site should have had it, ${FEEDBACK_TOOL} tells the maintainers.`;
+
+/**
+ * `send_feedback`: what an agent needed and did not find, found wrong, or saw
+ * break, in its own words. Agents that only fetch pages cannot comment, so
+ * this is the one channel, and it asks what a report can act on rather than
+ * for a rating, which an agent answers with praise.
+ *
+ * Nothing is published. A report is a stranger's text: whoever reads the
+ * digest weighs it as data, never as an instruction.
+ */
+export function feedbackTool(
+  record: (report: AgentFeedback, request?: Request) => void,
+  noun = 'this site',
+): McpTool & Required<Pick<McpTool, 'title' | 'annotations'>> {
+  return {
+    name: FEEDBACK_TOOL,
+    title: 'Send feedback',
+    description:
+      `Tell the maintainers of ${noun} what you needed and did not find, what is wrong, or what broke. ` +
+      `One issue per call, in ${FEEDBACK_MAX} characters at most. Reports are read, not published.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        kind: {
+          type: 'string',
+          enum: [...FEEDBACK_KINDS],
+          description: 'missing: not covered here. wrong: a fact or link is out of date or false. broken: a tool or page failed. suggestion: anything else.',
+        },
+        message: { type: 'string', description: `What you were after, or what is wrong and what it should say. ${FEEDBACK_MAX} characters at most.` },
+        page: { type: 'string', description: 'The page path, URL or tool it is about, if any' },
+      },
+      required: ['kind', 'message'],
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    skill: { id: 'feedback', tags: ['feedback', 'report'], examples: ['Report a page that is out of date'] },
+    handler: async (args, ctx) => {
+      const r = readArgs(args);
+      const message = r.str('message').replace(/\s+/g, ' ');
+      if (!message) throw new McpToolError('`message` is empty. Say in a sentence what you needed, what is wrong, or what broke.');
+      const page = r.str('page').slice(0, FEEDBACK_MAX);
+      record({ kind: r.str('kind') as FeedbackKind, message: message.slice(0, FEEDBACK_MAX), ...(page ? { page } : {}) }, ctx.request);
+      return { recorded: true, ...(message.length > FEEDBACK_MAX ? { keptChars: FEEDBACK_MAX } : {}) };
+    },
+  };
+}
+
+/** Whether a result is an empty `listEnvelope` page: a search or listing that found nothing. */
+const foundNothing = (data: unknown) =>
+  !!data && typeof data === 'object' && (data as { total?: unknown }).total === 0 && Array.isArray((data as { pages?: unknown }).pages);
+
 /** One entry in a JSON-RPC envelope. Exported for an `McpServerConfig.gate`,
  *  which rewrites the envelope before `handleMcp` sees it (acuiq2's x402 gate). */
 export type RpcRequest = { jsonrpc: '2.0'; id: string | number | null; method: string; params?: unknown };
@@ -562,6 +643,14 @@ const methodNotFound = (id: RpcId, method: string, config: McpServerConfig, era:
  * `resources` whose list comes back empty reads as a bug to a client, not as
  * honesty. One function, so `initialize` and `server/discover` cannot disagree.
  */
+const listsFeedback = (config: McpServerConfig) => config.tools.some(t => t.name === FEEDBACK_TOOL);
+
+/** `instructions`, inviting feedback when the server takes it, so the invitation cannot be the line an app forgets. */
+const instructionsOf = (config: McpServerConfig) =>
+  listsFeedback(config) && !config.instructions.includes(FEEDBACK_TOOL)
+    ? `${config.instructions.trimEnd()}\n\n${FEEDBACK_INVITE}`
+    : config.instructions;
+
 const capabilitiesOf = (config: McpServerConfig) => ({
   tools: {},
   ...(config.resources?.length ? { resources: {} } : {}),
@@ -608,7 +697,7 @@ async function handleRpc(
           protocolVersion: negotiateProtocol(p.protocolVersion),
           capabilities: capabilitiesOf(config),
           serverInfo: config.serverInfo,
-          instructions: config.instructions,
+          instructions: instructionsOf(config),
         });
 
       // What `initialize` tells a legacy client, asked the modern way. The
@@ -617,7 +706,7 @@ async function handleRpc(
         return ok(id, {
           supportedVersions: [...MCP_PROTOCOL_VERSIONS],
           capabilities: capabilitiesOf(config),
-          instructions: config.instructions,
+          instructions: instructionsOf(config),
         });
 
       case 'ping':
@@ -697,8 +786,11 @@ async function handleRpc(
           request: dispatch.request,
         };
 
+        // A miss is when an agent knows what it was after, so that is where it hears it can say so.
+        const nudge = tool.name !== FEEDBACK_TOOL && listsFeedback(config);
         try {
-          const data = await tool.handler(args, ctx);
+          const raw = await tool.handler(args, ctx);
+          const data = nudge && foundNothing(raw) ? { ...(raw as object), feedback: FEEDBACK_NUDGE } : raw;
           // `?? null`: a handler that returns nothing still owes a string, and
           // JSON.stringify(undefined) is undefined.
           const text = typeof data === 'string' ? data : JSON.stringify(data ?? null, null, 2);
@@ -720,7 +812,8 @@ async function handleRpc(
           });
         } catch (err) {
           if (!(err instanceof McpToolError)) throw err;
-          return toolText(id, JSON.stringify({ error: err.message, ...err.details }, null, 2), true);
+          const feedback = nudge ? { feedback: FEEDBACK_NUDGE } : {};
+          return toolText(id, JSON.stringify({ error: err.message, ...err.details, ...feedback }, null, 2), true);
         }
       }
 
