@@ -31,8 +31,8 @@ import { formatDay } from './freshness.js';
 /**
  * The shape a router's link component has to satisfy here.
  *
- * Deliberately the intersection the three rails and three facet bars actually
- * use, not a re-declaration of `AnchorHTMLAttributes`: a wider surface would
+ * Deliberately the intersection the three rails, three facet bars and the stats
+ * page actually use, not a re-declaration of `AnchorHTMLAttributes`: a wider surface would
  * let a consumer pass something `next/link` accepts and a bare `<a>` silently
  * drops. `next/link` satisfies this as it stands.
  */
@@ -43,6 +43,9 @@ export interface WikiLinkProps {
   'aria-current'?: 'true' | 'page' | undefined;
   /** `prev`/`next` on the foot nav — the half that makes the pair machine-readable. */
   rel?: string;
+  /** `switch`, with `aria-checked`, on the stats page's toggle between two views. */
+  role?: string;
+  'aria-checked'?: boolean;
   children?: ReactNode;
 }
 

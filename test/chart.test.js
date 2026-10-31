@@ -38,18 +38,19 @@ test("a count's week is the total of its days; a rate's, their mean", () => {
   assert.deepEqual(bucketChart(points, 'week', 'mean').map(p => p.value), [40, 8]);
 });
 
-test('a step is offered once it makes four points; the default makes 200 or fewer', () => {
-  assert.deepEqual(chartSteps(7 * DAY), { steps: ['day'], fallback: 'day' });
-  assert.deepEqual(chartSteps(30 * DAY), { steps: ['day', 'week'], fallback: 'day' });
-  assert.deepEqual(chartSteps(365 * DAY), { steps: ['day', 'week', 'month'], fallback: 'week' });
-  assert.deepEqual(chartSteps(3 * 365 * DAY), { steps: ['day', 'week', 'month'], fallback: 'week' });
-  assert.deepEqual(chartSteps(5 * 365 * DAY), { steps: ['day', 'week', 'month'], fallback: 'month' });
+test('every step is offered; the default makes 200 or fewer', () => {
+  const all = ['day', 'week', 'month'];
+  assert.deepEqual(chartSteps(7 * DAY), { steps: all, fallback: 'day' });
+  assert.deepEqual(chartSteps(90 * DAY), { steps: all, fallback: 'day' });
+  assert.deepEqual(chartSteps(365 * DAY), { steps: all, fallback: 'week' });
+  assert.deepEqual(chartSteps(3 * 365 * DAY), { steps: all, fallback: 'week' });
+  assert.deepEqual(chartSteps(5 * 365 * DAY), { steps: all, fallback: 'month' });
 });
 
 test('no step is finer than the points: weekly readings have no day', () => {
-  assert.deepEqual(chartSteps(70 * DAY, 7 * DAY), { steps: ['week'], fallback: 'week' });
-  assert.deepEqual(chartSteps(21 * DAY, 7 * DAY), { steps: ['week'], fallback: 'week' });
+  assert.deepEqual(chartSteps(21 * DAY, 7 * DAY), { steps: ['week', 'month'], fallback: 'week' });
   assert.deepEqual(chartSteps(365 * DAY, 7 * DAY), { steps: ['week', 'month'], fallback: 'week' });
+  assert.deepEqual(chartSteps(365 * DAY, 30 * DAY), { steps: ['month'], fallback: 'month' });
 });
 
 test('values are compact from a thousand and four figures below', () => {

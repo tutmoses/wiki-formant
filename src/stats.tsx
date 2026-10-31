@@ -10,11 +10,13 @@
 // counts people and agents apart where visitors otherwise count both, and
 // `?page=`, `?entry=`, `?source=`, `?country=` and `?device=` narrow it. Every
 // row in a list is a link that adds its own, and every narrowing a link that
-// drops it.
+// drops it. Each is `link`, so a site passing its router's link component
+// changes the window or the filter without reloading the page.
 
 import type { CSSProperties, ReactNode } from 'react';
 import { STATS_FILTERS, count, type Digest, type StatsFilter } from './analytics.js';
 import type { PasskeyGate } from './passkey.js';
+import { Anchor, type WikiLinkComponent } from './react-server.js';
 import { PasskeyButton, PasskeySignOut, StatsFigures } from './stats-figures.js';
 
 export interface StatsProps {
@@ -28,6 +30,8 @@ export interface StatsProps {
   apart?: boolean;
   /** The windows offered as `?days=` links on the same page. */
   ranges?: readonly number[];
+  /** Every link on the page: `next/link`, say, so a window or a filter does not reload it. */
+  link?: WikiLinkComponent;
 }
 
 /** The windows the stats page offers, in days; `Infinity` is all time. */
@@ -80,12 +84,14 @@ function StatsList({
   rows,
   label = v => v,
   to,
+  link: Link,
 }: {
   title: string;
   rows: [string, number][];
   label?: (v: string) => string;
   /** Where a row narrows the page to; a list of events, which no visit filter reaches, has none. */
   to?: (v: string) => string;
+  link: WikiLinkComponent;
 }) {
   if (!rows.length) return null;
   const max = Math.max(...rows.map(([, n]) => n));
@@ -95,7 +101,7 @@ function StatsList({
       <ol>
         {rows.map(([v, n]) => (
           <li key={v} style={{ '--share': n / max } as CSSProperties}>
-            <span>{to ? <a href={to(v)}>{label(v)}</a> : label(v)}</span>
+            <span>{to ? <Link href={to(v)}>{label(v)}</Link> : label(v)}</span>
             <span className="stats-count">{count(n)}</span>
           </li>
         ))}
@@ -111,7 +117,7 @@ function StatsList({
  * nothing in them are left out. The chart and the bars are `currentColor`
  * until the importing stylesheet gives them a colour.
  */
-export function Stats({ digest: d, days, filter = {}, apart = false, ranges = STATS_RANGES }: StatsProps) {
+export function Stats({ digest: d, days, filter = {}, apart = false, ranges = STATS_RANGES, link: Link = Anchor }: StatsProps) {
   const today = Math.floor(Date.now() / DAY_MS);
   const counted = d.counted_from ? Date.parse(d.counted_from) / DAY_MS : today;
   const narrowed = STATS_FILTERS.filter(k => filter[k]);
@@ -133,15 +139,15 @@ export function Stats({ digest: d, days, filter = {}, apart = false, ranges = ST
     <>
       <div role="group" aria-label="Window">
         {ranges.map(n => (
-          <a key={n} href={at(filter, n)} aria-current={n === days ? 'page' : undefined}>
+          <Link key={n} href={at(filter, n)} aria-current={n === days ? 'page' : undefined}>
             {windowLabel(n)}
-          </a>
+          </Link>
         ))}
       </div>
       <div>
-        <a href={at(filter, days, !apart)} role="switch" aria-checked={apart} title="People and agents counted apart">
+        <Link href={at(filter, days, !apart)} role="switch" aria-checked={apart} title="People and agents counted apart">
           Agents apart
-        </a>
+        </Link>
       </div>
     </>
   );
@@ -153,9 +159,9 @@ export function Stats({ digest: d, days, filter = {}, apart = false, ranges = ST
           <ul aria-label="Narrowed to">
             {narrowed.map(k => (
               <li key={k}>
-                <a href={at({ ...filter, [k]: undefined })} title="Remove">
+                <Link href={at({ ...filter, [k]: undefined })} title="Remove">
                   {NAMES[k]}: {k === 'country' ? country(filter[k]!) : filter[k]} ×
-                </a>
+                </Link>
               </li>
             ))}
           </ul>
@@ -166,20 +172,21 @@ export function Stats({ digest: d, days, filter = {}, apart = false, ranges = ST
       )}
       <StatsFigures digest={d} first={first} apart={apart} controls={controls} />
       <div className="stats-lists">
-        <StatsList title="Pages" rows={rows(d.top_pages, 'page', 'visitors')} to={to('page')} />
-        <StatsList title="Entry pages" rows={rows(d.entry_pages, 'page', 'visitors')} to={to('entry')} />
-        <StatsList title="Sources" rows={rows(d.top_sources, 'source', 'visitors')} to={to('source')} />
+        <StatsList link={Link} title="Pages" rows={rows(d.top_pages, 'page', 'visitors')} to={to('page')} />
+        <StatsList link={Link} title="Entry pages" rows={rows(d.entry_pages, 'page', 'visitors')} to={to('entry')} />
+        <StatsList link={Link} title="Sources" rows={rows(d.top_sources, 'source', 'visitors')} to={to('source')} />
         <StatsList
+          link={Link}
           title="From X posts"
           rows={rows(d.from_posts, 'page', 'visitors')}
           to={v => at({ ...filter, source: 'x', entry: v })}
         />
-        <StatsList title="Sibling sites" rows={rows(d.sibling_referrals, 'source', 'visitors')} to={to('source')} />
-        <StatsList title="Countries" rows={rows(d.countries, 'country', 'visitors')} label={country} to={to('country')} />
-        <StatsList title="Devices" rows={rows(d.devices, 'device', 'visitors')} to={to('device')} />
-        <StatsList title="Agents" rows={rows(d.top_agents, 'agent', 'visitors')} />
-        <StatsList title="Agent tool calls" rows={rows(d.agent_tool_calls, 'tool', 'events')} />
-        <StatsList title="Searches that found nothing" rows={rows(d.gaps, 'query', 'events')} />
+        <StatsList link={Link} title="Sibling sites" rows={rows(d.sibling_referrals, 'source', 'visitors')} to={to('source')} />
+        <StatsList link={Link} title="Countries" rows={rows(d.countries, 'country', 'visitors')} label={country} to={to('country')} />
+        <StatsList link={Link} title="Devices" rows={rows(d.devices, 'device', 'visitors')} to={to('device')} />
+        <StatsList link={Link} title="Agents" rows={rows(d.top_agents, 'agent', 'visitors')} />
+        <StatsList link={Link} title="Agent tool calls" rows={rows(d.agent_tool_calls, 'tool', 'events')} />
+        <StatsList link={Link} title="Searches that found nothing" rows={rows(d.gaps, 'query', 'events')} />
       </div>
     </div>
   );

@@ -1006,7 +1006,7 @@ export const DELETE = gate.signOut;
 const q = statsQuery(params); // ?days= (1, 7, 30, 90, 365 or all, else 30), ?agents=apart and the filters
 return (
   <StatsGate gate={gate} session={(await cookies()).get(gate.cookie)?.value} invite={params.invite} host="caper.network">
-    {async () => <Stats digest={await digest(sql, q)} {...q} />}
+    {async () => <Stats digest={await digest(sql, q)} {...q} link={Link} />}
   </StatsGate>
 );
 ```
@@ -1027,7 +1027,10 @@ other link on the page keeps the choice. `digest`'s `by_day` carries every
 one of those per UTC day, a visit on the day it began, so the days add up to the
 totals. A day with no visits has no bounce rate or visit length and is left out
 of those charts rather than drawn as zero. Everything but the figures and the
-chart is server-rendered.
+chart is server-rendered. Every link on the page is `link`, a bare `<a>` unless
+the site passes its router's: with `next/link` a window, the switch or a
+narrowing re-renders the page in place rather than reloading it, and the chart
+keeps its figure and step.
 
 Every row in a list is a link that narrows the page to it, and the narrowings
 stack: `?page=`, `?entry=`, `?source=`, `?country=` and `?device=`, each shown as
@@ -1063,9 +1066,11 @@ token prices, ledger activity, a caper's price, visitors per day. One area
 series in the box's own `color`, its axis in `--chart-axis` if set, with range
 buttons — 24H, 7D, 30D, 90D, 1Y, All — then, after a rule, the day, week and
 month steps. The steps show wherever a range is drawn by day, so the buttons
-never shift; one is enabled once it makes four points (none under 24H and 7D,
-which are drawn by the hour and the four hours), and the default is the finest
-that makes 200 or fewer, so a year opens weekly and five years monthly.
+never shift; every one is enabled, however few points it makes, so 90D draws
+monthly as readily as daily (none under 24H and 7D, which are drawn by the hour
+and the four hours, and none finer than the points: weekly readings have no
+day). The default is the finest that makes 200 or fewer, so a year opens weekly
+and five years monthly, and a step picked holds across the ranges.
 
 ```tsx
 // Daily points: the chart slices and steps them itself; 30D up.

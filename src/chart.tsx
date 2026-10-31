@@ -56,14 +56,13 @@ export const CHART_RANGES: readonly ChartRange[] = ['24h', '7d', '30d', '90d', '
 const DAILY_RANGES: readonly ChartRange[] = ['30d', '90d', '1y', 'all'];
 
 /**
- * A step is offered once it makes four points, and the default is the finest that
- * makes 200 or fewer. None is finer than the points' own `spacing`: weekly readings
- * have no day.
+ * Every step is offered, however few points it makes, and the default is the finest
+ * that makes 200 or fewer. None is finer than the points' own `spacing`: weekly
+ * readings have no day.
  */
 export function chartSteps(span: number, spacing = DAY): { steps: ChartStep[]; fallback: ChartStep } {
   const fine = STEPS.filter(s => STEP[s].span >= spacing * 0.9);
-  const finest = fine[0] ?? 'month';
-  const steps = STEPS.filter(s => s === finest || (fine.includes(s) && span / STEP[s].span >= 4));
+  const steps = fine.length ? fine : ['month' as const];
   return { steps, fallback: steps.find(s => span / STEP[s].span <= 200) ?? steps.at(-1)! };
 }
 
@@ -495,7 +494,7 @@ export function TimeChart({
           {ranges.length > 1 && (
             <div role="group" aria-label="Range">
               {ranges.map(r => (
-                <button key={r} type="button" aria-pressed={r === range} onClick={() => { setRange(r); setStep(null); }}>
+                <button key={r} type="button" aria-pressed={r === range} onClick={() => setRange(r)}>
                   {RANGE[r].label}
                 </button>
               ))}
