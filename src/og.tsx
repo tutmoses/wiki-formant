@@ -16,6 +16,13 @@
 //   - no CSS variables and no color-mix(): colours arrive as flat values.
 // Fonts stay with the caller: Next traces a font file into a function only from
 // a literal path in the app's own code, which a package cannot name.
+//
+// A page's banner is its card. The generated field exists so a page with no
+// banner still unfurls with something; it never stands in for a banner the
+// page has. radix.wiki drew Atomic Composability on its banner and the homepage
+// on bubbles beside a banner it had, because the homepage's metadata never
+// passed it; caper drew bubbles under every banner. `bannerField` is the first
+// half of `bannerField(...) ?? generated`, which is how every route picks.
 
 import type { ReactElement, ReactNode } from 'react';
 import { describe } from './metadata.js';
@@ -58,6 +65,44 @@ export function bubbles(rand: () => number, o: BubbleOptions): { background: str
     );
   });
   return { background, art };
+}
+
+/**
+ * A page's banner as the card's field: fetched, cropped to cover 1200×630 and
+ * inlined, under the scrim a photograph needs. Null when there is no banner,
+ * it is not an https URL on `hosts`, or it cannot be fetched and decoded, and
+ * the route draws its generated field instead.
+ *
+ * `hosts` is where the site stores banners. Fetching whatever `?banner=` named
+ * would make `/og` an anonymous proxy to any URL the server reaches, decoded by
+ * sharp on the way through. The bytes are inlined as PNG because satori decodes
+ * PNG and JPEG, not the WebP or AVIF an upload is stored as. `sharp` is an
+ * optional peer, loaded only here; run the route on Node.
+ */
+export async function bannerField(
+  banner: string | null | undefined,
+  hosts: RegExp,
+): Promise<{ background: string; art: ReactNode; scrim: true } | null> {
+  if (!banner) return null;
+  try {
+    const url = new URL(banner);
+    if (url.protocol !== 'https:' || !hosts.test(url.hostname)) return null;
+    const res = await fetch(url, { redirect: 'error' });
+    if (!res.ok) return null;
+    const { default: sharp } = await import('sharp');
+    const png = await sharp(Buffer.from(await res.arrayBuffer()))
+      .resize(OG_SIZE.width, OG_SIZE.height, { fit: 'cover' })
+      .png()
+      .toBuffer();
+    const src = `data:image/png;base64,${png.toString('base64')}`;
+    return {
+      background: '#111',
+      art: <img src={src} alt="" width={OG_SIZE.width} height={OG_SIZE.height} style={{ position: 'absolute', width: '100%', height: '100%', objectFit: 'cover' }} />,
+      scrim: true,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export interface SocialCardProps {

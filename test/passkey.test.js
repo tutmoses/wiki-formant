@@ -157,7 +157,7 @@ test('the stats page leaves out empty lists and marks the window shown', () => {
   assert.doesNotMatch(out, /Entry pages|Clicks to X/);
   assert.match(out, /<figure class="chart stats-chart"><div class="chart-canvas" role="img" aria-label="Visitors"><\/div>/);
   // The agents switch follows the windows, and the steps follow them, every one offered on a week of days.
-  assert.match(out, /<a href="\?days=all">All<\/a><\/div><div><a href="\?days=7&amp;agents=apart" role="switch" aria-checked="false" title="People and agents counted apart">Agents apart<\/a><\/div><div role="group" aria-label="Step"><button type="button" aria-pressed="true" title="One point per day">D<\/button><button type="button" aria-pressed="false" title="One point per week">W<\/button><button type="button" aria-pressed="false" title="One point per month">M<\/button><\/div><\/div><\/figure>/);
+  assert.match(out, /<a href="\?days=all">All<\/a><\/div><div><a href="\?days=7&amp;agents=apart" role="switch" aria-checked="false" aria-label="People and agents counted apart" title="People and agents counted apart"><svg class="chart-icon"[^>]*>.*?<\/svg><\/a><\/div><div role="group" aria-label="Step"><button type="button" aria-pressed="true" title="One point per day">D<\/button><button type="button" aria-pressed="false" title="One point per week">W<\/button><button type="button" aria-pressed="false" title="One point per month">M<\/button><\/div><\/div><\/figure>/);
 });
 
 test('apart, people and agents are two figures, and every link but the switch keeps them apart', () => {
@@ -167,7 +167,7 @@ test('apart, people and agents are two figures, and every link but the switch ke
   assert.match(out, /<a href="\?days=90&amp;agents=apart&amp;device=phone">90D<\/a>/);
   assert.match(out, /<a href="\?days=7&amp;agents=apart&amp;country=GB&amp;device=phone">United Kingdom<\/a>/);
   assert.match(out, /<a href="\?days=7&amp;agents=apart" title="Remove">Device: phone ×<\/a>/);
-  assert.match(out, /<a href="\?days=7&amp;device=phone" role="switch" aria-checked="true" title="People and agents counted apart">Agents apart<\/a>/);
+  assert.match(out, /<a href="\?days=7&amp;device=phone" role="switch" aria-checked="true" aria-label="People and agents counted apart" title="People and agents counted apart"><svg class="chart-icon"[^>]*>.*?<\/svg><\/a>/);
 });
 
 test('every link is the router link a site passes, so a window or a filter does not reload the page', () => {

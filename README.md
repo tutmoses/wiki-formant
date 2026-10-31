@@ -582,6 +582,16 @@ return new ImageResponse(<SocialCard {...{ title, eyebrow, description, backgrou
 
 Fonts stay with the site: Next traces a font file into the function only from a literal path in the app's own code, and satori reads TTF or OTF, never the woff2 `next/font` serves. The frame never sets a style key to `undefined`, which satori throws on rather than skipping; `scrim` darkens the foot for art that is a photograph.
 
+**A page's banner is its card.** The generated field exists so a page with no banner still unfurls with something; it never stands in for a banner the page has. Every route picks the same way, and every page's metadata passes its banner to the card URL, the homepage and category hubs included:
+
+```tsx
+const field = (await bannerField(searchParams.get('banner'), /\.public\.blob\.vercel-storage\.com$/))
+  ?? bubbles(cardRandom(title), { field, colors });
+return new ImageResponse(<SocialCard {...{ title, description }} {...field} colors={colors} />, { ...OG_SIZE, headers: OG_HEADERS });
+```
+
+`bannerField` fetches the banner only from the hosts you name, so `/og` is no proxy to any URL a caller writes, crops it to cover the card, inlines it as PNG (satori decodes no WebP or AVIF) and turns the scrim on. A missing, foreign or undecodable banner returns null and the generated field draws instead. It loads `sharp`, an optional peer, so the route runs on Node.
+
 ## Revisions
 
 What changed between two versions of a page, and therefore which semver bump to
@@ -1022,7 +1032,7 @@ ranked list, and `?days=` links between windows, all time among them, pinned in
 the chart's frame as its own buttons are (`TimeChart`'s `controls`). Each
 figure is a button that charts it: visitors, page views, bounce rate,
 visit length and clicks to X. Visitors count agents; `?agents=apart`, a switch
-beside the windows, splits them into people and agents, and every
+beside the windows drawn as a robot's head, splits them into people and agents, and every
 other link on the page keeps the choice. `digest`'s `by_day` carries every
 one of those per UTC day, a visit on the day it began, so the days add up to the
 totals. A day with no visits has no bounce rate or visit length and is left out

@@ -46,6 +46,8 @@ export interface WikiLinkProps {
   /** `switch`, with `aria-checked`, on the stats page's toggle between two views. */
   role?: string;
   'aria-checked'?: boolean;
+  /** The name of a link drawn as an icon. */
+  'aria-label'?: string;
   children?: ReactNode;
 }
 

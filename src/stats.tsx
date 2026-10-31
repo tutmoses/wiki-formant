@@ -145,8 +145,14 @@ export function Stats({ digest: d, days, filter = {}, apart = false, ranges = ST
         ))}
       </div>
       <div>
-        <Link href={at(filter, days, !apart)} role="switch" aria-checked={apart} title="People and agents counted apart">
-          Agents apart
+        {/* On while people and agents are counted apart: a robot's head in currentColor. */}
+        <Link href={at(filter, days, !apart)} role="switch" aria-checked={apart} aria-label="People and agents counted apart" title="People and agents counted apart">
+          <svg className="chart-icon" viewBox="0 0 12 12" aria-hidden>
+            <path d="M6 1.5v2M1 6.5v2M11 6.5v2" stroke="currentColor" />
+            <rect x="2.5" y="3.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" />
+            <circle cx="4.75" cy="7" r="0.9" fill="currentColor" />
+            <circle cx="7.25" cy="7" r="0.9" fill="currentColor" />
+          </svg>
         </Link>
       </div>
     </>

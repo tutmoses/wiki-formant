@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isValidElement } from 'react';
-import { SocialCard, bubbles, cardRandom } from 'wiki-formant/og';
+import { SocialCard, bannerField, bubbles, cardRandom } from 'wiki-formant/og';
 
 const colors = { text: '#fff', muted: '#ccc', accent: '#f99' };
 
@@ -38,4 +38,12 @@ test('a long title is fitted at a word, never cut mid-word', () => {
   const card = SocialCard({ title, colors, background: '#000' });
   const text = card.props.children[1].props.children[1].props.children;
   assert.ok(text.length <= 90 && text.endsWith('…') && title.startsWith(text.slice(0, -1)), text);
+});
+
+test('a banner off the allowed hosts, or none, leaves the generated field to draw', async () => {
+  const hosts = /\.public\.blob\.vercel-storage\.com$/;
+  assert.equal(await bannerField(null, hosts), null);
+  assert.equal(await bannerField('https://example.com/a.webp', hosts), null);
+  assert.equal(await bannerField('http://x.public.blob.vercel-storage.com/a.webp', hosts), null);
+  assert.equal(await bannerField('not a url', hosts), null);
 });
