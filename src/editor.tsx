@@ -94,8 +94,8 @@ function cleanPastedHtml(html: string): string {
  * stored HTML, so a page edited once kept them for good. Nofollow on a site's
  * own links throws away its link equity, and a new tab for in-site navigation
  * is a bug. Whether a link is external depends on the host it is served from,
- * which the editor cannot know, so the render path decides: `normaliseLinks`
- * from `wiki-formant/links`. Dropping both attributes from the mark also cleans
+ * which the editor cannot know, so the render path decides: `articleHtml`'s
+ * `links` pass in `wiki-formant/headings`. Dropping both attributes from the mark also cleans
  * a legacy link the next time its page is saved.
  *
  * @internal

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sliceCorpus } from 'wiki-formant/corpus';
+import { sliceCorpus } from '../dist/corpus.js';
 
 const section = (path, n) => ({ path, tagPath: path.split('/')[0], section: 'x'.repeat(n) });
 const docs = [section('a/one', 100), section('a/two', 300), section('b/three', 50)];

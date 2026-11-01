@@ -50,3 +50,15 @@ test('a nonce makes script-src strict and admits each inline script by its hash'
   assert.doesNotMatch(strict.split('; ').find(d => d.startsWith('script-src')), /unsafe-inline/);
   assert.match(contentSecurityPolicy({}, { nonce: null, inlineScripts: ['boot()'] }), /script-src 'self' 'unsafe-inline'/);
 });
+
+test('withWikiDefaults puts the bare OpenAPI path first in beforeFiles, keeping the app\'s rewrites in either form', async () => {
+  const { withWikiDefaults } = await import('wiki-formant/headers');
+  const spec = { source: '/openapi.json', destination: '/.well-known/openapi.json' };
+  const twin = { source: '/:path*.md', destination: '/api/wiki/:path*.md' };
+  assert.deepEqual(await withWikiDefaults({}).rewrites(), { beforeFiles: [spec] });
+  assert.deepEqual(await withWikiDefaults({ rewrites: async () => [twin] }).rewrites(), { afterFiles: [twin], beforeFiles: [spec] });
+  assert.deepEqual(
+    await withWikiDefaults({ rewrites: async () => ({ beforeFiles: [twin], fallback: [twin] }) }).rewrites(),
+    { beforeFiles: [spec, twin], fallback: [twin] },
+  );
+});

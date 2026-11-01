@@ -7,6 +7,8 @@ import { createTaxonomy } from 'wiki-formant/taxonomy';
 import { categoryView } from 'wiki-formant/category';
 import { wikiReadTools } from 'wiki-formant/wiki-tools';
 import { searchTsvDdl } from 'wiki-formant/search';
+import { mcpResponse } from 'wiki-formant/mcp';
+import { createTester, wikiReadChecks } from 'wiki-formant/conformance';
 
 const DDL = `
   CREATE TABLE "WikiPage" (
@@ -175,4 +177,28 @@ test('page text reads lists through the app resolver, as its twin does; blocks s
 
   const unresolved = wikiReadTools({ store, tree, text: listText, url: () => '', noun: 'x', corpusTitle: 'x' });
   assert.equal((await call(unresolved, 'get_page', { path: 'tech/index' })).content, '(live list)');
+});
+
+test('wikiReadChecks passes against the read tools over the transport, a slice resuming where the budget cut', async () => {
+  const { store, tree } = await wiki();
+  // Over the smallest budget, so the slice is cut and resumes.
+  await store.save({ tagPath: 'tech', slug: 'long', title: 'Long', content: [{ id: 'p', type: 'content', text: `<p>${'word '.repeat(300)}</p>` }] });
+  const tools = wikiReadTools({ store, tree, text, url: (t, s) => `https://w.test/${[t, s].filter(Boolean).join('/')}`, noun: 'the test wiki', corpusTitle: 'Test Wiki' });
+  const config = { serverInfo: { name: 'w', version: '1.0.0' }, instructions: 'Search first.', tools };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (url, init) => mcpResponse(new Request(url, init), config);
+  const log = console.log;
+  console.log = () => {};
+  try {
+    const t = createTester({ base: 'https://w.test', clientName: 'w-test' });
+    // tagPath + slug, as radix-wiki addresses a page.
+    const { first, page } = await wikiReadChecks(t, { query: 'blueprints', address: r => ({ tagPath: r.tagPath, slug: r.slug }), corpusChars: 1_000 });
+    assert.equal(first.path, 'tech/engine');
+    assert.equal(page.title, 'Engine');
+    assert.deepEqual(t.results.filter(r => !r.ok), []);
+    assert.ok(t.results.some(r => r.tool === 'get_full_corpus(resumes)'));
+  } finally {
+    globalThis.fetch = realFetch;
+    console.log = log;
+  }
 });

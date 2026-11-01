@@ -7,7 +7,7 @@ import {
 } from 'wiki-formant/sidebar';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { isRailLinkActive, TableOfContents } from 'wiki-formant/react';
+import { isRailLinkActive, LinkPreviewCard, TableOfContents } from 'wiki-formant/react';
 
 // The collapse rule carries both bug fixes, so it is tested directly. The
 // component around it is verified in a browser, where a DOM actually exists.
@@ -141,4 +141,13 @@ test('a table of contents mounted before its article reads the article when it a
   await act(() => new Promise(r => setTimeout(r, 300)));
   assert.match(rail.textContent, /More/);
   await act(() => root.unmount());
+});
+
+test('LinkPreviewCard draws the banner only when there is one, and takes the controller\'s props', () => {
+  const card = props => renderToStaticMarkup(createElement(LinkPreviewCard, { style: { left: 4, top: 8 }, onMouseEnter() {}, onMouseLeave() {}, ...props }));
+  assert.equal(
+    card({ title: 'Engine', excerpt: 'Runs blueprints.' }),
+    '<div class="link-preview-card" style="left:4px;top:8px"><div class="link-preview-body"><div class="link-preview-title">Engine</div><p class="link-preview-excerpt">Runs blueprints.</p></div></div>',
+  );
+  assert.match(card({ title: 'Engine', bannerImage: '/b.png', excerpt: null }), /^<div class="link-preview-card"[^>]*><img src="\/b\.png" alt="" class="link-preview-banner" loading="lazy"\/><div class="link-preview-body"><div class="link-preview-title">Engine<\/div><\/div><\/div>$/);
 });

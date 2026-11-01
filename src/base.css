@@ -276,6 +276,7 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
 .see-also-detail { font-size: var(--ui-small); color: var(--ui-muted); }
 
 .link-preview-card { position: fixed; z-index: 50; width: 20rem; max-width: calc(100vw - 1rem); overflow: hidden; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); box-shadow: var(--ui-shadow, 0 8px 24px -4px rgb(0 0 0 / 0.25)); }
+.link-preview-banner { display: block; width: 100%; height: 7rem; object-fit: cover; }
 .link-preview-body { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.75rem; }
 .link-preview-title { font-weight: 600; }
 .link-preview-excerpt { display: -webkit-box; margin: 0; overflow: hidden; font-size: var(--ui-small); color: var(--ui-muted); -webkit-line-clamp: 4; -webkit-box-orient: vertical; }

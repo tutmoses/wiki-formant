@@ -818,6 +818,33 @@ export function useLinkPreview<T>({
   };
 }
 
+/**
+ * The card `useLinkPreview` positions: an optional banner, the title and the
+ * excerpt, in base.css's `link-preview-*` classes. Spread `cardProps` onto it;
+ * a caller that has to move the card (out of a query container) passes its own
+ * `style`.
+ */
+export function LinkPreviewCard({
+  title,
+  excerpt,
+  bannerImage,
+  ...card
+}: LinkPreviewState<unknown>['cardProps'] & {
+  title: string;
+  excerpt?: string | null;
+  bannerImage?: string | null;
+}) {
+  return (
+    <div className="link-preview-card" {...card}>
+      {bannerImage && <img src={bannerImage} alt="" className="link-preview-banner" loading="lazy" />}
+      <div className="link-preview-body">
+        <div className="link-preview-title">{title}</div>
+        {excerpt && <p className="link-preview-excerpt">{excerpt}</p>}
+      </div>
+    </div>
+  );
+}
+
 // ---- table sort -------------------------------------------------------------
 
 export type SortDirection = 'asc' | 'desc';

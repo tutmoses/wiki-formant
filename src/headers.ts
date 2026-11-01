@@ -118,7 +118,14 @@ interface WikiNextConfig {
   experimental?: object;
   images?: object;
   headers?: () => Promise<unknown[]> | unknown[];
+  rewrites?: () => Promise<WikiRewrites> | WikiRewrites;
 }
+
+/** A Next `rewrites()` answer: a bare list (run after the file system) or the three phases. */
+type WikiRewrites = unknown[] | { beforeFiles?: unknown[]; afterFiles?: unknown[]; fallback?: unknown[] };
+
+/** The OpenAPI document at the bare path an agent guesses beside `/.well-known/openapi.json`. */
+const OPENAPI_REWRITE = { source: '/openapi.json', destination: '/.well-known/openapi.json' };
 
 /**
  * An app's Next config with the settings every app here wrote out the same way:
@@ -133,9 +140,13 @@ interface WikiNextConfig {
  * - `securityHeaders` on every route, with `csp` enforced in production only:
  *   Next's dev runtime is inline and `eval`. An origin that sets its policy
  *   per request (a nonce) passes none.
+ * - `/openapi.json` rewritten to `/.well-known/openapi.json` ahead of the file
+ *   system, so the spec answers at both paths S10 publishes it at.
  *
- * Anything the app sets wins, and its own `headers()` follow these. Pass
- * `NextConfig` as `T` so the object is typed as Next's own config.
+ * Anything the app sets wins, and its own `headers()` follow these; its
+ * `rewrites()`, in either form, keep their phases with this one first in
+ * `beforeFiles`. Pass `NextConfig` as `T` so the object is typed as Next's own
+ * config.
  */
 export function withWikiDefaults<T extends WikiNextConfig>(config: T, { csp }: { csp?: string } = {}): T {
   return {
@@ -148,6 +159,11 @@ export function withWikiDefaults<T extends WikiNextConfig>(config: T, { csp }: {
         { source: '/:path*', headers: securityHeaders(process.env.NODE_ENV === 'production' ? csp : null) },
         ...((await config.headers?.()) ?? []),
       ];
+    },
+    async rewrites() {
+      const own = (await config.rewrites?.()) ?? {};
+      const phases = Array.isArray(own) ? { afterFiles: own } : own;
+      return { ...phases, beforeFiles: [OPENAPI_REWRITE, ...(phases.beforeFiles ?? [])] };
     },
   };
 }

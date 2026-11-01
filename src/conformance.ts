@@ -102,6 +102,7 @@ export interface TesterOptions {
 export interface Tester {
   base: string;
   endpoint: string;
+  clientName: string;
   /** One JSON-RPC call. Waits out a 429 as `Retry-After` asks, up to four tries. */
   rpc(method: string, params?: unknown): Promise<Rpc>;
   /** `tools/call` shorthand. */
@@ -160,6 +161,7 @@ export function createTester(opts: TesterOptions): Tester {
   return {
     base,
     endpoint,
+    clientName: opts.clientName,
     rpc,
     call: (name, args = {}) => rpc('tools/call', { name, arguments: args }),
     rpcAt,
@@ -953,4 +955,136 @@ export async function rolaOriginCheck(
   const answer = t.payload(await t.callAt(opts.endpoint ?? t.endpoint, opts.tool ?? 'get_challenge')) as { sign?: { message?: string } };
   const message = answer?.sign?.message ?? '';
   t.check('ROLA recipe names this origin', message.includes(`"${origin}"`), `expects "${origin}" in: …${message.slice(-90)}`);
+}
+
+// ---- the suites every surface runs -----------------------------------------
+
+export interface StandardSuiteConfig {
+  /** `server.json`'s version, which `initialize` and every descriptor must state. */
+  version: string;
+  /** The capability keys `initialize` must declare. Default `['tools']`. */
+  capabilities?: readonly string[];
+  /** Every path the OpenAPI document is served at. */
+  openapi?: readonly string[];
+  /** The tools that write, which must not be marked read-only. */
+  writes?: readonly string[];
+  /** `manifestParity`'s options. */
+  manifest?: Parameters<typeof manifestParity>[1];
+  /** The calls `payloadBudget` weighs beyond the no-argument ones it finds itself; `[]` for those alone. None skips it. */
+  budget?: Parameters<typeof payloadBudget>[1];
+  /** Surfaces an agent recrawls, for `conditionalGetChecks`. None skips it. */
+  conditionalGet?: readonly string[];
+  /** JSON descriptors, for `descriptorChecks`. Default `S10_DESCRIPTORS`. */
+  descriptors?: readonly string[];
+  /** Paths the `User-agent: *` group must reach, for `robotsChecks`. None skips it. */
+  robots?: readonly string[];
+}
+
+/**
+ * The suites every surface's `scripts/_mcp-test.ts` runs, in the order they
+ * run them: transport, version coherence, the agent card, annotations, the
+ * manifest, payload budgets, conditional GETs, descriptors and robots. Returns
+ * the `initialize` response for the surface's own assertions.
+ */
+export async function standardSuite(t: Tester, cfg: StandardSuiteConfig): Promise<Rpc> {
+  const init = await transportChecks(t, t.clientName, cfg.capabilities);
+  await versionCoherence(t, cfg.version, standardVersionSources(t, cfg.openapi), init.result?.serverInfo?.version);
+  await agentCardParity(t);
+  await annotationChecks(t, { writes: cfg.writes });
+  await manifestParity(t, cfg.manifest);
+  if (cfg.budget) await payloadBudget(t, cfg.budget);
+  if (cfg.conditionalGet) await conditionalGetChecks(t, cfg.conditionalGet);
+  await descriptorChecks(t, cfg.descriptors);
+  if (cfg.robots) await robotsChecks(t, cfg.robots);
+  return init;
+}
+
+/** A row as `search_wiki` and `list_pages` return it. */
+export interface WikiReadRow {
+  path: string;
+  tagPath?: string;
+  slug?: string;
+  id?: string;
+  url?: string;
+}
+
+export interface WikiReadCheckOptions {
+  /** A query with hits on this wiki. */
+  query: string;
+  /** `get_page`'s arguments for a row. Default `{ path }`. */
+  address?: (row: WikiReadRow) => Record<string, unknown>;
+  /** A row's markdown twin, for `twinParity`. None skips it. */
+  twin?: (row: WikiReadRow) => string;
+  /** The `maxChars` the corpus slice is asked for, at least `CORPUS_BUDGET.min`. Default 20,000. */
+  corpusChars?: number;
+  endpoint?: string;
+  label?: string;
+}
+
+/**
+ * The `wiki-formant/wiki-tools` read tools answer as an agent expects: the
+ * categories, a search and the page it finds, a listing, recent changes, a
+ * corpus preflight and a page-aligned slice that resumes, and the teaching
+ * answers to no hits, a missing argument, an unknown tool and a missing page.
+ * Returns the search rows and the page read, for the surface's own checks.
+ */
+export async function wikiReadChecks(t: Tester, opts: WikiReadCheckOptions) {
+  const endpoint = opts.endpoint ?? t.endpoint;
+  const label = (s: string) => (opts.label ? `[${opts.label}] ${s}` : s);
+  const address = opts.address ?? (row => ({ path: row.path }));
+  const call = (name: string, args?: Record<string, unknown>) => t.callAt(endpoint, name, args);
+  const read = async <T>(name: string, args?: Record<string, unknown>) => t.payload(await call(name, args)) as T | undefined;
+  const text = (r: Rpc) => r.result?.content?.[0]?.text ?? '';
+
+  const cats = await read<{ categories?: unknown[] }>('get_categories');
+  t.check(label('get_categories'), (cats?.categories?.length ?? 0) > 0, `${cats?.categories?.length ?? 0} categories`);
+
+  const search = await read<{ total?: number; pages?: WikiReadRow[] }>('search_wiki', { query: opts.query, pageSize: 5 });
+  const rows = search?.pages ?? [];
+  const first = rows[0];
+  t.check(label('search_wiki'), (search?.total ?? 0) > 0 && !!first?.path, `${search?.total ?? 0} hits for "${opts.query}", first="${first?.path}"`);
+
+  const page = first ? await read<{ title?: string; content?: string }>('get_page', address(first)) : undefined;
+  t.check(label('get_page'), !!page?.title, `"${page?.title}" ${page?.content?.length ?? 0} chars`);
+  if (first && opts.twin) await twinParity(t, label('get_page is the .md twin'), opts.twin(first), page?.content ?? '');
+
+  const listed = await read<{ total?: number; pages?: unknown[] }>('list_pages', { pageSize: 5 });
+  t.check(label('list_pages'), (listed?.pages?.length ?? 0) > 0, `${listed?.pages?.length ?? 0} of ${listed?.total ?? 0}`);
+
+  const recent = await read<{ pages?: unknown[] }>('get_recent_changes', { days: 30, limit: 5 });
+  t.check(label('get_recent_changes'), Array.isArray(recent?.pages), `${recent?.pages?.length ?? 0} pages changed in 30d`);
+
+  // A corpus under the budget comes back whole; one over it, cut on a page
+  // boundary with somewhere to resume from. The 1,000 is the heading and the
+  // separators the document carries beside its pages.
+  const maxChars = opts.corpusChars ?? 20_000;
+  const size = await read<{ characters?: number; totalPages?: number }>('get_full_corpus', { sizeOnly: true });
+  const characters = size?.characters ?? 0;
+  t.check(label('get_full_corpus(sizeOnly)'), characters > 0 && (size?.totalPages ?? 0) > 0, `${size?.totalPages} pages, ${characters.toLocaleString()} chars`);
+  type Slice = { document?: string; truncated?: boolean; nextSkip?: number; skip?: number; includedPages?: number };
+  const slice = await read<Slice>('get_full_corpus', { maxChars });
+  const over = characters > maxChars;
+  t.check(
+    label('get_full_corpus(bounded)'),
+    (slice?.document?.length ?? Infinity) <= maxChars + 1_000 && slice?.truncated === over,
+    `${(slice?.document?.length ?? 0).toLocaleString()} chars for maxChars=${maxChars.toLocaleString()}, ${slice?.includedPages} pages, truncated=${slice?.truncated}, nextSkip=${slice?.nextSkip}`,
+  );
+  if (typeof slice?.nextSkip === 'number') {
+    const resumed = await read<Slice>('get_full_corpus', { maxChars, skip: slice.nextSkip });
+    t.check(label('get_full_corpus(resumes)'), resumed?.skip === slice.nextSkip && resumed?.document !== slice.document, `skip=${resumed?.skip} returns a different slice`);
+  }
+
+  const none = await read<{ total?: number; note?: string }>('search_wiki', { query: 'zzzqqqnotathing' });
+  t.check(label('no hits teach'), none?.total === 0 && !!none?.note, none?.note?.slice(0, 80) ?? 'no note on an empty result');
+
+  const missing = await call('search_wiki', {});
+  t.check(label('missing argument'), !!missing.result?.isError && text(missing).includes('"query"') && text(missing).includes('Expected schema'), text(missing).split('\n')[0] ?? '');
+
+  const unknown = await call('no_such_tool', {});
+  t.check(label('unknown tool'), unknown.error?.code === -32602 && (unknown.error.message ?? '').includes('search_wiki'), `${unknown.error?.code}: ${(unknown.error?.message ?? '').slice(0, 80)}`);
+
+  const miss = await call('get_page', address({ path: 'definitely/not/a-page', tagPath: 'definitely/not', slug: 'a-page' }));
+  t.check(label('get_page(404) teaches'), !!miss.result?.isError && text(miss).includes('didYouMean'), text(miss).slice(0, 80));
+
+  return { rows, first, page };
 }

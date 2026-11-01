@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SignJWT } from 'jose';
-import { createRola, sessionSecret, signSession, verifySession, bearerToken } from 'wiki-formant/rola';
+import { createRola, sessionSecret, signSession, verifySession, bearerToken, rolaLoginTools } from 'wiki-formant/rola';
+import { McpToolError } from 'wiki-formant/mcp';
 
 // prisma.challenge, as far as this module reaches into it.
 function memoryChallenges() {
@@ -102,4 +103,33 @@ test('bearerToken reads the Authorization header in any case', () => {
   assert.equal(bearerToken(new Headers({ authorization: 'bearer  abc' })), 'abc');
   assert.equal(bearerToken(new Headers({ Authorization: 'Basic abc' })), null);
   assert.equal(bearerToken(new Headers()), null);
+});
+
+test('rolaLoginTools: the challenge names the dApp and the origin, and a refused login says to start again', async () => {
+  const expiresAt = new Date('2026-11-01T00:05:00Z');
+  const [challenge, login] = rolaLoginTools({
+    site: 'Caper',
+    dAppDefinitionAddress: 'account_tdx_dapp',
+    origin: 'https://caper.network',
+    generateChallenge: async () => ({ challenge: 'ab', expiresAt }),
+    login: async signed => {
+      if (signed.proof.signature !== 'good') throw new McpToolError('Invalid signature');
+      return { token: 't', expiresAt, walletAddress: signed.address };
+    },
+    tokenTtlSec: 12 * 3600,
+    notes: { challenge: 'Writes are Stokenet-testnet only for now.', sign: { deriveAddress: 'bech32m …' } },
+  });
+  assert.deepEqual([challenge.name, login.name], ['get_challenge', 'login']);
+  assert.match(challenge.description, /^Step 1 of writing to Caper: .*\(5-minute expiry\).*Stokenet-testnet only for now\. You always sign/);
+  assert.match(login.description, /a 12h Bearer token/);
+
+  const issued = await challenge.handler({}, {});
+  assert.equal(issued.expiresAt, '2026-11-01T00:05:00.000Z');
+  assert.match(issued.sign.message, /"account_tdx_dapp".*"https:\/\/caper\.network"/);
+  assert.deepEqual(Object.keys(issued.sign), ['message', 'curve', 'address', 'deriveAddress', 'then']);
+
+  const args = { challenge: 'ab', address: 'account_tdx_me', publicKey: 'aa', curve: 'curve25519' };
+  const ok = await login.handler({ ...args, signature: 'good' }, {});
+  assert.deepEqual({ ...ok, note: undefined }, { token: 't', tokenType: 'Bearer', expiresAt: '2026-11-01T00:05:00.000Z', walletAddress: 'account_tdx_me', note: undefined });
+  await assert.rejects(login.handler({ ...args, signature: 'bad' }, {}), err => err instanceof McpToolError && err.message === 'Invalid signature' && /call get_challenge again/.test(err.details.hint));
 });

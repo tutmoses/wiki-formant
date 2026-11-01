@@ -22,6 +22,9 @@ import type { DiffBlock } from './revisions.js';
 import { describe } from './metadata.js';
 import { openingText } from './text.js';
 
+/** The section a `corpus` callback returns, from the slicer this module keeps internal. */
+export type { CorpusSection };
+
 type ToolName = 'search_wiki' | 'get_page' | 'get_pages' | 'list_pages' | 'get_categories' | 'get_recent_changes' | 'get_full_corpus' | 'get_page_history';
 
 export interface WikiToolsOptions<B extends DiffBlock> {
