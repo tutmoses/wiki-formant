@@ -22,8 +22,12 @@ export interface CorpusSection {
   section: string;
 }
 
-/** `maxChars` bounds: the default, the floor and the ceiling. Quote them in the tool's schema. */
-export const CORPUS_BUDGET = { default: 200_000, min: 1_000, max: 1_000_000 } as const;
+/**
+ * `maxChars` bounds: the default, the floor and the ceiling. Quote them in the
+ * tool's schema. The default slice, with its JSON around it, stays inside
+ * `payloadBudget`'s 120,000, since a call with no arguments is weighed there.
+ */
+export const CORPUS_BUDGET = { default: 100_000, min: 1_000, max: 1_000_000 } as const;
 
 export interface CorpusSliceOptions {
   /** The returned document's heading. */

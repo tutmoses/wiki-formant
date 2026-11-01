@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sliceCorpus } from '../dist/corpus.js';
+import { sliceCorpus, CORPUS_BUDGET } from '../dist/corpus.js';
 
 const section = (path, n) => ({ path, tagPath: path.split('/')[0], section: 'x'.repeat(n) });
 const docs = [section('a/one', 100), section('a/two', 300), section('b/three', 50)];
@@ -41,4 +41,10 @@ test('clipping the LAST page still reports truncation', () => {
   assert.equal(s.truncated, true);
   assert.equal(s.clippedPage, 'a/big');
   assert.equal('nextSkip' in s, false);
+});
+
+test('a call with no arguments fits the payload budget it is weighed against', () => {
+  const big = Array.from({ length: 300 }, (_, i) => section(`a/p${i}`, 2_000));
+  const text = JSON.stringify(sliceCorpus(big, { title: 'T' }));
+  assert.ok(text.length <= 120_000, `${text.length} chars from the default maxChars of ${CORPUS_BUDGET.default}`);
 });
