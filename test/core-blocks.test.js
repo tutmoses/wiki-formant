@@ -245,3 +245,9 @@ test('a locations block reads as its places, and must give each its address or i
   assert.equal(core({ id: 'x', type: 'locations', items: [{ id: 'p', address: 'Here', map: 'javascript:alert(1)' }] }), false);
   assert.equal(core({ id: 'x', ...coreBlockDefaults().locations() }), true);
 });
+
+test('a core leaf\'s one-line fields read as their words and as markdown', () => {
+  const s = { type: 'stats', items: [{ value: '<strong>40</strong>', label: 'Years <em>baking</em>' }] };
+  assert.equal(coreAtomicText(s), '40 Years baking');
+  assert.equal(coreAtomicToMarkdown(s, { siteUrl: 'https://site.test' }), '- **40** — Years _baking_');
+});

@@ -1,6 +1,6 @@
 {
   "name": "wiki-formant",
-  "version": "0.98.1",
+  "version": "0.99.0",
   "description": "The portable half of a wiki: derived taxonomy and facet controls, a version-negotiating MCP transport, markdown twins, block rendering, a rich-text editor engine, conditional-GET plumbing, and the headers and CSP every origin sends.",
   "type": "module",
   "license": "MIT",
@@ -327,6 +327,7 @@
     "@tiptap/extension-table-cell": "^2.27.3",
     "@tiptap/extension-table-header": "^2.27.3",
     "@tiptap/extension-table-row": "^2.27.3",
+    "@tiptap/extension-text-style": "^2.27.3",
     "@tiptap/extension-youtube": "^2.27.3",
     "@tiptap/pm": "^2.27.3",
     "@tiptap/react": "^2.27.3",

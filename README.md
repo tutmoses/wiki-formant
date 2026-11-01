@@ -601,6 +601,7 @@ const safe = mapBlockTree(blocks, b => sanitizeCoreLeaf(b, clean), BLOCK_SHAPE);
 - The default list is what `wiki-formant/tiptap`'s nodes store plus a presentational SVG subset. Extend `tags`, `attributes`, `classes` and `schemesByTag` from your stored HTML, never from memory.
 - A YouTube iframe comes out as the `YouTube` node's markup, whoever wrote it, and `base.css` draws it as a 16:9 player.
 - Classes pass by name only, since a site's own utilities can draw over the chrome.
+- `sanitizeLine(html, { links })` cleans what a `WikiLine` stores: its marks and `wikiTextStyle`'s spans. `sanitizeCoreLeaf` runs it over the core leaves' one-line fields (a figure, a quote and who said it, the events' and places' headings, a place's name), which `block-views` draws as HTML.
 
 ## Image uploads
 
@@ -665,7 +666,7 @@ const url = useUrlPrompt(editor, { resolveMapUrl });
 
 - `WikiToolbar` shows each command the editor's extensions support (`supports`) and nothing else, in fixed groups, with the table controls while the cursor is in a table.
 - `useUrlPrompt` is the link and embed field: it opens on the current link, unlinks on an emptied one, and closes when its editor changes.
-- `WikiLine` is a one-line field with its own `marks`, undo and `onFocus`, so one toolbar can drive the field last touched.
+- `WikiLine` is a one-line field with its own `marks`, undo and `onFocus`, so one toolbar can drive the field last touched. Its `style` mark is `wikiTextStyle`: a font, colour and size on a run of words, which an article editor takes through `nodes` and an app's own controls set with `setTextStyle`.
 - A link is stored as its `href` and the `link` class only; whether it is external is decided at render by `articleHtml`'s `links` pass. `uploadImageTo('/api/upload')` is the `uploadImage` an editor passes.
 
 ## Block editor

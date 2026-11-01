@@ -26,7 +26,10 @@ import { Anchor } from './react-server.js';
 import type { WikiLinkComponent } from './react-server.js';
 import { safeLinkHref } from './validation.js';
 import { cx } from './html.js';
-import { BANNER_LABELS, BANNER_MESSAGES, bannerVariant } from './text.js';
+import { BANNER_LABELS, BANNER_MESSAGES, bannerVariant, plainText } from './text.js';
+
+/** A one-line field as the HTML it holds, cleaned by `sanitizeCoreLeaf` (`sanitizeLine`) on its way here. */
+const line = (html: string) => ({ dangerouslySetInnerHTML: { __html: html } });
 
 
 // ---- codeTabs ---------------------------------------------------------------
@@ -299,10 +302,10 @@ export function StatsView({
       {rows.map((item, i) => (
         <div key={item.id ?? i} className="stat-card">
           <span className="stat-value">
-            {item.value}
+            <span {...line(String(item.value))} />
             {item.suffix && <span className="stat-suffix">{item.suffix}</span>}
           </span>
-          <span className="stat-label">{item.label}</span>
+          <span className="stat-label" {...line(item.label)} />
         </div>
       ))}
     </div>
@@ -329,12 +332,12 @@ export function TestimonialView({ quote, author, role, avatarUrl, photo }: Testi
   const src = avatarUrl && safeLinkHref(avatarUrl);
   return (
     <figure className="testimonial">
-      <blockquote>{quote}</blockquote>
+      <blockquote {...line(quote)} />
       <figcaption>
         {src && <img src={src} {...photo} alt="" loading="lazy" />}
         <span>
-          <strong>{author}</strong>
-          {role && <small>{role}</small>}
+          <strong {...line(author)} />
+          {role && <small {...line(role)} />}
         </span>
       </figcaption>
     </figure>
@@ -381,7 +384,7 @@ export function EventsView({ items, upcoming, past, day }: EventsViewProps) {
       ).map(([heading, rows], ended) =>
         rows.length ? (
           <Fragment key={ended}>
-            <h2>{heading}</h2>
+            <h2 {...line(heading)} />
             <ol className="event-list">
               {rows.map((e, i) => (
                 <li key={e.id ?? i}>
@@ -463,7 +466,7 @@ export function LocationsView({ heading, map, items }: LocationsViewProps) {
   const Name = heading ? 'h3' : 'h2';
   return (
     <section className="locations">
-      {heading && <h2>{heading}</h2>}
+      {heading && <h2 {...line(heading)} />}
       <ul className="places">
         {items.map((p, i) => {
           const link = safeLinkHref(mapHref(p));
@@ -471,7 +474,7 @@ export function LocationsView({ heading, map, items }: LocationsViewProps) {
           return (
             <li key={p.id ?? i} className="place">
               {image && <img src={image} {...p.photo} alt="" className="place-picture" loading="lazy" />}
-              {p.name && <Name>{p.name}</Name>}
+              {p.name && <Name {...line(p.name)} />}
               {p.address && <address>{link ? <a href={link}>{p.address.trim()}</a> : p.address.trim()}</address>}
               {!!p.hours?.length && <PlaceHours hours={p.hours} timeZone={p.timeZone} />}
               {p.note && <p dangerouslySetInnerHTML={{ __html: p.note }} />}
@@ -485,7 +488,7 @@ export function LocationsView({ heading, map, items }: LocationsViewProps) {
                 <iframe
                   className="place-map"
                   src={mapEmbed({ address: p.address, map: p.map })}
-                  title={`Map of ${p.name || p.address.split('\n')[0]}`}
+                  title={`Map of ${(p.name && plainText(p.name)) || p.address.split('\n')[0]}`}
                   loading="lazy"
                   referrerPolicy="no-referrer-when-downgrade"
                 />

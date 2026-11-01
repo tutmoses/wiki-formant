@@ -21,6 +21,7 @@ import {
   codeTabsToText,
   linkGridToText,
   pageListToText,
+  plainText,
   referencesToText,
   statsToText,
   stripHtml,
@@ -425,12 +426,12 @@ export function referencesToMarkdown(
 /** Metric cards as a bullet list, or `''` when empty. */
 export function statsToMarkdown(items: readonly StatItem[]): string {
   if (!items.length) return '';
-  return items.map(s => `- **${s.value}${s.suffix ?? ''}** — ${s.label}`).join('\n');
+  return items.map(s => `- **${plainText(String(s.value))}${s.suffix ?? ''}** — ${inlineToMarkdown(s.label)}`).join('\n');
 }
 
 /** A quotation over its attribution. @internal */
 export function testimonialToMarkdown(quote: string, author: string, role?: string | null): string {
-  return `> ${quote.trim().replace(/\n+/g, '\n> ')}\n>\n> — ${[author, role].filter(Boolean).join(', ')}`;
+  return `> ${quote.trim().split(/\n+/).map(inlineToMarkdown).join('\n> ')}\n>\n> — ${[author, role].filter(Boolean).map(w => inlineToMarkdown(w!)).join(', ')}`;
 }
 
 /** Grouped links under their headings, with an optional lead paragraph. @internal */
@@ -521,14 +522,14 @@ function eventSections({ upcoming, past, items, day }: EventsData) {
 /** Events under their headings, split by the day the twin is read, as the page is. */
 export function eventsToMarkdown(block: EventsData): string {
   return eventSections(block)
-    .map(s => `## ${s.heading}\n\n${s.items.map(e => `- ${eventWhen(e)}: ${inlineToMarkdown(e.text)}${s.now(e) ? ' (now on)' : ''}`).join('\n')}`)
+    .map(s => `## ${inlineToMarkdown(s.heading)}\n\n${s.items.map(e => `- ${eventWhen(e)}: ${inlineToMarkdown(e.text)}${s.now(e) ? ' (now on)' : ''}`).join('\n')}`)
     .join('\n\n');
 }
 
 /** Events as prose, `12 Nov 2026: Group show, London` a line, under their headings. */
 export function eventsToText(block: EventsData): string {
   return eventSections(block)
-    .map(s => `${s.heading}\n${s.items.map(e => `${eventWhen(e)}: ${stripHtml(e.text).replace(/\s+/g, ' ')}${s.now(e) ? ' (now on)' : ''}`).join('\n')}`)
+    .map(s => `${plainText(s.heading)}\n${s.items.map(e => `${eventWhen(e)}: ${stripHtml(e.text).replace(/\s+/g, ' ')}${s.now(e) ? ' (now on)' : ''}`).join('\n')}`)
     .join('\n\n');
 }
 
@@ -550,7 +551,7 @@ export function locationsToMarkdown({ heading, items }: LocationsData): string {
     const map = mapHref(p);
     const address = addressLine(p.address);
     return [
-      p.name && `${level} ${p.name}`,
+      p.name && `${level} ${inlineToMarkdown(p.name)}`,
       p.image && `![](${p.image})`,
       address && (map ? `[${address}](${map})` : address),
       p.hours?.length && hoursRows(p.hours).map(r => `- ${r.label}: ${r.times}`).join('\n'),
@@ -560,14 +561,14 @@ export function locationsToMarkdown({ heading, items }: LocationsData): string {
       .filter(Boolean)
       .join('\n\n');
   };
-  return [heading && `## ${heading}`, ...items.map(place)].filter(Boolean).join('\n\n');
+  return [heading && `## ${inlineToMarkdown(heading)}`, ...items.map(place)].filter(Boolean).join('\n\n');
 }
 
 /** Each place as prose: its name, address, hours a row to a line, note, phone and email. */
 export function locationsToText({ heading, items }: LocationsData): string {
   const place = (p: PlaceItem) =>
     [
-      p.name,
+      p.name && plainText(p.name),
       addressLine(p.address),
       ...(p.hours?.length ? hoursRows(p.hours).map(r => `${r.label} ${r.times}`) : []),
       p.note && stripHtml(p.note).replace(/\s+/g, ' '),
@@ -576,7 +577,7 @@ export function locationsToText({ heading, items }: LocationsData): string {
     ]
       .filter(Boolean)
       .join('\n');
-  return [heading, ...items.map(place)].filter(Boolean).join('\n\n');
+  return [heading && plainText(heading), ...items.map(place)].filter(Boolean).join('\n\n');
 }
 
 /** A flat bullet list of links — resolved page lists, feed items, link rails. */

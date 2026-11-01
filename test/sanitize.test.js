@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createHtmlSanitizer, sanitizeCoreLeaf } from 'wiki-formant/sanitize';
+import { createHtmlSanitizer, sanitizeCoreLeaf, sanitizeLine } from 'wiki-formant/sanitize';
 import { jsonLdScript } from 'wiki-formant/react-server';
 
 const clean = createHtmlSanitizer();
@@ -21,6 +21,10 @@ test('what the editor nodes store survives', () => {
   assert.equal(clean(tweet), tweet.replaceAll('=""', ''));
   assert.match(clean('<table class="tiptap-table"><tbody><tr><td class="p-2" colspan="2">x</td></tr></tbody></table>'), /<td class="p-2" colspan="2">/);
   assert.match(clean('<h2 id="intro">Intro</h2>'), /id="intro"/);
+  // wikiTextStyle's span: a font, a colour and a size, the site's own by var().
+  const styled = '<span style="font-family:var(--font-lora), Georgia, serif;color:var(--color-accent);font-size:1.5em">x</span>';
+  assert.equal(clean(styled), styled);
+  assert.equal(clean('<span style="font-family:var(x), serif">x</span>'), '<span>x</span>');
 });
 
 test('inline SVG keeps its presentational subset and its camelCase', () => {
@@ -92,4 +96,20 @@ test("a place's note is cleaned as an event's text is", () => {
   const out = sanitizeCoreLeaf({ type: 'locations', items: [{ id: 'p', address: 'Here', note: '<img src=x onerror=alert(1)>Closed Sundays' }] }, createHtmlSanitizer());
   assert.doesNotMatch(out.items[0].note, /onerror/);
   assert.equal(out.items[0].address, 'Here');
+});
+
+test('a line keeps its marks and styled spans, and nothing else', () => {
+  const line = 'A <strong>bold</strong> <em>new</em> <code>x</code> <a href="/shop" class="link">shop</a> <span style="font-family:var(--font-lora), serif;color:#c00;font-size:1.25em">styled</span>';
+  assert.equal(sanitizeLine(line), line);
+  assert.equal(sanitizeLine('<p>One</p><img src="x.png"><script>alert(1)</script>'), 'One');
+  assert.equal(sanitizeLine('<a href="/shop">shop</a>', { links: false }), 'shop');
+  assert.equal(sanitizeLine('<span style="position:fixed;color:red">x</span>'), '<span style="color:red">x</span>');
+  assert.equal(sanitizeLine('Fish & chips'), 'Fish & chips');
+});
+
+test('a core leaf\'s one-line fields are cleaned as lines', () => {
+  const t = sanitizeCoreLeaf({ type: 'testimonial', quote: '<em>Kind</em><img src=x onerror=1>', author: '<strong>Ada</strong><script>x</script>', role: 'Engineer' }, clean);
+  assert.deepEqual([t.quote, t.author, t.role], ['<em>Kind</em>', '<strong>Ada</strong>', 'Engineer']);
+  const s = sanitizeCoreLeaf({ type: 'stats', items: [{ value: '40<sup>+</sup>', label: '<span style="color:red">Years</span>' }] }, clean);
+  assert.deepEqual(s.items[0], { value: '40+', label: '<span style="color:red">Years</span>' });
 });

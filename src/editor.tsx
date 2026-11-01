@@ -24,6 +24,7 @@
 
 import StarterKit from '@tiptap/starter-kit';
 import TiptapLink from '@tiptap/extension-link';
+import TextStyle from '@tiptap/extension-text-style';
 import TiptapImage from '@tiptap/extension-image';
 import TiptapTable from '@tiptap/extension-table';
 import TiptapTableRow from '@tiptap/extension-table-row';
@@ -41,16 +42,17 @@ import { cx } from './html.js';
  *
  * Each of these packages ships a `declare module '@tiptap/core'` block that adds
  * its commands to `ChainedCommands` — `toggleBold`, `insertTable`, `setLink`,
- * `setImage`. Because this module owns the extensions, it has to carry
+ * `setImage`, `removeEmptyTextStyle`. Because this module owns the extensions, it has to carry
  * the augmentation across the package boundary, and a re-exported type is what
  * makes the emitted `.d.ts` load the module that declares it. Without these
- * four lines every `editor.chain().focus().toggleBold()` in every consumer
+ * lines every `editor.chain().focus().toggleBold()` in every consumer
  * stops type-checking.
  */
 export type { StarterKitOptions } from '@tiptap/starter-kit';
 export type { LinkOptions } from '@tiptap/extension-link';
 export type { ImageOptions } from '@tiptap/extension-image';
 export type { TableOptions } from '@tiptap/extension-table';
+export type { TextStyleOptions } from '@tiptap/extension-text-style';
 
 /** The view and the editor's type, so a consumer imports nothing from `@tiptap/*` itself. */
 export { EditorContent } from '@tiptap/react';
@@ -107,6 +109,40 @@ export const wikiLink = TiptapLink.extend({
     );
   },
 }).configure({ openOnClick: false, HTMLAttributes: { class: 'link', target: null, rel: null } });
+
+/** What `wikiTextStyle` may set on a run of words, each one property of its span's `style`. */
+export interface TextStyleAttrs {
+  fontFamily?: string | null;
+  color?: string | null;
+  fontSize?: string | null;
+}
+
+const STYLE_CSS = { fontFamily: 'font-family', color: 'color', fontSize: 'font-size' } as const;
+
+/**
+ * Tiptap's TextStyle, carrying a font, a colour and a size: a run of words
+ * styled apart from the block around it, the same in a line as in an article.
+ * Each is read back from stored HTML, so a span the sanitiser kept is edited
+ * as it was written. Set with `setTextStyle`, which drops an empty span.
+ */
+export const wikiTextStyle = TextStyle.extend({
+  addAttributes() {
+    return Object.fromEntries(
+      Object.entries(STYLE_CSS).map(([name, css]) => [
+        name,
+        {
+          default: null,
+          parseHTML: (el: HTMLElement) => el.style.getPropertyValue(css) || null,
+          renderHTML: (attrs: Record<string, unknown>) => (attrs[name] ? { style: `${css}: ${attrs[name]}` } : {}),
+        },
+      ]),
+    );
+  },
+});
+
+/** Style the selected words, or with null take a property off them; a span left with none goes. */
+export const setTextStyle = (editor: Editor, attrs: TextStyleAttrs) =>
+  editor.chain().focus().setMark('textStyle', attrs).removeEmptyTextStyle().run();
 
 export interface WikiEditorExtensionOptions {
   /** Empty-document prompt. */
@@ -756,8 +792,8 @@ export function useWikiEditor({
 
 // ---- one line ---------------------------------------------------------------
 
-/** What a one-line field may keep. With none, its value is plain text. */
-export type LineMark = 'bold' | 'italic' | 'link';
+/** What a one-line field may keep: an article's inline marks, and `wikiTextStyle`'s font, colour and size. With none, its value is plain text. */
+export type LineMark = 'bold' | 'italic' | 'code' | 'link' | 'style';
 
 // A line's whole document is the line, so Enter has nowhere to go.
 const LineDoc = TiptapNode.create({
@@ -817,7 +853,6 @@ export function WikiLine({ as: Tag, value, onChange, placeholder, marks = [], cl
           orderedList: false,
           listItem: false,
           codeBlock: false,
-          code: false,
           horizontalRule: false,
           hardBreak: false,
           strike: false,
@@ -825,8 +860,10 @@ export function WikiLine({ as: Tag, value, onChange, placeholder, marks = [], cl
           gapcursor: false,
           ...(has('bold') ? {} : { bold: false }),
           ...(has('italic') ? {} : { italic: false }),
+          ...(has('code') ? {} : { code: false }),
         }),
         ...(has('link') ? [wikiLink] : []),
+        ...(has('style') ? [wikiTextStyle] : []),
       ],
       content: content(value),
       editorProps: { transformPastedHTML: pastedLine, transformPastedText: t => t.replace(/\s+/g, ' ') },

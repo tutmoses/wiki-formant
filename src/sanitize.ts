@@ -48,14 +48,15 @@ const STYLE_PROPS = [
   'border', 'border-top', 'border-bottom', 'border-left', 'border-right',
   'border-radius', 'border-color', 'border-width', 'border-style',
   'background', 'background-color', 'color', 'opacity',
-  'font-size', 'font-weight', 'font-style', 'line-height',
+  'font-family', 'font-size', 'font-weight', 'font-style', 'line-height',
   'text-align', 'vertical-align', 'display', 'overflow',
 ];
 
-// Ordinary CSS tokens plus rgb()/rgba(). Excluding quotes, backslashes, angle
-// brackets and any other `(` keeps `url(...)` and `expression(...)` out of
-// every property without a per-property regex.
-const SAFE_CSS_VALUE = /^(?:[a-z0-9#%.,\-+/ ]|rgba?\([\d\s,.%]+\))*$/i;
+// Ordinary CSS tokens plus rgb()/rgba(), and var() naming a custom property, so
+// a run of words can take the site's own colour or web font. Excluding quotes,
+// backslashes, angle brackets and any other `(` keeps `url(...)` and
+// `expression(...)` out of every property without a per-property regex.
+const SAFE_CSS_VALUE = /^(?:[a-z0-9#%.,\-+/ ]|rgba?\([\d\s,.%]+\)|var\(--[a-z0-9-]+\))*$/i;
 
 const PROSE_TAGS = [
   'p', 'br', 'hr', 'div', 'span', 'blockquote', 'pre', 'code',
@@ -177,6 +178,30 @@ export function createHtmlSanitizer(options: HtmlSanitizerOptions = {}): (html: 
   return (html: string): string => (!html || !html.includes('<') ? html : asYouTubeNodes(sanitizeHtml(html, config)));
 }
 
+// What a `WikiLine` keeps: its marks, the link's class, and `wikiTextStyle`'s
+// three properties, each held to the same safe value as an article's.
+const LINE_TAGS = ['strong', 'em', 'b', 'i', 'code', 'span', 'a'];
+const LINE_STYLES = Object.fromEntries(['font-family', 'color', 'font-size'].map(p => [p, [SAFE_CSS_VALUE]]));
+
+/**
+ * A one-line field's HTML, cleaned: bold, italic, code, a link and a styled
+ * span, and nothing else, so a heading or a caption drawn from it as HTML holds
+ * no block, picture or script. `links: false` drops a link's tag and keeps its
+ * words, for a field drawn inside a link already, a button's label.
+ */
+export function sanitizeLine(html: string, { links = true }: { links?: boolean } = {}): string {
+  if (!html || !html.includes('<')) return html;
+  return sanitizeHtml(html, {
+    allowedTags: links ? LINE_TAGS : LINE_TAGS.filter(t => t !== 'a'),
+    allowedAttributes: { a: ['href'], span: ['style'] },
+    allowedClasses: { a: ['link'] },
+    allowedStyles: { span: LINE_STYLES },
+    allowedSchemesByTag: { a: ['http', 'https', 'mailto', 'tel'] },
+    allowProtocolRelative: false,
+    nonTextTags: ['script', 'style', 'textarea', 'option', 'noscript'],
+  });
+}
+
 // A YouTube player the editor did not write: an agent's, an import's, a pasted
 // embed code. Run over the sanitiser's own output, whose markup is regular.
 const BARE_YOUTUBE = /(<div data-youtube-video>)?(<iframe\b[^>]*\bsrc="https:\/\/www\.youtube(?:-nocookie)?\.com\/embed\/[^"]*"[^>]*><\/iframe>)/g;
@@ -195,10 +220,17 @@ const each = (v: unknown, map: (item: Record<string, unknown>) => Record<string,
 
 const str = (v: unknown): v is string => typeof v === 'string';
 
+/** The named one-line fields of `o` that hold words, each through `sanitizeLine`. */
+const lines = (o: Record<string, unknown>, ...keys: string[]) =>
+  Object.fromEntries(keys.filter(k => str(o[k])).map(k => [k, sanitizeLine(o[k] as string)]));
+
 /**
  * The core leaf types' HTML fields, cleaned: `content.text`, `linkGrid` group
- * descriptions, `references` and `events` item text, and a place's note. Every other field those blocks
- * carry renders as a React text node and is escaped already.
+ * descriptions, `references` and `events` item text, and a place's note, by
+ * `clean`; and their one-line fields, a figure's value and label, a quote and
+ * who said it, the events' headings and a place's heading and name, by
+ * `sanitizeLine`. Every other field those blocks carry renders as a React text
+ * node and is escaped already.
  *
  * Returns any other block untouched, so it drops straight into a
  * `mapBlockTree` pass — a repo whose own types render HTML cleans those itself.
@@ -217,10 +249,15 @@ export function sanitizeCoreLeaf<B extends { type: string }>(block: B, clean: (h
         groups: each(b.groups, g => (str(g.description) ? { ...g, description: clean(g.description) } : g)),
       } as unknown as B;
     case 'references':
-    case 'events':
       return { ...b, items: each(b.items, i => (str(i.text) ? { ...i, text: clean(i.text) } : i)) } as unknown as B;
+    case 'events':
+      return { ...b, ...lines(b, 'upcoming', 'past'), items: each(b.items, i => (str(i.text) ? { ...i, text: clean(i.text) } : i)) } as unknown as B;
     case 'locations':
-      return { ...b, items: each(b.items, p => (str(p.note) ? { ...p, note: clean(p.note) } : p)) } as unknown as B;
+      return { ...b, ...lines(b, 'heading'), items: each(b.items, p => ({ ...p, ...lines(p, 'name'), ...(str(p.note) && { note: clean(p.note) }) })) } as unknown as B;
+    case 'stats':
+      return { ...b, items: each(b.items, s => ({ ...s, ...lines(s, 'value', 'label') })) } as unknown as B;
+    case 'testimonial':
+      return { ...b, ...lines(b, 'quote', 'author', 'role') } as unknown as B;
     default:
       return block;
   }
