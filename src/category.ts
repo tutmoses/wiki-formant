@@ -2,7 +2,7 @@
 // taxonomy and the store.
 //
 // radix-wiki assembled this inside its route and miow copied it line for line:
-// the count, a sort that only shows once the set needs an A–Z index, the facets
+// the count, a sort toggle for any set with two pages to order, the facets
 // its `select` keys give, a letter that exists, and a card per section listing
 // what it holds. acuiq2 kept a subset that had drifted (no sort, no cards). The
 // view is the app's; the arithmetic is here.
@@ -43,8 +43,9 @@ const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 /**
  * A category's pages narrowed by its facets and an A–Z letter, sorted A–Z or
  * newest first (by a `date` key where the category declares one), and a card
- * per visible child. A set small enough to need no index offers no sort: it is
- * A–Z.
+ * per visible child. The order is the category's own until the query asks for
+ * the other, whatever the set's size: a blog of thirty posts is still newest
+ * first, though it is too short for an A–Z index.
  */
 export async function categoryView<P extends FacetablePage & { tagPath: string; slug: string }>(
   { tree, taxonomy, pages: reader }: { tree: WikiTree<WikiNode>; taxonomy: Taxonomy; pages: CategoryReader<P> },
@@ -57,14 +58,12 @@ export async function categoryView<P extends FacetablePage & { tagPath: string; 
     sort === 'recent' && tree.metadataKeys(path).some(k => k.key === 'date' && k.type === 'date') ? 'date' : sort;
   const fallback = (path: string): 'title' | 'recent' => (tree.resolve(path).sort === 'title' ? 'title' : 'recent');
   const asked = one(query.sort);
-  const requested = asked === 'title' || asked === 'recent' ? asked : fallback(tagPath);
-  const fetched = await reader.list(tagPath, { sort: order(tagPath, requested), limit });
-  const sort = taxonomy.needsAlphaIndex(fetched.length) ? requested : 'title';
-  const all = sort === requested ? fetched : await reader.list(tagPath, { sort: order(tagPath, sort), limit });
+  const sort = asked === 'title' || asked === 'recent' ? asked : fallback(tagPath);
+  const all = await reader.list(tagPath, { sort: order(tagPath, sort), limit });
 
   const filters: FacetFilters = taxonomy.facetFilters(tagPath, query);
   const letter = taxonomy.resolveLetter(all, filters, one(query.letter)?.toUpperCase());
-  const sortable = taxonomy.needsAlphaIndex(all.length);
+  const sortable = all.length > 1;
   // A link carries the sort only when it is not the category's own, so the bare
   // category and its default are one address, not two.
   const state = { sort: sortable && sort !== fallback(tagPath) ? sort : undefined, filters, letter };

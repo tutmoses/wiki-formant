@@ -230,9 +230,8 @@ export interface Taxonomy {
   /** A page's populated metadata keys as facts-panel rows, facet values linked. */
   metadataRows: (tagPath: string, page: { metadata?: unknown }) => MetadataRow[];
   /**
-   * Whether a set has outgrown a grid: the one size rule a hub's browsing
-   * controls read. `alphaControls` applies it; a sort toggle reads it too, with
-   * the same unfiltered count, so the two appear and vanish together.
+   * Whether a set has outgrown a grid and needs an A–Z index. `alphaControls`
+   * applies it. The sort toggle does not: order matters to a short dated set too.
    */
   needsAlphaIndex: (pageCount: number) => boolean;
   href: (tagPath: string, state: CategoryState) => string;

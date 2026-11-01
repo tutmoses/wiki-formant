@@ -115,6 +115,15 @@ test('a category link carries its sort only when it is not the default, and a le
   assert.equal(recent.sortHref('title'), '/tech/core');
 });
 
+test('a category too short for an A–Z index keeps the order it asks for, and offers the other', async () => {
+  const { store, tree } = await wiki();
+  const taxonomy = createTaxonomy({ getMetadataKeys: p => tree.metadataKeys(p) });
+  const recent = await categoryView({ tree, taxonomy, pages: store }, 'tech/core', { sort: 'recent' });
+  assert.equal(taxonomy.needsAlphaIndex(recent.total), false);
+  assert.equal(recent.sort, 'recent');
+  assert.ok(recent.sortable);
+});
+
 test('get_page with blocks returns what an edit starts from, rows carry the id, and history reads by path', async () => {
   const { store, tree } = await wiki();
   const tools = wikiReadTools({
