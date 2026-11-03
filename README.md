@@ -8,6 +8,8 @@ The editor, history, sanitiser, chart and passkey modules bring their libraries 
 npm install wiki-formant
 ```
 
+An agent can start a wiki for you, hosted on miow.me or in your own app, with the skill in `skills/wiki-formant`: `npx skills add tutmoses/wiki-formant`.
+
 What stays the app's: its design system, its block types beyond the core, its connection, cache and auth. Everything else here is shared.
 
 ## API
