@@ -86,21 +86,24 @@ function bucketStart(time: number, step: ChartStep): number {
  * Points, oldest first, one per step. A price keeps the last value in each
  * step, as a candle does its close: the first open, the highest high, the
  * lowest low. A count is the total of its days; a rate, their mean. Volume is
- * summed.
+ * summed. The first step sits on its first point when the points start inside
+ * it, so the axis never reaches back past the days that were counted.
  *
  * @internal
  */
 export function bucketChart(points: readonly ChartPoint[], step: ChartStep, aggregate: ChartAggregate): ChartPoint[] {
   const out: ChartPoint[] = [];
   let n = 0;
+  let bucket: number | undefined;
   for (const p of points) {
     const start = bucketStart(p.time, step);
-    const last = out.at(-1);
-    if (last?.time !== start) {
-      out.push({ ...p, time: start });
+    if (bucket !== start) {
+      out.push({ ...p, time: out.length ? start : p.time });
+      bucket = start;
       n = 1;
       continue;
     }
+    const last = out.at(-1)!;
     if (aggregate === 'last') last.value = p.value;
     else if (aggregate === 'sum') last.value += p.value;
     else last.value += (p.value - last.value) / ++n;

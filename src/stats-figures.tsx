@@ -100,8 +100,9 @@ const EMPTY: DigestDay = { date: '', visitors: 0, pageviews: 0, visits: 0, bounc
  */
 export function StatsFigures({ digest, first, apart, controls }: { digest: Digest; first: number; apart: boolean; controls: ReactNode }) {
   const figures = useMemo(() => figuresOf(digest, apart), [digest, apart]);
-  const [chosen, choose] = useState(0);
-  const figure = figures[chosen] ?? figures[0]!;
+  // By name, since a window or the agents switch can arrive without a reload and the figures shift.
+  const [chosen, choose] = useState(figures[0]!.label);
+  const figure = figures.find(f => f.label === chosen) ?? figures[0]!;
   const byDay = useMemo(() => new Map(digest.by_day.map(r => [r.date, r])), [digest.by_day]);
   const series = useMemo<ChartPoint[]>(() => {
     const today = Math.floor(Date.now() / 1000 / DAY);
@@ -115,8 +116,8 @@ export function StatsFigures({ digest, first, apart, controls }: { digest: Diges
   return (
     <>
       <div className="stats-figures" role="group" aria-label="Chart">
-        {figures.map((f, i) => (
-          <button key={f.label} type="button" aria-pressed={i === chosen} onClick={() => choose(i)}>
+        {figures.map(f => (
+          <button key={f.label} type="button" aria-pressed={f === figure} onClick={() => choose(f.label)}>
             <span>{f.label}</span>
             <strong>
               {f.value}

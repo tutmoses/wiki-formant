@@ -163,12 +163,14 @@ export function recordEvent(sql: Sql, { name, props = {}, url, headers, site = '
   return quietly(async () => {
     let path: string | null = null;
     if (url) path = normalisePath(new URL(url, 'http://x').pathname);
+    // An agent's country is where its requests came from, so the stats page's countries can count it.
+    const country = headers?.get('x-vercel-ip-country')?.slice(0, 2);
     return sql(
       'INSERT INTO "Event" ("siteId", name, path, props, visitor) VALUES ($1, $2, $3, $4::jsonb, $5)',
       site,
       name.slice(0, 64),
       path,
-      JSON.stringify(props),
+      JSON.stringify(country ? { ...props, country } : props),
       headers?.get('user-agent') ? await visitorOf(sql, site, headers) : null,
     );
   });
@@ -264,6 +266,23 @@ const VISIT_TEST: Record<keyof StatsFilter, (value: string) => string> = {
   device: v => `bool_or(device = ${v})`,
 };
 
+/** An agent's source and device in the lists, which no request of its carries. */
+const AGENT_SOURCE = '(agent)';
+const AGENT_DEVICE = 'agent';
+
+/**
+ * Each filter as a test on one agent: its reads in the window are its visit,
+ * the first its entry page. Its source and device are the two above, and its
+ * country the one its requests came from, where they were counted with one.
+ */
+const AGENT_TEST: Record<keyof StatsFilter, (value: string) => string> = {
+  page: v => `bool_or(path = ${v})`,
+  entry: v => `(array_agg(path ORDER BY at))[1] = ${v}`,
+  source: v => `${v} = '${AGENT_SOURCE}'`,
+  country: v => `bool_or(country = ${v})`,
+  device: v => `${v} = '${AGENT_DEVICE}'`,
+};
+
 export interface DigestOptions {
   site?: string;
   /** How far back, in whole days from now; `Infinity` for all time. */
@@ -281,10 +300,18 @@ export interface DigestOptions {
   ownAgents?: string[];
   /**
    * Narrows every figure to the visits that pass, and the events to their
-   * visitors. `ViewDay` keeps no visits, so a narrowed digest leaves it out
-   * and starts at `counted_from`, and has no `previous_visitors`.
+   * visitors; an agent passes as `AGENT_TEST` has it. `ViewDay` keeps no
+   * visits, so a narrowed digest leaves it out and starts at `counted_from`,
+   * and has no `previous_visitors`.
    */
   filter?: StatsFilter;
+  /**
+   * People and agents counted apart, as they are by default: the ranked lists
+   * count people. False counts agents in the pages, entry pages, sources,
+   * countries and devices too, as `visitors_incl_agents` counts them, so a
+   * stats page's lists add up to the visitors its chart draws.
+   */
+  apart?: boolean;
 }
 
 type Ranked<K extends string, M extends string> = Array<Record<K, string> & Record<M, number>>;
@@ -369,7 +396,7 @@ export interface Digest {
  */
 export async function digest(
   sql: Sql,
-  { site = '', days, handle, siblings = [], gaps = [SEARCH_GAPS], ownAgents = ['-mcp-test', 'radix-studio'], filter = {} }: DigestOptions,
+  { site = '', days, handle, siblings = [], gaps = [SEARCH_GAPS], ownAgents = ['-mcp-test', 'radix-studio'], filter = {}, apart = true }: DigestOptions,
 ): Promise<Digest> {
   // The window is the database's clock, which stamped the rows; the app's can run behind it.
   // All time is a century: further back than any row, and still an int to Postgres.
@@ -384,6 +411,9 @@ export async function digest(
   /** Clicks on links to the site's own X account, among `e`. */
   const follows = handle && `name = 'Outbound Link: Click' AND props->>'url' ILIKE ANY(${$([`%x.com/${handle}%`, `%twitter.com/${handle}%`])}::text[])`;
   const tests = STATS_FILTERS.flatMap(k => (filter[k] ? [VISIT_TEST[k]($(filter[k]))] : []));
+  const agentTests = STATS_FILTERS.flatMap(k => (filter[k] ? [AGENT_TEST[k]($(filter[k]))] : []));
+  /** Agents among the rows of a ranked list, unless they are counted apart. */
+  const agentsToo = (select: string) => (apart ? '' : ` UNION ALL ${select}`);
   const day = (at: string) => `to_char(${at} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`;
   /** The site's own agents, as a test on an event's user agent. */
   const ours = `coalesce(props->>'ua', '') ILIKE ANY(${$(ownAgents.map(a => `%${a}%`))}::text[])`;
@@ -415,16 +445,20 @@ export async function digest(
       FROM numbered${s} GROUP BY visitor, visit${tests.length ? ` HAVING ${tests.join(' AND ')}` : ''}
     ), v${s} AS (
       ${tests.length ? `SELECT n.id, n.path, n.source, n.country, n.device, n.visitor, n.at FROM numbered${s} n JOIN visits${s} USING (visitor, visit)` : `SELECT * FROM viewed${s}`}
+    ), read${s} AS (
+      SELECT visitor, "createdAt" AS at, path, props->>'country' AS country, ${AGENT_NAME} AS agent FROM "Event"
+      WHERE "siteId" = $1 AND ${at} AND name IN ('AI Bot Visit', 'MCP Call') AND visitor IS NOT NULL AND NOT ${ours}
+    ), ag${s} AS (
+      SELECT * FROM read${s}${agentTests.length ? ` WHERE visitor IN (SELECT visitor FROM read${s} GROUP BY 1 HAVING ${agentTests.join(' AND ')})` : ''}
     ), e${s} AS (
       SELECT name, props, visitor, "createdAt" AS at FROM "Event" WHERE "siteId" = $1 AND ${at}
-      ${tests.length ? `AND visitor IN (SELECT visitor FROM v${s})` : ''}
+      ${tests.length ? `AND (visitor IN (SELECT visitor FROM v${s}) OR visitor IN (SELECT visitor FROM ag${s}))` : ''}
+    ), acted${s} AS MATERIALIZED (
+      SELECT visitor, at FROM e${s} WHERE name NOT IN ('AI Bot Visit', 'MCP Call') AND visitor IS NOT NULL
     ), bounced${s} AS (
+      -- Against the few reader events alone: probing every agent event once per visit took seconds.
       SELECT * FROM visits${s} b WHERE views = 1 AND NOT EXISTS (
-        SELECT 1 FROM e${s} x WHERE x.visitor = b.visitor AND x.name NOT IN ('AI Bot Visit', 'MCP Call')
-        AND x.at >= b.at AND x.at < b.at + interval '30 minutes')
-    ), ag${s} AS (
-      SELECT visitor, at, ${AGENT_NAME} AS agent FROM e${s}
-      WHERE name IN ('AI Bot Visit', 'MCP Call') AND visitor IS NOT NULL AND NOT ${ours}
+        SELECT 1 FROM acted${s} x WHERE x.visitor = b.visitor AND x.at >= b.at AND x.at < b.at + interval '30 minutes')
     ), a${s} AS (
       SELECT * FROM "ViewDay" WHERE "siteId" = $1 AND day >= ${dayAgo(back + 1)}${back ? ` AND day < ${dayAgo(back)}` : ''}${tests.length ? ' AND false' : ''}
     ), sessions${s} AS (
@@ -447,19 +481,40 @@ export async function digest(
   const [row] = (await sql(
     `WITH ${chain('', 0)}, ${chain('_p', 1)}, src AS (
       SELECT coalesce(source, '(none)') AS source, count(DISTINCT visitor) AS visitors FROM visits GROUP BY 1
-      UNION ALL SELECT key, value::int FROM a, jsonb_each_text(a.sources)
+      UNION ALL SELECT key, value::int FROM a, jsonb_each_text(a.sources)${agentsToo(`SELECT '${AGENT_SOURCE}', count(DISTINCT visitor) FROM ag HAVING count(*) > 0`)}
     )
     SELECT json_build_object(
       ${headline('')},
       'previous', json_build_object(${headline('_p')}, 'follow_clicks', ${follows ? `(SELECT count(*) FROM e_p WHERE ${follows})` : 'NULL'}),
       'counted_from', (SELECT ${day('min("createdAt")')} FROM "View" WHERE "siteId" = $1),
       'top_sources', ${list('SELECT source, sum(visitors) AS visitors FROM src GROUP BY 1', 6)},
-      'top_pages', ${list(merged('page', 'pages', 'SELECT path, count(DISTINCT visitor) FROM v GROUP BY 1'), 6)},
-      'entry_pages', ${list(merged('page', 'entryPages', 'SELECT entry, count(DISTINCT visitor) FROM visits GROUP BY 1'), 6)},
+      'top_pages', ${list(
+        merged('page', 'pages', `SELECT path, count(DISTINCT visitor) FROM v GROUP BY 1${agentsToo('SELECT path, count(DISTINCT visitor) FROM ag WHERE path IS NOT NULL GROUP BY 1')}`),
+        6,
+      )},
+      'entry_pages', ${list(
+        merged(
+          'page',
+          'entryPages',
+          `SELECT entry, count(DISTINCT visitor) FROM visits GROUP BY 1${agentsToo(
+            'SELECT entry, count(*) FROM (SELECT (array_agg(path ORDER BY at))[1] AS entry FROM ag GROUP BY visitor) f WHERE entry IS NOT NULL GROUP BY 1',
+          )}`,
+        ),
+        6,
+      )},
       'from_posts', ${list(`SELECT entry AS page, count(DISTINCT visitor) AS visitors FROM visits WHERE source = 'x' GROUP BY 1`, 15)},
       'sibling_referrals', ${list(`SELECT source, sum(visitors) AS visitors FROM src WHERE source = ANY(${$(siblings)}::text[]) GROUP BY 1`, 6)},
-      'countries', ${list(merged('country', 'countries', 'SELECT country, count(DISTINCT visitor) FROM v WHERE country IS NOT NULL GROUP BY 1'), 10)},
-      'devices', ${list(merged('device', 'devices', 'SELECT device, count(DISTINCT visitor) FROM v GROUP BY 1'))},
+      'countries', ${list(
+        merged(
+          'country',
+          'countries',
+          `SELECT country, count(DISTINCT visitor) FROM v WHERE country IS NOT NULL GROUP BY 1${agentsToo('SELECT country, count(DISTINCT visitor) FROM ag WHERE country IS NOT NULL GROUP BY 1')}`,
+        ),
+        10,
+      )},
+      'devices', ${list(
+        merged('device', 'devices', `SELECT device, count(DISTINCT visitor) FROM v GROUP BY 1${agentsToo(`SELECT '${AGENT_DEVICE}', count(DISTINCT visitor) FROM ag HAVING count(*) > 0`)}`),
+      )},
       'by_day', ${list(
         `SELECT date, sum(visitors) AS visitors, sum(pageviews) AS pageviews, sum(visits) AS visits, sum(bounces) AS bounces,
           sum(seconds) AS seconds, sum(agents) AS agents, sum(everyone) AS visitors_incl_agents, sum(follows) AS follow_clicks FROM (

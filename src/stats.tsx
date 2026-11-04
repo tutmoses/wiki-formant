@@ -11,7 +11,8 @@
 // `?page=`, `?entry=`, `?source=`, `?country=` and `?device=` narrow it. Every
 // row in a list is a link that adds its own, and every narrowing a link that
 // drops it. Each is `link`, so a site passing its router's link component
-// changes the window or the filter without reloading the page.
+// changes the window or the filter without reloading the page, and the chart
+// redraws in place. None is prefetched: each is a digest query.
 
 import type { CSSProperties, ReactNode } from 'react';
 import { STATS_FILTERS, count, type Digest, type StatsFilter } from './analytics.js';
@@ -30,7 +31,7 @@ export interface StatsProps {
   apart?: boolean;
   /** The windows offered as `?days=` links on the same page. */
   ranges?: readonly number[];
-  /** Every link on the page: `next/link`, say, so a window or a filter does not reload it. */
+  /** Every link on the page: `next/link`, say, so a window or a filter does not reload it. Each is given `prefetch={false}`. */
   link?: WikiLinkComponent;
 }
 
@@ -57,6 +58,7 @@ export function statsQuery(params: Record<string, string | string[] | undefined>
     const v = params[k];
     if (typeof v === 'string' && v) filter[k] = v.slice(0, 500);
   }
+  // `apart` is `digest`'s option too, so its lists count the visitors the chart draws.
   return { days: statsDays(params.days, ranges), filter, apart: params.agents === 'apart' };
 }
 
@@ -101,7 +103,15 @@ function StatsList({
       <ol>
         {rows.map(([v, n]) => (
           <li key={v} style={{ '--share': n / max } as CSSProperties}>
-            <span>{to ? <Link href={to(v)}>{label(v)}</Link> : label(v)}</span>
+            <span>
+              {to ? (
+                <Link href={to(v)} prefetch={false}>
+                  {label(v)}
+                </Link>
+              ) : (
+                label(v)
+              )}
+            </span>
             <span className="stats-count">{count(n)}</span>
           </li>
         ))}
@@ -114,7 +124,8 @@ function StatsList({
  * A site's own analytics on one page: the headline figures against the window
  * before, visitors counting agents unless `apart`, whichever of them is chosen per day, and every ranked list the
  * digest carries, each row a link that narrows the page to it. Lists with
- * nothing in them are left out. The chart and the bars are `currentColor`
+ * nothing in them are left out. The digest is made with the same `apart`, so
+ * the lists count the visitors the chart draws. The chart and the bars are `currentColor`
  * until the importing stylesheet gives them a colour.
  */
 export function Stats({ digest: d, days, filter = {}, apart = false, ranges = STATS_RANGES, link: Link = Anchor }: StatsProps) {
@@ -139,14 +150,21 @@ export function Stats({ digest: d, days, filter = {}, apart = false, ranges = ST
     <>
       <div role="group" aria-label="Window">
         {ranges.map(n => (
-          <Link key={n} href={at(filter, n)} aria-current={n === days ? 'page' : undefined}>
+          <Link key={n} href={at(filter, n)} aria-current={n === days ? 'page' : undefined} prefetch={false}>
             {windowLabel(n)}
           </Link>
         ))}
       </div>
       <div>
         {/* On while visitors count agents too, off while people and agents are counted apart: a robot's head in currentColor. */}
-        <Link href={at(filter, days, !apart)} role="switch" aria-checked={!apart} aria-label="Agents counted among visitors" title="Agents counted among visitors">
+        <Link
+          href={at(filter, days, !apart)}
+          role="switch"
+          aria-checked={!apart}
+          aria-label="Agents counted among visitors"
+          title="Agents counted among visitors"
+          prefetch={false}
+        >
           <svg className="chart-icon" viewBox="0 0 12 12" aria-hidden>
             <path d="M6 1.5v2M1 6.5v2M11 6.5v2" stroke="currentColor" />
             <rect x="2.5" y="3.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" />
@@ -165,7 +183,7 @@ export function Stats({ digest: d, days, filter = {}, apart = false, ranges = ST
           <ul aria-label="Narrowed to">
             {narrowed.map(k => (
               <li key={k}>
-                <Link href={at({ ...filter, [k]: undefined })} title="Remove">
+                <Link href={at({ ...filter, [k]: undefined })} title="Remove" prefetch={false}>
                   {NAMES[k]}: {k === 'country' ? country(filter[k]!) : filter[k]} ×
                 </Link>
               </li>

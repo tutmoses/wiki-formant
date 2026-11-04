@@ -234,7 +234,7 @@ test('agents are named and counted apart from visitors, the site\'s own left out
   const { sql, calls } = fakeSql();
   await digest(sql, { days: 7, ownAgents: ['-mcp-test'] });
   const { query, values } = calls.at(-1);
-  assert.match(query, /ag AS \(\s*SELECT visitor, at, coalesce\(props->>'bot', .* FROM e\s+WHERE name IN \('AI Bot Visit', 'MCP Call'\) AND visitor IS NOT NULL AND NOT coalesce\(props->>'ua', ''\) ILIKE ANY\(\$\d+::text\[\]\)/);
+  assert.match(query, /read AS \(\s*SELECT visitor, "createdAt" AS at, path, props->>'country' AS country, coalesce\(props->>'bot', .* FROM "Event"\s+WHERE .* AND name IN \('AI Bot Visit', 'MCP Call'\) AND visitor IS NOT NULL AND NOT coalesce\(props->>'ua', ''\) ILIKE ANY\(\$\d+::text\[\]\)/);
   assert.match(query, /'agents', \(SELECT count\(DISTINCT visitor\) FROM ag\)/);
   // Visitors with agents are the two counts at once, so the site's own stay out of it too.
   assert.match(query, /'visitors_incl_agents', \(SELECT count\(DISTINCT visitor\) FROM \(SELECT visitor FROM v UNION SELECT visitor FROM ag\) u\)/);
@@ -242,6 +242,22 @@ test('agents are named and counted apart from visitors, the site\'s own left out
   assert.match(query, /'previous', json_build_object\(.*'agents', \(SELECT count\(DISTINCT visitor\) FROM ag_p\)/s);
   assert.match(query, /'top_agents', \(SELECT coalesce\(json_agg\(t\), '\[\]'\) FROM \(SELECT agent, count\(DISTINCT visitor\) AS visitors FROM ag GROUP BY 1/);
   assert.equal(values.filter(v => Array.isArray(v) && v[0] === '%-mcp-test%').length, 1);
+});
+
+test('agents counted among visitors are in the lists, and a filter narrows them as it does people', async () => {
+  const { sql, calls } = fakeSql();
+  await digest(sql, { days: 7 });
+  const apart = calls.at(-1).query;
+  assert.doesNotMatch(apart, /FROM ag WHERE path IS NOT NULL/);
+  await digest(sql, { days: 7, apart: false, filter: { page: '/a', device: 'agent' } });
+  const { query, values } = calls.at(-1);
+  assert.match(query, /UNION ALL SELECT path, count\(DISTINCT visitor\) FROM ag WHERE path IS NOT NULL GROUP BY 1/);
+  assert.match(query, /UNION ALL SELECT '\(agent\)', count\(DISTINCT visitor\) FROM ag HAVING count\(\*\) > 0/);
+  assert.match(query, /UNION ALL SELECT 'agent', count\(DISTINCT visitor\) FROM ag HAVING count\(\*\) > 0/);
+  assert.match(query, /ag AS \(\s*SELECT \* FROM read WHERE visitor IN \(SELECT visitor FROM read GROUP BY 1 HAVING bool_or\(path = \$\d+\) AND \$\d+ = 'agent'\)/);
+  assert.match(query, /OR visitor IN \(SELECT visitor FROM ag\)/);
+  const highest = Math.max(...[...query.matchAll(/\$(\d+)/g)].map(m => Number(m[1])));
+  assert.equal(highest, values.length);
 });
 
 const PREVIOUS = { visitors: 5, pageviews: 9, bounce_rate: 50, visit_duration: 30, agents: 4, visitors_incl_agents: 6, follow_clicks: 1 };

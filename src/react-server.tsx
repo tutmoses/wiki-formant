@@ -48,6 +48,8 @@ export interface WikiLinkProps {
   'aria-checked'?: boolean;
   /** The name of a link drawn as an icon. */
   'aria-label'?: string;
+  /** False where following the link costs the server a query, as a stats page's links do; a plain anchor ignores it. */
+  prefetch?: boolean;
   children?: ReactNode;
 }
 
@@ -59,7 +61,7 @@ export type WikiLinkComponent = ComponentType<WikiLinkProps>;
  * Exported because `block-views` renders links too and had declared the same
  * three lines; a default that exists twice is a default that can diverge.
  */
-export const Anchor: WikiLinkComponent = (props) => <a {...props} />;
+export const Anchor: WikiLinkComponent = ({ prefetch: _, ...props }) => <a {...props} />;
 
 // ---- facet bar --------------------------------------------------------------
 
