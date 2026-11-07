@@ -265,3 +265,25 @@ test("a revision is read only through its own site's page", async () => {
   assert.deepEqual(await b.history(page.id), []);
   assert.equal(await b.revision(page.id, rev.id), null);
 });
+
+test('a hyphen or underscore inside a word is a space to the full-text tier', async () => {
+  const { sql } = await db();
+  const store = wikiStore({ sql });
+  await store.save({ tagPath: 'blog', slug: 'p', title: 'Nine events', content: [para('a', "Building Radix's developer pipeline.")] });
+  assert.deepEqual((await store.search('radix-pipeline')).items.map(i => i.slug), ['p']);
+  assert.deepEqual((await store.search('radix_pipeline')).items.map(i => i.slug), ['p']);
+  assert.equal((await store.search('radix -pipeline')).total, 0, "a leading hyphen is still websearch's NOT");
+});
+
+test('a search that finds nothing is retried with its misspellings corrected against the titles', async () => {
+  const { sql } = await db();
+  const store = wikiStore({ sql });
+  await store.save({ tagPath: 'tech', slug: 'h', title: 'Hyperscale weekly', content: [para('a', 'Progress.')] });
+  await store.save({ tagPath: 'tech', slug: 'b', title: 'Bonds', content: [para('a', 'Fixed income.')] });
+  await store.save({ tagPath: 'meta', slug: 'm', title: 'Hyperscales log', content: [para('a', 'x')] });
+  const fixed = await store.search('hyperscall weekl');
+  assert.equal(fixed.corrected, 'hyperscale weekly');
+  assert.deepEqual(fixed.items.map(i => i.slug), ['h']);
+  assert.deepEqual(await store.search('bondix'), { items: [], total: 0 }, 'a name the wiki lacks is not turned into one it has');
+  assert.equal((await store.search('hyperscale')).corrected, undefined, 'a query that finds something is left alone');
+});

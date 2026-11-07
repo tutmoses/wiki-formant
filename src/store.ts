@@ -21,7 +21,7 @@ import type { BlockGroup, DiffBlock } from './revisions.js';
 import { computeRevisionDiff } from './revisions.js';
 import { bump, type ChangeType } from './versioning.js';
 import { withChanges, type HistoryChange } from './history.js';
-import { proseSql, escapeLikeTerm, HEADLINE_OPTIONS, FTS_RANK_NORMALIZATION } from './search.js';
+import { proseSql, escapeLikeTerm, fullTextQuery, correctQuery, HEADLINE_OPTIONS, FTS_RANK_NORMALIZATION } from './search.js';
 import { openingText, matchSnippet } from './text.js';
 import { describe } from './metadata.js';
 import { decodeEntities } from './markdown.js';
@@ -75,6 +75,14 @@ export interface WikiRevisionRow<B = unknown> {
 export type WikiRevisionEntry = Omit<WikiRevisionRow, 'content'> & { changes: HistoryChange[] };
 
 export type ListSort = 'title' | 'recent' | 'date';
+
+/** A search's scope and page. `content` adds each row's blocks. */
+export interface SearchOptions {
+  tagPath?: string | null;
+  skip?: number;
+  take?: number;
+  content?: boolean;
+}
 
 export interface WikiStoreOptions<B extends DiffBlock> {
   sql: Sql;
@@ -284,9 +292,9 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
    * page is never a result. A tier-3 row's snippet is Postgres' own headline,
    * because a stem match has no literal substring to window on.
    */
-  const search = async (
+  const ranked = async (
     query: string,
-    { tagPath = null, skip = 0, take = 25, content: withContent = false }: { tagPath?: string | null; skip?: number; take?: number; content?: boolean } = {},
+    { tagPath = null, skip = 0, take = 25, content: withContent = false }: SearchOptions = {},
   ) => {
     const term = escapeLikeTerm(query);
     if (!term) return { items: [] as (WikiPageListing & { score: number; content?: B[] })[], total: 0 };
@@ -319,7 +327,7 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
               CASE WHEN tier = 3 THEN ts_headline('english', ${proseSql()}, tsq, '${HEADLINE_OPTIONS}') END AS headline
          FROM (SELECT count(*)::int AS total FROM matched) t LEFT JOIN paged ON true
         ORDER BY tier, CASE WHEN tier = 0 THEN title END, CASE WHEN tier = 3 THEN fts END DESC, "updatedAt" DESC`,
-      query.trim(), `${term}%`, `%${term}%`, hidden, site, tagPath, take, skip,
+      fullTextQuery(query), `${term}%`, `%${term}%`, hidden, site, tagPath, take, skip,
     );
     const items = found.filter(hit => hit.id !== null).map(({ tier, total: _, headline, content, ...row }) => ({
       ...row,
@@ -329,6 +337,30 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
         || matchSnippet(content, query, () => opening({ content: content as B[], metadata: row.metadata })),
     }));
     return { items, total: found[0]?.total ?? 0 };
+  };
+
+  /** Every word of the searchable titles, with how many titles use it: what a misspelling is corrected against. */
+  const titleWords = async (tagPath: string | null) =>
+    new Map((await rows<{ word: string; n: number }>(
+      `SELECT word, count(*)::int AS n FROM ${PAGE} p, regexp_split_to_table(lower(p.title), '[^[:alnum:]]+') word
+        WHERE p."siteId" = $1 AND word <> '' AND ($2::text IS NULL OR p."tagPath" = $2) AND ($2::text IS NOT NULL OR NOT ${hiddenSql('$3')})
+        GROUP BY 1`,
+      site, tagPath, hidden,
+    )).map(r => [r.word, r.n]));
+
+  /**
+   * {@link ranked}, and when its first page is empty, the same search with each
+   * misspelled word corrected against the titles' own words (`correctQuery`).
+   * A result found that way carries `corrected`, the query that found it, so a
+   * page can say what it searched for instead.
+   */
+  const search = async (query: string, options: SearchOptions = {}): Promise<Awaited<ReturnType<typeof ranked>> & { corrected?: string }> => {
+    const found = await ranked(query, options);
+    if (found.total || options.skip) return found;
+    const corrected = correctQuery(query, await titleWords(options.tagPath ?? null));
+    if (!corrected) return found;
+    const again = await ranked(corrected, options);
+    return again.total ? { ...again, corrected } : found;
   };
 
   /** A revision query's guard: `$1`, its page, is this site's. Another site's page id finds nothing. */

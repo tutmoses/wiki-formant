@@ -131,3 +131,58 @@ export const FTS_RANK_NORMALIZATION = 32;
 export function escapeLikeTerm(query: string): string {
   return (query ?? '').trim().replace(/[\\%_]/g, char => `\\${char}`);
 }
+
+/**
+ * A query as the full-text tier reads it: a hyphen or underscore inside a word
+ * is a space. `websearch_to_tsquery` keeps a hyphenated word as a phrase that
+ * needs the compound itself, so the slug `radix-pipeline` found nothing where
+ * `radix pipeline` found sixteen pages. A leading `-` is websearch's NOT, and
+ * stays.
+ */
+export function fullTextQuery(query: string): string {
+  return (query ?? '').trim().replace(/([\p{L}\p{N}])[-_]+(?=[\p{L}\p{N}])/gu, '$1 ');
+}
+
+/** Edits between two words, a swapped adjacent pair counting as one. */
+function editDistance(a: string, b: string): number {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array<number>(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0]![j] = j;
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i]![j] = Math.min(d[i - 1]![j]! + 1, d[i]![j - 1]! + 1, d[i - 1]![j - 1]! + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i]![j] = Math.min(d[i]![j]!, d[i - 2]![j - 2]! + 1);
+    }
+  return d[a.length]![b.length]!;
+}
+
+/**
+ * A query with each misspelled word replaced by the nearest word in `vocabulary`
+ * (word → how often it occurs), or `null` when no word changes. Called only for
+ * a query that found nothing, so a word the wiki already uses is never touched.
+ *
+ * Tight on purpose: a word of four to seven letters may be one edit out, a
+ * longer one two, and a shorter one none. Looser, a name the wiki lacks turns
+ * into a word it has – `bondix` into `bonds` – and the reader gets an answer to
+ * a question they did not ask. Ties go to the commoner word.
+ */
+export function correctQuery(query: string, vocabulary: ReadonlyMap<string, number>): string | null {
+  let changed = false;
+  const fixed = query.trim().toLowerCase().split(/\s+/).map(word => {
+    const budget = word.length >= 8 ? 2 : word.length >= 4 ? 1 : 0;
+    if (!budget || vocabulary.has(word) || !/^[\p{L}\p{N}]+$/u.test(word)) return word;
+    let best: string | null = null;
+    let bestDistance = Infinity;
+    let bestCount = 0;
+    for (const [candidate, count] of vocabulary) {
+      if (Math.abs(candidate.length - word.length) > budget) continue;
+      const distance = editDistance(word, candidate);
+      if (distance > budget) continue;
+      if (distance < bestDistance || (distance === bestDistance && count > bestCount)) [best, bestDistance, bestCount] = [candidate, distance, count];
+    }
+    if (!best) return word;
+    changed = true;
+    return best;
+  });
+  return changed ? fixed.join(' ') : null;
+}

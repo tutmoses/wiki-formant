@@ -565,7 +565,7 @@ const off = onTweetResize((h, source) => sizeTweetEmbed(el, h, source));
 
 ## Search
 
-`wiki-formant/search`: what a literal tier and a full-text tier must agree on: `proseSql`, `HEADLINE_OPTIONS`, `FTS_RANK_NORMALIZATION`, and `searchTsvDdl(table)`, the statements that drop and re-add the generated `search_tsv` column and its index in one transaction.
+`wiki-formant/search`: what a literal tier and a full-text tier must agree on: `proseSql`, `HEADLINE_OPTIONS`, `FTS_RANK_NORMALIZATION`, and `searchTsvDdl(table)`, the statements that drop and re-add the generated `search_tsv` column and its index in one transaction. `fullTextQuery` is a query as the full-text tier reads it, a hyphen or underscore inside a word a space; `correctQuery(query, vocabulary)` corrects a query's misspelt words against a site's own, which the store's `search` retries with when its first page is empty, returning the query that found the rows as `corrected`.
 
 ```ts
 const { column, index } = searchTsvDdl('"WikiPage"');
@@ -715,7 +715,7 @@ export const POST = viewRoute();
 
 - `createTracker` records only on a Vercel production deployment unless `enabled` says otherwise. `trackMcpCall` fits `McpServerConfig.onCall`; `trackSearch` normalises a query and drops an empty one; `recordEvent` is the undeferred write.
 - A proxy reaches the tracker through a dynamic `import()` inside `event.waitUntil`, since it imports the database client.
-- `digest(sql, { days })` is the site as one JSON object: visitors, agents, views, bounce rate, visit length, sources, pages, countries, devices, by day, agents by name, MCP calls and searches that found nothing. A visit is a run of views with no gap over 30 minutes; a bounce is a one-view visit with no event of the reader's. `ownAgents` leaves the site's own out. A multi-tenant app passes `site`.
+- `digest(sql, { days })` is the site as one JSON object: visitors, agents, views, bounce rate, visit length, sources, pages, countries, devices, by day, agents by name, MCP calls and searches that found nothing, less a search its visitor went on typing within five minutes and any of one character. A visit is a run of views with no gap over 30 minutes; a bounce is a one-view visit with no event of the reader's. `ownAgents` leaves the site's own out. A multi-tenant app passes `site`.
 - A browser under automation (`navigator.webdriver`) sends no beacon.
 
 ## Passkeys and the stats page

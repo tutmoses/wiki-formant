@@ -115,10 +115,10 @@ export async function searchWiki<B extends DiffBlock>(
   o: Pick<WikiToolsOptions<B>, 'store' | 'privateHidden' | 'url' | 'text' | 'metadata'>,
   query: string,
   { tagPath, page = 1, size = 20 }: { tagPath?: string; page?: number; size?: number } = {},
-): Promise<{ items: WikiRow[]; total: number }> {
+): Promise<{ items: WikiRow[]; total: number; corrected?: string }> {
   if (offFor(o)(tagPath)) return { items: [], total: 0 };
-  const { items, total } = await o.store.search(query, { tagPath, skip: (page - 1) * size, take: size, content: true });
-  return { items: items.map(rowFor(o)), total };
+  const { items, total, corrected } = await o.store.search(query, { tagPath, skip: (page - 1) * size, take: size, content: true });
+  return { items: items.map(rowFor(o)), total, ...(corrected ? { corrected } : {}) };
 }
 
 export function wikiReadTools<B extends DiffBlock>(o: WikiToolsOptions<B>): WikiTool[] {
@@ -184,7 +184,7 @@ export function wikiReadTools<B extends DiffBlock>(o: WikiToolsOptions<B>): Wiki
       description:
         `Keyword search across ${noun}: the first call when you know what you are looking for but not where it lives. ` +
         'Matches titles and body prose, ranked in four tiers: titles starting with the term, titles containing it, literal body hits, then English full-text hits by relevance, which stem words and drop stopwords. ' +
-        'Not semantic: one distinctive word beats a sentence. ' +
+        'Not semantic: one distinctive word beats a sentence. A query that finds nothing is retried with its misspelled words corrected, and `corrected` then names what was searched. ' +
         'Each row carries a `path`, its size in `chars` and a snippet windowed on the match. Feed the paths to get_pages in one call rather than looping get_page. ' +
         'Narrow with tagPath when a term is common. Defaults: page 1, pageSize 20 (max 50); keep paging while `hasMore` is true.',
       inputSchema: {
@@ -204,9 +204,10 @@ export function wikiReadTools<B extends DiffBlock>(o: WikiToolsOptions<B>): Wiki
         const page = r.num('page', 1, 1, 100_000);
         const size = r.num('pageSize', 20, 1, 50);
         if (!query) throw new McpToolError('`query` is empty. Pass a keyword to search for, or call list_pages to enumerate a branch instead.');
-        const { items, total } = await searchWiki(o, query, { tagPath, page, size });
+        const { items, total, corrected } = await searchWiki(o, query, { tagPath, page, size });
         return withAdjustments(r, {
           query,
+          ...(corrected ? { corrected } : {}),
           ...listEnvelope(
             items, total, page, size,
             o.noMatch?.(query, tagPath)

@@ -418,10 +418,22 @@ export async function digest(
   /** The site's own agents, as a test on an event's user agent. */
   const ours = `coalesce(props->>'ua', '') ILIKE ANY(${$(ownAgents.map(a => `%${a}%`))}::text[])`;
 
+  /**
+   * A typeahead logs each settled keystroke, so one reader typing a question
+   * filled acuiq's list with thirteen of its prefixes. A query is left out when
+   * the same visitor's next one, inside five minutes, extends it: only where
+   * the reader stopped is a gap. So is a single character.
+   */
   const gapSelects = gaps.map(g => {
     const prop = $(g.prop);
-    return `(SELECT props->>${prop} AS query, count(*) AS events FROM e
-      WHERE name = ${$(g.event)} AND props @> ${$(JSON.stringify(g.where ?? {}))}::jsonb AND props->>${prop} IS NOT NULL
+    return `(SELECT query, count(*) AS events FROM (
+        SELECT props, visitor, props->>${prop} AS query,
+          lead(props->>${prop}) OVER typed AS next, lead(at) OVER typed - at AS after
+        FROM e WHERE name = ${$(g.event)} AND props->>${prop} IS NOT NULL
+        WINDOW typed AS (PARTITION BY visitor ORDER BY at)
+      ) s
+      WHERE props @> ${$(JSON.stringify(g.where ?? {}))}::jsonb AND char_length(query) > 1
+        AND NOT coalesce(visitor IS NOT NULL AND after <= interval '5 minutes' AND char_length(next) > char_length(query) AND starts_with(next, query), false)
       GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 15)`;
   });
 

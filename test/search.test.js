@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  proseSql, searchTsvSql, escapeLikeTerm,
+  proseSql, searchTsvSql, escapeLikeTerm, fullTextQuery, correctQuery,
   PROSE_PATTERN, HEADLINE_OPTIONS, FTS_RANK_NORMALIZATION,
 } from 'wiki-formant/search';
 
@@ -67,4 +67,20 @@ test('the snippet asks for one unmarked fragment', () => {
 
 test('rank normalisation is 32, not length division', () => {
   assert.equal(FTS_RANK_NORMALIZATION, 32);
+});
+
+test('fullTextQuery splits words joined by a hyphen or underscore, and keeps a leading NOT', () => {
+  assert.equal(fullTextQuery(' radix-pipeline '), 'radix pipeline');
+  assert.equal(fullTextQuery('ex_hn1'), 'ex hn1');
+  assert.equal(fullTextQuery('radix -wallet'), 'radix -wallet');
+});
+
+test('correctQuery corrects within one edit, two from eight letters, and never a short word', () => {
+  const vocab = new Map([['hyperscale', 3], ['weekly', 1], ['week', 9], ['eczema', 1], ['bonds', 4], ['the', 50]]);
+  assert.equal(correctQuery('hyperscal weekly', vocab), 'hyperscale weekly');
+  assert.equal(correctQuery('Hyperscall weekl', vocab), 'hyperscale week', 'a tie goes to the commoner word');
+  assert.equal(correctQuery('palmar ecxema', vocab), 'palmar eczema');
+  assert.equal(correctQuery('bondix', vocab), null);
+  assert.equal(correctQuery('teh', vocab), null);
+  assert.equal(correctQuery('hyperscale', vocab), null);
 });

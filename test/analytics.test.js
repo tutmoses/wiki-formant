@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { PGlite } from '@electric-sql/pglite';
 import {
   collect,
   deviceOf,
@@ -379,4 +380,30 @@ test('the view route passes a site resolver through to collect', async () => {
   assert.equal(tasks.length, 0);
   await route(post('/here'));
   assert.equal(tasks.length, 1);
+});
+
+test('a missed search the same visitor went on typing is not a gap, nor is one character', async () => {
+  const pg = new PGlite();
+  await pg.exec(`
+    CREATE TABLE "View" (id bigserial PRIMARY KEY, "siteId" text NOT NULL DEFAULT '', path text NOT NULL, source text, country text, device text NOT NULL, visitor text NOT NULL, "createdAt" timestamptz(3) NOT NULL DEFAULT now());
+    CREATE TABLE "Event" (id bigserial PRIMARY KEY, "siteId" text NOT NULL DEFAULT '', name text NOT NULL, path text, props jsonb NOT NULL DEFAULT '{}', visitor text, "createdAt" timestamptz(3) NOT NULL DEFAULT now());
+    CREATE TABLE "ViewDay" ("siteId" text NOT NULL DEFAULT '', day date NOT NULL, visitors int NOT NULL, pageviews int NOT NULL, visits int NOT NULL, bounces int NOT NULL, seconds int NOT NULL,
+      pages jsonb NOT NULL DEFAULT '{}', "entryPages" jsonb NOT NULL DEFAULT '{}', sources jsonb NOT NULL DEFAULT '{}', countries jsonb NOT NULL DEFAULT '{}', devices jsonb NOT NULL DEFAULT '{}', PRIMARY KEY ("siteId", day));`);
+  const searched = [
+    // One reader's typeahead: only where they stopped is a gap, and it ended on a hit.
+    ['a', 'cough cons', 0, 60], ['a', 'cough const', 0, 59], ['a', 'cough constipation', 4, 58],
+    // Another stopped on a miss.
+    ['b', 'hyperscal', 0, 50], ['b', 'hyperscal weekl', 0, 49],
+    ['c', 'ç', 0, 40],
+    // Ten minutes is a new search, not the same one typed on.
+    ['d', 'palmer', 0, 30], ['d', 'palmer eczema', 0, 20],
+    // No visitor, so no reader to have typed on.
+    [null, 'thyroid', 0, 10], [null, 'thyroid gland', 0, 9],
+  ];
+  for (const [visitor, q, results, ago] of searched)
+    await pg.query(`INSERT INTO "Event" (name, props, visitor, "createdAt") VALUES ('Search Query', $1, $2, now() - make_interval(mins => $3))`,
+      [JSON.stringify({ q, results: String(results), surface: 'wiki' }), visitor, ago]);
+  const sql = async (query, ...values) => (await pg.query(query, values)).rows;
+  const { gaps } = await digest(sql, { days: 7 });
+  assert.deepEqual(gaps.map(g => g.query), ['hyperscal weekl', 'palmer', 'palmer eczema', 'thyroid', 'thyroid gland']);
 });
