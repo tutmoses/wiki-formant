@@ -288,7 +288,8 @@ test('a filter narrows the visits, leaves out the archive and the comparison', a
   const { query, values } = calls.at(-1);
   const highest = Math.max(...[...query.matchAll(/\$(\d+)/g)].map(m => Number(m[1])));
   assert.equal(highest, values.length);
-  assert.match(query, /HAVING bool_or\(path = \$\d+\) AND coalesce\(\(array_agg\(source ORDER BY at, id\)\)\[1\], '\(none\)'\) = \$\d+ AND bool_or\(country = \$\d+\)/);
+  assert.match(query, /HAVING bool_or\(path = \$\d+\) AND coalesce\(CASE WHEN .* IN \(SELECT source FROM bots\) .*, '\(none\)'\) = \$\d+ AND bool_or\(country = \$\d+\)/);
+  assert.match(query, /HAVING .*IN \(SELECT source FROM bots_p\)/);
   assert.match(query, /JOIN visits USING \(visitor, visit\)/);
   assert.match(query, /::date AND false/);
   assert.match(query, /visits_p AS \(.*HAVING bool_or\(path = \$\d+\)/s);
@@ -300,7 +301,7 @@ test('without a filter every view counts and the archive adds in', async () => {
   const { sql, calls } = fakeSql();
   await digest(sql, { days: 30 });
   const { query } = calls.at(-1);
-  assert.doesNotMatch(query, /HAVING|JOIN visits|AND false/);
+  assert.doesNotMatch(query, /GROUP BY visitor, visit HAVING|JOIN visits|AND false/);
 });
 
 // ---- the app binding --------------------------------------------------------
@@ -406,4 +407,24 @@ test('a missed search the same visitor went on typing is not a gap, nor is one c
   const sql = async (query, ...values) => (await pg.query(query, values)).rows;
   const { gaps } = await digest(sql, { days: 7 });
   assert.deepEqual(gaps.map(g => g.query), ['hyperscal weekl', 'palmer', 'palmer eczema', 'thyroid', 'thyroid gland']);
+});
+
+test('a referrer whose twenty visitors each read one page is a bot; one that kept a reader is not', async () => {
+  const pg = new PGlite();
+  await pg.exec(`
+    CREATE TABLE "View" (id bigserial PRIMARY KEY, "siteId" text NOT NULL DEFAULT '', path text NOT NULL, source text, country text, device text NOT NULL, visitor text NOT NULL, "createdAt" timestamptz(3) NOT NULL DEFAULT now());
+    CREATE TABLE "Event" (id bigserial PRIMARY KEY, "siteId" text NOT NULL DEFAULT '', name text NOT NULL, path text, props jsonb NOT NULL DEFAULT '{}', visitor text, "createdAt" timestamptz(3) NOT NULL DEFAULT now());
+    CREATE TABLE "ViewDay" ("siteId" text NOT NULL DEFAULT '', day date NOT NULL, visitors int NOT NULL, pageviews int NOT NULL, visits int NOT NULL, bounces int NOT NULL, seconds int NOT NULL,
+      pages jsonb NOT NULL DEFAULT '{}', "entryPages" jsonb NOT NULL DEFAULT '{}', sources jsonb NOT NULL DEFAULT '{}', countries jsonb NOT NULL DEFAULT '{}', devices jsonb NOT NULL DEFAULT '{}', PRIMARY KEY ("siteId", day));`);
+  const view = (visitor, source, ago) =>
+    pg.query(`INSERT INTO "View" (path, source, device, visitor, "createdAt") VALUES ('/a', $1, 'computer', $2, now() - make_interval(mins => $3))`, [source, visitor, ago]);
+  for (let i = 0; i < 20; i++) await view(`spam${i}`, 'spam.org', 60);
+  for (let i = 0; i < 20; i++) await view(`g${i}`, 'google.com', 60);
+  await view('g0', null, 59);
+  for (let i = 0; i < 19; i++) await view(`few${i}`, 'few.org', 60);
+  const sql = async (query, ...values) => (await pg.query(query, values)).rows;
+  const { top_sources } = await digest(sql, { days: 7 });
+  assert.deepEqual(top_sources, [{ source: '(bot)', visitors: 20 }, { source: 'google.com', visitors: 20 }, { source: 'few.org', visitors: 19 }]);
+  const filtered = await digest(sql, { days: 7, filter: { source: '(bot)' } });
+  assert.equal(filtered.visitors, 20);
 });

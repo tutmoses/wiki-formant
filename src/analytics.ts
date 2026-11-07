@@ -255,13 +255,28 @@ export type StatsFilter = Partial<Record<(typeof STATS_FILTERS)[number], string>
 export const count = (n: number) => n.toLocaleString('en');
 
 /**
- * Each filter as a test on one visit. A page, country or device is any of the
- * visit's views; an entry page or a source is its first. `(none)` is no source.
+ * A referrer that sent this many visitors in the window, not one of whom read a
+ * second page, is a crawler naming a site it never came from: aocr.org sent
+ * radix.wiki 319 one-page visitors in a month while Google's bounced four in five.
  */
-const VISIT_TEST: Record<keyof StatsFilter, (value: string) => string> = {
+const BOT_VISITORS = 20;
+const BOT_SOURCE = '(bot)';
+
+/** A visit's source: its first view's, or `(bot)` where that source is among `bots`. */
+const visitSource = (s: string) => {
+  const first = '(array_agg(source ORDER BY at, id))[1]';
+  return `CASE WHEN ${first} IN (SELECT source FROM bots${s}) THEN '${BOT_SOURCE}' ELSE ${first} END`;
+};
+
+/**
+ * Each filter as a test on one visit in the window suffixed `s`. A page,
+ * country or device is any of the visit's views; an entry page or a source is
+ * its first. `(none)` is no source.
+ */
+const VISIT_TEST: Record<keyof StatsFilter, (value: string, s: string) => string> = {
   page: v => `bool_or(path = ${v})`,
   entry: v => `(array_agg(path ORDER BY at, id))[1] = ${v}`,
-  source: v => `coalesce((array_agg(source ORDER BY at, id))[1], '(none)') = ${v}`,
+  source: (v, s) => `coalesce(${visitSource(s)}, '(none)') = ${v}`,
   country: v => `bool_or(country = ${v})`,
   device: v => `bool_or(device = ${v})`,
 };
@@ -366,6 +381,7 @@ export interface Digest {
   >;
   /** The first UTC day this site counted itself, before which only `ViewDay` speaks; null with no views. */
   counted_from: string | null;
+  /** `(bot)` stands for each referrer `BOT_VISITORS` takes for a crawler's. */
   top_sources: Ranked<'source', 'visitors'>;
   top_pages: Ranked<'page', 'visitors'>;
   entry_pages: Ranked<'page', 'visitors'>;
@@ -410,7 +426,11 @@ export async function digest(
 
   /** Clicks on links to the site's own X account, among `e`. */
   const follows = handle && `name = 'Outbound Link: Click' AND props->>'url' ILIKE ANY(${$([`%x.com/${handle}%`, `%twitter.com/${handle}%`])}::text[])`;
-  const tests = STATS_FILTERS.flatMap(k => (filter[k] ? [VISIT_TEST[k]($(filter[k]))] : []));
+  const tests = STATS_FILTERS.flatMap(k => {
+    if (!filter[k]) return [];
+    const v = $(filter[k]);
+    return [(s: string) => VISIT_TEST[k](v, s)];
+  });
   const agentTests = STATS_FILTERS.flatMap(k => (filter[k] ? [AGENT_TEST[k]($(filter[k]))] : []));
   /** Agents among the rows of a ranked list, unless they are counted apart. */
   const agentsToo = (select: string) => (apart ? '' : ` UNION ALL ${select}`);
@@ -451,10 +471,13 @@ export async function digest(
       SELECT *, CASE WHEN at - lag(at) OVER (PARTITION BY visitor ORDER BY at, id) <= interval '30 minutes' THEN 0 ELSE 1 END AS starts FROM viewed${s}
     ), numbered${s} AS (
       SELECT *, sum(starts) OVER (PARTITION BY visitor ORDER BY at, id) AS visit FROM marked${s}
+    ), bots${s} AS (
+      SELECT source FROM (SELECT visitor, (array_agg(source ORDER BY at, id))[1] AS source, count(*) AS views FROM numbered${s} GROUP BY visitor, visit) f
+      WHERE source IS NOT NULL GROUP BY 1 HAVING count(DISTINCT visitor) >= ${BOT_VISITORS} AND max(views) = 1
     ), visits${s} AS (
       SELECT visitor, visit, min(at) AS at, count(*) AS views, extract(epoch FROM max(at) - min(at)) AS seconds,
-        (array_agg(path ORDER BY at, id))[1] AS entry, (array_agg(source ORDER BY at, id))[1] AS source
-      FROM numbered${s} GROUP BY visitor, visit${tests.length ? ` HAVING ${tests.join(' AND ')}` : ''}
+        (array_agg(path ORDER BY at, id))[1] AS entry, ${visitSource(s)} AS source
+      FROM numbered${s} GROUP BY visitor, visit${tests.length ? ` HAVING ${tests.map(t => t(s)).join(' AND ')}` : ''}
     ), v${s} AS (
       ${tests.length ? `SELECT n.id, n.path, n.source, n.country, n.device, n.visitor, n.at FROM numbered${s} n JOIN visits${s} USING (visitor, visit)` : `SELECT * FROM viewed${s}`}
     ), read${s} AS (
