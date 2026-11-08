@@ -15,6 +15,8 @@ import { TimeChart, stepDecimals, type ChartAggregate, type ChartPoint } from '.
 const places = (step?: number) => (step ? stepDecimals(step) : 0);
 const duration = (s: number, step?: number) => (s < 60 ? `${s.toFixed(places(step))}s` : `${Math.floor(Math.round(s) / 60)}m ${Math.round(s) % 60}s`);
 const percent = (n: number, step?: number) => `${n.toFixed(places(step))}%`;
+// Views per visit sit between one and a few, so a tenth tells them apart.
+const perVisit = (n: number, step?: number) => n.toFixed(step ? stepDecimals(step) : 1);
 interface Delta {
   text: string;
   /** Whether the change is the good way; absent when there is none. */
@@ -61,6 +63,14 @@ const figuresOf = ({ previous: p, ...d }: Digest, apart: boolean): Figure[] => [
         },
       ]),
   { label: 'Page views', value: count(d.pageviews), delta: change(d.pageviews, p.pageviews), day: r => r.pageviews },
+  {
+    label: 'Views per visit',
+    value: d.visits ? perVisit(d.pageviews / d.visits) : '–',
+    delta: change(d.visits ? d.pageviews / d.visits : null, p.pageviews != null && p.visits ? p.pageviews / p.visits : null),
+    day: r => (r.visits ? r.pageviews / r.visits : null),
+    format: perVisit,
+    aggregate: 'mean',
+  },
   {
     label: 'Bounce rate',
     value: d.bounce_rate == null ? '–' : percent(d.bounce_rate),

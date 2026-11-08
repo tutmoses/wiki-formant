@@ -261,7 +261,7 @@ test('agents counted among visitors are in the lists, and a filter narrows them 
   assert.equal(highest, values.length);
 });
 
-const PREVIOUS = { visitors: 5, pageviews: 9, bounce_rate: 50, visit_duration: 30, agents: 4, visitors_incl_agents: 6, follow_clicks: 1 };
+const PREVIOUS = { visitors: 5, pageviews: 9, visits: 6, bounce_rate: 50, visit_duration: 30, agents: 4, visitors_incl_agents: 6, follow_clicks: 1 };
 const digestOf = digest => async query => (query.includes('json_build_object') ? [{ digest: { ...digest, previous: { ...PREVIOUS } } }] : []);
 
 test('a window before the site counted itself compares no events, and nothing when filtered', async () => {

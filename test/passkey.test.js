@@ -131,8 +131,8 @@ test('a session lives only as long as its passkey, and signing out ends it', asy
 });
 
 const DIGEST = {
-  visitors: 12, pageviews: 30, bounce_rate: 50, visit_duration: 75, agents: 3, visitors_incl_agents: 15,
-  previous: { visitors: 10, pageviews: 30, bounce_rate: 46, visit_duration: 100, agents: null, visitors_incl_agents: 10, follow_clicks: null },
+  visitors: 12, pageviews: 30, visits: 20, bounce_rate: 50, visit_duration: 75, agents: 3, visitors_incl_agents: 15,
+  previous: { visitors: 10, pageviews: 30, visits: 25, bounce_rate: 46, visit_duration: 100, agents: null, visitors_incl_agents: 10, follow_clicks: null },
   top_sources: [{ source: 'x', visitors: 4 }], top_pages: [{ page: '/', visitors: 9 }, { page: '/a', visitors: 3 }],
   entry_pages: [], from_posts: [], sibling_referrals: [], countries: [{ country: 'GB', visitors: 5 }],
   devices: [{ device: 'phone', visitors: 7 }], by_day: [], follow_clicks: null,
@@ -146,6 +146,8 @@ test('the stats page leaves out empty lists and marks the window shown', () => {
   // Visitors count agents, unless the page is asked to keep them apart.
   assert.match(out, /<div class="stats-figures" role="group" aria-label="Chart"><button type="button" aria-pressed="true"><span>Visitors<\/span><strong>15<small class="stats-delta" data-better="true">\+50%<\/small><\/strong><\/button><button type="button" aria-pressed="false"><span>Page views/);
   assert.match(out, /<span>Page views<\/span><strong>30<small class="stats-delta">0%<\/small><\/strong>/);
+  // A rate's change is a share of the rate before: 1.5 views a visit against 1.2.
+  assert.match(out, /<span>Views per visit<\/span><strong>1\.5<small class="stats-delta" data-better="true">\+25%<\/small><\/strong>/);
   assert.match(out, /<span>Bounce rate<\/span><strong>50%<small class="stats-delta" data-better="false">\+4 pp<\/small><\/strong>/);
   assert.match(out, /<span>Visit length<\/span><strong>1m 15s<small class="stats-delta" data-better="false">-25%<\/small><\/strong>/);
   // Agents are named in a list that narrows nothing.

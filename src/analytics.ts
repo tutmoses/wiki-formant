@@ -356,6 +356,8 @@ export interface DigestDay {
 export interface Digest {
   visitors: number;
   pageviews: number;
+  /** Runs of one visitor's views with no gap over 30 minutes. */
+  visits: number;
   /** Percent of visits that are bounces (`DigestDay.bounces`); null with no visits. */
   bounce_rate: number | null;
   /** Mean seconds from a visit's first view to its last; null with no visits. */
@@ -376,7 +378,7 @@ export interface Digest {
    * when filtered.
    */
   previous: Record<
-    'visitors' | 'pageviews' | 'bounce_rate' | 'visit_duration' | 'agents' | 'visitors_incl_agents' | 'follow_clicks',
+    'visitors' | 'pageviews' | 'visits' | 'bounce_rate' | 'visit_duration' | 'agents' | 'visitors_incl_agents' | 'follow_clicks',
     number | null
   >;
   /** The first UTC day this site counted itself, before which only `ViewDay` speaks; null with no views. */
@@ -508,6 +510,7 @@ export async function digest(
   /** One window's headline figures, as `json_build_object` arguments. */
   const headline = (s: string) => `'visitors', (SELECT count(DISTINCT visitor) FROM v${s}) + (SELECT visitors FROM archived${s}),
       'pageviews', (SELECT count(*) FROM v${s}) + (SELECT pageviews FROM archived${s}),
+      'visits', (SELECT visits FROM sessions${s}),
       'bounce_rate', (SELECT round(100.0 * bounces / nullif(visits, 0)) FROM sessions${s}),
       'visit_duration', (SELECT round(seconds / nullif(visits, 0)) FROM sessions${s}),
       'agents', (SELECT count(DISTINCT visitor) FROM ag${s}),
