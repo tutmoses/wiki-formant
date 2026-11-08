@@ -14,6 +14,8 @@ model View {
   country   String?
   device    String
   visitor   String
+  // Set once its reader has had the page visible fifteen seconds or given it input.
+  engaged   Boolean  @default(false)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   @@index([siteId, createdAt])

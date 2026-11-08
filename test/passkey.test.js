@@ -131,47 +131,36 @@ test('a session lives only as long as its passkey, and signing out ends it', asy
 });
 
 const DIGEST = {
-  visitors: 12, pageviews: 30, visits: 20, bounce_rate: 50, visit_duration: 75, agents: 3, visitors_incl_agents: 15,
-  previous: { visitors: 10, pageviews: 30, visits: 25, bounce_rate: 46, visit_duration: 100, agents: null, visitors_incl_agents: 10, follow_clicks: null },
+  visitors: 12, engaged: 8, pageviews: 30, visits: 20, bounce_rate: 50, agents: 3,
+  previous: { visitors: 10, engaged: null, pageviews: 30, visits: 25, bounce_rate: 46, agents: null, follow_clicks: null },
   top_sources: [{ source: 'x', visitors: 4 }], top_pages: [{ page: '/', visitors: 9 }, { page: '/a', visitors: 3 }],
   entry_pages: [], from_posts: [], sibling_referrals: [], countries: [{ country: 'GB', visitors: 5 }],
   devices: [{ device: 'phone', visitors: 7 }], by_day: [], follow_clicks: null,
   top_agents: [{ agent: 'ClaudeBot', visitors: 2 }, { agent: 'node', visitors: 1 }], agent_tool_calls: [], gaps: [],
-  counted_from: '2026-10-01',
+  counted_from: '2026-10-01', engaged_from: '2026-10-01',
 };
 
 test('the stats page leaves out empty lists and marks the window shown', () => {
   const out = renderToStaticMarkup(createElement(Stats, { digest: DIGEST, days: 7 }));
   assert.match(out, /<div class="chart-controls"><div role="group" aria-label="Window"><a href="\?days=1">24H<\/a><a href="\?days=7" aria-current="page">7D<\/a>/);
-  // Visitors count agents, unless the page is asked to keep them apart.
-  assert.match(out, /<div class="stats-figures" role="group" aria-label="Chart"><button type="button" aria-pressed="true"><span>Visitors<\/span><strong>15<small class="stats-delta" data-better="true">\+50%<\/small><\/strong><\/button><button type="button" aria-pressed="false"><span>Page views/);
+  // People and agents are two figures, never one count of both.
+  assert.match(out, /<div class="stats-figures" role="group" aria-label="Chart"><button type="button" aria-pressed="true"><span>People<\/span><strong>12<small class="stats-delta" data-better="true">\+20%<\/small><\/strong><\/button><button type="button" aria-pressed="false"><span>Engaged<\/span><strong>8<\/strong><\/button><button type="button" aria-pressed="false"><span>Agents<\/span><strong>3<\/strong><\/button><button type="button" aria-pressed="false"><span>Page views/);
   assert.match(out, /<span>Page views<\/span><strong>30<small class="stats-delta">0%<\/small><\/strong>/);
   // A rate's change is a share of the rate before: 1.5 views a visit against 1.2.
   assert.match(out, /<span>Views per visit<\/span><strong>1\.5<small class="stats-delta" data-better="true">\+25%<\/small><\/strong>/);
   assert.match(out, /<span>Bounce rate<\/span><strong>50%<small class="stats-delta" data-better="false">\+4 pp<\/small><\/strong>/);
-  assert.match(out, /<span>Visit length<\/span><strong>1m 15s<small class="stats-delta" data-better="false">-25%<\/small><\/strong>/);
+  assert.doesNotMatch(out, /Visitors|Visit length|role="switch"/);
   // Agents are named in a list that narrows nothing.
   assert.match(out, /<h2>Agents<\/h2><ol><li style="--share:1"><span>ClaudeBot<\/span>/);
   assert.match(out, /aria-pressed="false"><span>Bounce rate<\/span>/);
-  assert.match(out, /1m 15s/);
   assert.match(out, /United Kingdom/);
   assert.match(out, /--share:0\.3333/);
   assert.doesNotMatch(out, /Entry pages|Clicks to X/);
   // Missed searches are listed even when there are none.
   assert.match(out, /<h2>Searches that found nothing<\/h2><p>None in this window\.<\/p>/);
-  assert.match(out, /<figure class="chart stats-chart"><div class="chart-canvas" role="img" aria-label="Visitors"><\/div>/);
-  // The agents switch follows the windows, and the steps follow them, every one offered on a week of days.
-  assert.match(out, /<a href="\?days=all">All<\/a><\/div><div><a href="\?days=7&amp;agents=apart" role="switch" aria-checked="true" aria-label="Agents counted among visitors" title="Agents counted among visitors"><svg class="chart-icon"[^>]*>.*?<\/svg><\/a><\/div><div role="group" aria-label="Step"><button type="button" aria-pressed="true" title="One point per day">D<\/button><button type="button" aria-pressed="false" title="One point per week">W<\/button><button type="button" aria-pressed="false" title="One point per month">M<\/button><\/div><\/div><\/figure>/);
-});
-
-test('apart, people and agents are two figures, and every link but the switch keeps them apart', () => {
-  const out = renderToStaticMarkup(createElement(Stats, { digest: DIGEST, days: 7, apart: true, filter: { device: 'phone' } }));
-  assert.match(out, /<button type="button" aria-pressed="true"><span>People<\/span><strong>12<small class="stats-delta" data-better="true">\+20%<\/small><\/strong><\/button><button type="button" aria-pressed="false"><span>Agents<\/span><strong>3<\/strong><\/button>/);
-  assert.doesNotMatch(out, /<span>Visitors<\/span>/);
-  assert.match(out, /<a href="\?days=90&amp;agents=apart&amp;device=phone">90D<\/a>/);
-  assert.match(out, /<a href="\?days=7&amp;agents=apart&amp;country=GB&amp;device=phone">United Kingdom<\/a>/);
-  assert.match(out, /<a href="\?days=7&amp;agents=apart" title="Remove">Device: phone ×<\/a>/);
-  assert.match(out, /<a href="\?days=7&amp;device=phone" role="switch" aria-checked="false" aria-label="Agents counted among visitors" title="Agents counted among visitors"><svg class="chart-icon"[^>]*>.*?<\/svg><\/a>/);
+  assert.match(out, /<figure class="chart stats-chart"><div class="chart-canvas" role="img" aria-label="People"><\/div>/);
+  // The steps follow the windows, every one offered on a week of days.
+  assert.match(out, /<a href="\?days=all">All<\/a><\/div><div role="group" aria-label="Step"><button type="button" aria-pressed="true" title="One point per day">D<\/button><button type="button" aria-pressed="false" title="One point per week">W<\/button><button type="button" aria-pressed="false" title="One point per month">M<\/button><\/div><\/div><\/figure>/);
 });
 
 test('every link is the router link a site passes, so a window or a filter does not reload the page', () => {
@@ -182,8 +171,8 @@ test('every link is the router link a site passes, so a window or a filter does 
 });
 
 test('no change from the window before is unsigned', () => {
-  const out = renderToStaticMarkup(createElement(Stats, { digest: { ...DIGEST, previous: { ...DIGEST.previous, visitors_incl_agents: 15 } }, days: 1 }));
-  assert.match(out, /<strong>15<small class="stats-delta">0%<\/small>/);
+  const out = renderToStaticMarkup(createElement(Stats, { digest: { ...DIGEST, previous: { ...DIGEST.previous, visitors: 12 } }, days: 1 }));
+  assert.match(out, /<strong>12<small class="stats-delta">0%<\/small>/);
 });
 
 test('every row narrows the page to itself, and keeps the window and what is already narrowed', () => {
@@ -198,13 +187,12 @@ test('every row narrows the page to itself, and keeps the window and what is alr
 });
 
 test('a narrowed page has no comparison with the window before', () => {
-  const out = renderToStaticMarkup(createElement(Stats, { digest: { ...DIGEST, previous: { ...DIGEST.previous, visitors_incl_agents: null } }, days: 7, filter: { page: '/' } }));
-  assert.match(out, /<strong>15<\/strong>/);
+  const out = renderToStaticMarkup(createElement(Stats, { digest: { ...DIGEST, previous: { ...DIGEST.previous, visitors: null } }, days: 7, filter: { page: '/' } }));
+  assert.match(out, /<span>People<\/span><strong>12<\/strong>/);
 });
 
 test('the query reads the window and one value per filter', () => {
-  assert.deepEqual(statsQuery({ days: '90', page: '/a', country: ['GB', 'FR'], device: '', other: 'x' }), { days: 90, filter: { page: '/a' }, apart: false });
-  assert.equal(statsQuery({ agents: 'apart' }).apart, true);
+  assert.deepEqual(statsQuery({ days: '90', page: '/a', country: ['GB', 'FR'], device: '', other: 'x' }), { days: 90, filter: { page: '/a' } });
 });
 
 test('a ?days= value outside the offered windows falls back', () => {

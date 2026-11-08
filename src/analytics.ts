@@ -148,6 +148,26 @@ export function recordView(sql: Sql, { headers, path, referrer, utm, site = '' }
   );
 }
 
+/**
+ * Mark a visitor's latest unengaged view of `path` in the last half hour as
+ * engaged: the beacon's second word on a view, sent once its reader engaged
+ * (`startBeacon`). Never rejects. @internal
+ */
+export function recordEngaged(sql: Sql, { headers, path, site = '' }: Omit<ViewInput, 'referrer' | 'utm'>): Promise<void> {
+  const page = normalisePath(path);
+  if (page === null) return Promise.resolve();
+  return quietly(async () =>
+    sql(
+      `UPDATE "View" SET engaged = true WHERE id = (
+        SELECT id FROM "View" WHERE "siteId" = $1 AND visitor = $2 AND path = $3 AND NOT engaged AND "createdAt" > now() - interval '30 minutes'
+        ORDER BY id DESC LIMIT 1)`,
+      site,
+      await visitorOf(sql, site, headers),
+      page,
+    ),
+  );
+}
+
 export interface EventInput {
   name: string;
   props?: Record<string, string | number>;
@@ -176,11 +196,12 @@ export function recordEvent(sql: Sql, { name, props = {}, url, headers, site = '
   });
 }
 
-/** What a page sends: a view, or with `name` an event. */
+/** What a page sends: a view, with `engaged` its reader's engagement, or with `name` an event. */
 export interface Beacon {
   path: string;
   referrer?: string;
   utm?: string;
+  engaged?: boolean;
   name?: string;
   props?: Record<string, string | number>;
 }
@@ -230,7 +251,9 @@ export async function collect(request: Request, { sql, defer, site, rateLimit: l
   defer(() =>
     typeof body.name === 'string' && body.name
       ? recordEvent(sql, { name: body.name, props: beaconProps(body.props), url: raw, headers, site: key })
-      : recordView(sql, { headers, path: raw, referrer: body.referrer, utm: body.utm, site: key }),
+      : body.engaged === true
+        ? recordEngaged(sql, { headers, path: raw, site: key })
+        : recordView(sql, { headers, path: raw, referrer: body.referrer, utm: body.utm, site: key }),
   );
   return done;
 }
@@ -281,21 +304,17 @@ const VISIT_TEST: Record<keyof StatsFilter, (value: string, s: string) => string
   device: v => `bool_or(device = ${v})`,
 };
 
-/** An agent's source and device in the lists, which no request of its carries. */
-const AGENT_SOURCE = '(agent)';
-const AGENT_DEVICE = 'agent';
-
 /**
  * Each filter as a test on one agent: its reads in the window are its visit,
- * the first its entry page. Its source and device are the two above, and its
- * country the one its requests came from, where they were counted with one.
+ * the first its entry page, and its country the one its requests came from.
+ * No request of an agent's carries a source or a device, so neither passes one.
  */
 const AGENT_TEST: Record<keyof StatsFilter, (value: string) => string> = {
   page: v => `bool_or(path = ${v})`,
   entry: v => `(array_agg(path ORDER BY at))[1] = ${v}`,
-  source: v => `${v} = '${AGENT_SOURCE}'`,
+  source: () => 'false',
   country: v => `bool_or(country = ${v})`,
-  device: v => `${v} = '${AGENT_DEVICE}'`,
+  device: () => 'false',
 };
 
 export interface DigestOptions {
@@ -320,13 +339,6 @@ export interface DigestOptions {
    * and has no `previous_visitors`.
    */
   filter?: StatsFilter;
-  /**
-   * People and agents counted apart, as they are by default: the ranked lists
-   * count people. False counts agents in the pages, entry pages, sources,
-   * countries and devices too, as `visitors_incl_agents` counts them, so a
-   * stats page's lists add up to the visitors its chart draws.
-   */
-  apart?: boolean;
 }
 
 type Ranked<K extends string, M extends string> = Array<Record<K, string> & Record<M, number>>;
@@ -341,36 +353,44 @@ const AGENT_NAME = `coalesce(props->>'bot', substring(props->>'ua' from 'compati
 export interface DigestDay {
   date: string;
   visitors: number;
+  /** Visitors who engaged with a page they viewed (`startBeacon`). */
+  engaged: number;
   pageviews: number;
   visits: number;
-  /** Visits that saw one page and did nothing else: a search, a click out or any reader event makes it a visit. */
+  /** Visits that bounced (`Digest.bounce_rate`); an archived day has none. */
   bounces: number;
-  /** Seconds from each visit's first view to its last, summed. */
-  seconds: number;
   agents: number;
-  visitors_incl_agents: number;
   /** Clicks on links to the site's X handle; zero without a handle. */
   follow_clicks: number;
 }
 
 export interface Digest {
   visitors: number;
+  /**
+   * Visitors who engaged with a page they viewed: had it in a visible tab for
+   * fifteen seconds, or gave it input (`startBeacon`). A crawler that runs
+   * scripts renders a page and goes, so these are people. `ViewDay` keeps no
+   * engagement, so an archived day adds nothing, and the window before is
+   * compared only where engagement was counted from its first day.
+   */
+  engaged: number;
   pageviews: number;
   /** Runs of one visitor's views with no gap over 30 minutes. */
   visits: number;
-  /** Percent of visits that are bounces (`DigestDay.bounces`); null with no visits. */
+  /**
+   * Percent of visits that bounced: saw one page and never engaged with it,
+   * the complement of `engaged`. Over the site's own visits, since `ViewDay`
+   * keeps no engagement; null with none. Compared with the window before as
+   * `engaged` is.
+   */
   bounce_rate: number | null;
-  /** Mean seconds from a visit's first view to its last; null with no visits. */
-  visit_duration: number | null;
   /**
    * Agents, counted as visitors are: an AI crawler, an MCP client, or anything
    * else reading the machine surface (`trackAiBot`), one per address and user
    * agent a day, the site's own left out. They run no page script, so they are
-   * never among `visitors`.
+   * never among `visitors`, and the ranked lists count people alone.
    */
   agents: number;
-  /** Visitors and `agents` as one count, which a stats page shows unless asked to keep them apart. */
-  visitors_incl_agents: number;
   /**
    * The headline figures over the same number of days before, narrowed alike.
    * A figure is null where that window reaches back past `counted_from` and
@@ -378,11 +398,13 @@ export interface Digest {
    * when filtered.
    */
   previous: Record<
-    'visitors' | 'pageviews' | 'visits' | 'bounce_rate' | 'visit_duration' | 'agents' | 'visitors_incl_agents' | 'follow_clicks',
+    'visitors' | 'engaged' | 'pageviews' | 'visits' | 'bounce_rate' | 'agents' | 'follow_clicks',
     number | null
   >;
   /** The first UTC day this site counted itself, before which only `ViewDay` speaks; null with no views. */
   counted_from: string | null;
+  /** The first UTC day, in this window or the one before, with a view marked engaged, before which `engaged` and `bounce_rate` mean nothing; null with none. */
+  engaged_from: string | null;
   /** `(bot)` stands for each referrer `BOT_VISITORS` takes for a crawler's. */
   top_sources: Ranked<'source', 'visitors'>;
   top_pages: Ranked<'page', 'visitors'>;
@@ -408,13 +430,13 @@ export interface Digest {
  * Visitor figures count distinct visitors, so a person who comes back on
  * another day counts once for each day. Days in `ViewDay` add to the visitor,
  * page, visit, source, country, device and per-day figures; events have no
- * history, so an archived day's visitors are its visitors with agents too.
+ * history.
  * The window before is the same chain of views, visits and events a second
  * time, `_p` on every name, so its figures are the headline's to the letter.
  */
 export async function digest(
   sql: Sql,
-  { site = '', days, handle, siblings = [], gaps = [SEARCH_GAPS], ownAgents = ['-mcp-test', 'radix-studio'], filter = {}, apart = true }: DigestOptions,
+  { site = '', days, handle, siblings = [], gaps = [SEARCH_GAPS], ownAgents = ['-mcp-test', 'radix-studio'], filter = {} }: DigestOptions,
 ): Promise<Digest> {
   // The window is the database's clock, which stamped the rows; the app's can run behind it.
   // All time is a century: further back than any row, and still an int to Postgres.
@@ -428,14 +450,10 @@ export async function digest(
 
   /** Clicks on links to the site's own X account, among `e`. */
   const follows = handle && `name = 'Outbound Link: Click' AND props->>'url' ILIKE ANY(${$([`%x.com/${handle}%`, `%twitter.com/${handle}%`])}::text[])`;
-  const tests = STATS_FILTERS.flatMap(k => {
-    if (!filter[k]) return [];
-    const v = $(filter[k]);
-    return [(s: string) => VISIT_TEST[k](v, s)];
-  });
-  const agentTests = STATS_FILTERS.flatMap(k => (filter[k] ? [AGENT_TEST[k]($(filter[k]))] : []));
-  /** Agents among the rows of a ranked list, unless they are counted apart. */
-  const agentsToo = (select: string) => (apart ? '' : ` UNION ALL ${select}`);
+  /** Each filter given, its value a parameter that the test on visits and the one on agents share. */
+  const given = STATS_FILTERS.flatMap(k => (filter[k] ? [[k, $(filter[k])] as const] : []));
+  const tests = given.map(([k, v]) => (s: string) => VISIT_TEST[k](v, s));
+  const agentTests = given.map(([k, v]) => AGENT_TEST[k](v));
   const day = (at: string) => `to_char(${at} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`;
   /** The site's own agents, as a test on an event's user agent. */
   const ours = `coalesce(props->>'ua', '') ILIKE ANY(${$(ownAgents.map(a => `%${a}%`))}::text[])`;
@@ -468,7 +486,7 @@ export async function digest(
     const dayAgo = (k: number) => `(now() AT TIME ZONE 'UTC' - make_interval(days => ${k} * $2::int))::date`;
     const at = `"createdAt" >= ${ago(back + 1)}${back ? ` AND "createdAt" < ${ago(back)}` : ''}`;
     return `viewed${s} AS (
-      SELECT id, path, source, country, device, visitor, "createdAt" AS at FROM "View" WHERE "siteId" = $1 AND ${at}
+      SELECT id, path, source, country, device, visitor, engaged, "createdAt" AS at FROM "View" WHERE "siteId" = $1 AND ${at}
     ), marked${s} AS (
       SELECT *, CASE WHEN at - lag(at) OVER (PARTITION BY visitor ORDER BY at, id) <= interval '30 minutes' THEN 0 ELSE 1 END AS starts FROM viewed${s}
     ), numbered${s} AS (
@@ -477,11 +495,11 @@ export async function digest(
       SELECT source FROM (SELECT visitor, (array_agg(source ORDER BY at, id))[1] AS source, count(*) AS views FROM numbered${s} GROUP BY visitor, visit) f
       WHERE source IS NOT NULL GROUP BY 1 HAVING count(DISTINCT visitor) >= ${BOT_VISITORS} AND max(views) = 1
     ), visits${s} AS (
-      SELECT visitor, visit, min(at) AS at, count(*) AS views, extract(epoch FROM max(at) - min(at)) AS seconds,
+      SELECT visitor, visit, min(at) AS at, count(*) = 1 AND NOT bool_or(engaged) AS bounced,
         (array_agg(path ORDER BY at, id))[1] AS entry, ${visitSource(s)} AS source
       FROM numbered${s} GROUP BY visitor, visit${tests.length ? ` HAVING ${tests.map(t => t(s)).join(' AND ')}` : ''}
     ), v${s} AS (
-      ${tests.length ? `SELECT n.id, n.path, n.source, n.country, n.device, n.visitor, n.at FROM numbered${s} n JOIN visits${s} USING (visitor, visit)` : `SELECT * FROM viewed${s}`}
+      ${tests.length ? `SELECT n.id, n.path, n.source, n.country, n.device, n.visitor, n.engaged, n.at FROM numbered${s} n JOIN visits${s} USING (visitor, visit)` : `SELECT * FROM viewed${s}`}
     ), read${s} AS (
       SELECT visitor, "createdAt" AS at, path, props->>'country' AS country, ${AGENT_NAME} AS agent FROM "Event"
       WHERE "siteId" = $1 AND ${at} AND name IN ('AI Bot Visit', 'MCP Call') AND visitor IS NOT NULL AND NOT ${ours}
@@ -490,80 +508,58 @@ export async function digest(
     ), e${s} AS (
       SELECT name, props, visitor, "createdAt" AS at FROM "Event" WHERE "siteId" = $1 AND ${at}
       ${tests.length ? `AND (visitor IN (SELECT visitor FROM v${s}) OR visitor IN (SELECT visitor FROM ag${s}))` : ''}
-    ), acted${s} AS MATERIALIZED (
-      SELECT visitor, at FROM e${s} WHERE name NOT IN ('AI Bot Visit', 'MCP Call') AND visitor IS NOT NULL
-    ), bounced${s} AS (
-      -- Against the few reader events alone: probing every agent event once per visit took seconds.
-      SELECT * FROM visits${s} b WHERE views = 1 AND NOT EXISTS (
-        SELECT 1 FROM acted${s} x WHERE x.visitor = b.visitor AND x.at >= b.at AND x.at < b.at + interval '30 minutes')
     ), a${s} AS (
       SELECT * FROM "ViewDay" WHERE "siteId" = $1 AND day >= ${dayAgo(back + 1)}${back ? ` AND day < ${dayAgo(back)}` : ''}${tests.length ? ' AND false' : ''}
-    ), sessions${s} AS (
-      SELECT sum(bounces) AS bounces, sum(visits) AS visits, sum(seconds) AS seconds FROM (
-        SELECT (SELECT count(*) FROM bounced${s}), count(*), coalesce(sum(seconds), 0) FROM visits${s}
-        UNION ALL SELECT coalesce(sum(bounces), 0), coalesce(sum(visits), 0), coalesce(sum(seconds), 0) FROM a${s}
-      ) t(bounces, visits, seconds)
     ), archived${s} AS (
-      SELECT coalesce(sum(visitors), 0) AS visitors, coalesce(sum(pageviews), 0) AS pageviews FROM a${s}
+      SELECT coalesce(sum(visitors), 0) AS visitors, coalesce(sum(pageviews), 0) AS pageviews, coalesce(sum(visits), 0) AS visits FROM a${s}
     )`;
+  };
+  /**
+   * A figure engagement decides. The window before has it only where
+   * engagement was counted from its first day: its first engaged view is on the day of its first view.
+   */
+  const engagement = (s: string, figure: string) => {
+    if (!s) return figure;
+    const first = (where: string) => `(SELECT ${day('min(at)')} FROM viewed${s}${where})`;
+    return `CASE WHEN ${first(' WHERE engaged')} = ${first('')} THEN ${figure} END`;
   };
   /** One window's headline figures, as `json_build_object` arguments. */
   const headline = (s: string) => `'visitors', (SELECT count(DISTINCT visitor) FROM v${s}) + (SELECT visitors FROM archived${s}),
+      'engaged', ${engagement(s, `(SELECT count(DISTINCT visitor) FROM v${s} WHERE engaged)`)},
       'pageviews', (SELECT count(*) FROM v${s}) + (SELECT pageviews FROM archived${s}),
-      'visits', (SELECT visits FROM sessions${s}),
-      'bounce_rate', (SELECT round(100.0 * bounces / nullif(visits, 0)) FROM sessions${s}),
-      'visit_duration', (SELECT round(seconds / nullif(visits, 0)) FROM sessions${s}),
-      'agents', (SELECT count(DISTINCT visitor) FROM ag${s}),
-      'visitors_incl_agents', (SELECT count(DISTINCT visitor) FROM (SELECT visitor FROM v${s} UNION SELECT visitor FROM ag${s}) u) + (SELECT visitors FROM archived${s})`;
+      'visits', (SELECT count(*) FROM visits${s}) + (SELECT visits FROM archived${s}),
+      'bounce_rate', ${engagement(s, `(SELECT round(100.0 * count(*) FILTER (WHERE bounced) / nullif(count(*), 0)) FROM visits${s})`)},
+      'agents', (SELECT count(DISTINCT visitor) FROM ag${s})`;
 
   const [row] = (await sql(
     `WITH ${chain('', 0)}, ${chain('_p', 1)}, src AS (
       SELECT coalesce(source, '(none)') AS source, count(DISTINCT visitor) AS visitors FROM visits GROUP BY 1
-      UNION ALL SELECT key, value::int FROM a, jsonb_each_text(a.sources)${agentsToo(`SELECT '${AGENT_SOURCE}', count(DISTINCT visitor) FROM ag HAVING count(*) > 0`)}
+      UNION ALL SELECT key, value::int FROM a, jsonb_each_text(a.sources)
     )
     SELECT json_build_object(
       ${headline('')},
       'previous', json_build_object(${headline('_p')}, 'follow_clicks', ${follows ? `(SELECT count(*) FROM e_p WHERE ${follows})` : 'NULL'}),
       'counted_from', (SELECT ${day('min("createdAt")')} FROM "View" WHERE "siteId" = $1),
+      'engaged_from', (SELECT ${day('min(at)')} FROM (SELECT at FROM viewed_p WHERE engaged UNION ALL SELECT at FROM viewed WHERE engaged) t),
       'top_sources', ${list('SELECT source, sum(visitors) AS visitors FROM src GROUP BY 1', 6)},
       'top_pages', ${list(
-        merged('page', 'pages', `SELECT path, count(DISTINCT visitor) FROM v GROUP BY 1${agentsToo('SELECT path, count(DISTINCT visitor) FROM ag WHERE path IS NOT NULL GROUP BY 1')}`),
+        merged('page', 'pages', 'SELECT path, count(DISTINCT visitor) FROM v GROUP BY 1'),
         6,
       )},
-      'entry_pages', ${list(
-        merged(
-          'page',
-          'entryPages',
-          `SELECT entry, count(DISTINCT visitor) FROM visits GROUP BY 1${agentsToo(
-            'SELECT entry, count(*) FROM (SELECT (array_agg(path ORDER BY at))[1] AS entry FROM ag GROUP BY visitor) f WHERE entry IS NOT NULL GROUP BY 1',
-          )}`,
-        ),
-        6,
-      )},
+      'entry_pages', ${list(merged('page', 'entryPages', 'SELECT entry, count(DISTINCT visitor) FROM visits GROUP BY 1'), 6)},
       'from_posts', ${list(`SELECT entry AS page, count(DISTINCT visitor) AS visitors FROM visits WHERE source = 'x' GROUP BY 1`, 15)},
       'sibling_referrals', ${list(`SELECT source, sum(visitors) AS visitors FROM src WHERE source = ANY(${$(siblings)}::text[]) GROUP BY 1`, 6)},
-      'countries', ${list(
-        merged(
-          'country',
-          'countries',
-          `SELECT country, count(DISTINCT visitor) FROM v WHERE country IS NOT NULL GROUP BY 1${agentsToo('SELECT country, count(DISTINCT visitor) FROM ag WHERE country IS NOT NULL GROUP BY 1')}`,
-        ),
-        10,
-      )},
-      'devices', ${list(
-        merged('device', 'devices', `SELECT device, count(DISTINCT visitor) FROM v GROUP BY 1${agentsToo(`SELECT '${AGENT_DEVICE}', count(DISTINCT visitor) FROM ag HAVING count(*) > 0`)}`),
-      )},
+      'countries', ${list(merged('country', 'countries', 'SELECT country, count(DISTINCT visitor) FROM v WHERE country IS NOT NULL GROUP BY 1'), 10)},
+      'devices', ${list(merged('device', 'devices', 'SELECT device, count(DISTINCT visitor) FROM v GROUP BY 1'))},
       'by_day', ${list(
-        `SELECT date, sum(visitors) AS visitors, sum(pageviews) AS pageviews, sum(visits) AS visits, sum(bounces) AS bounces,
-          sum(seconds) AS seconds, sum(agents) AS agents, sum(everyone) AS visitors_incl_agents, sum(follows) AS follow_clicks FROM (
-          SELECT ${day('at')}, count(DISTINCT visitor), count(*), 0, 0, 0, 0, 0, 0 FROM v GROUP BY 1
-          UNION ALL SELECT ${day('at')}, 0, 0, count(*), 0, coalesce(sum(seconds), 0), 0, 0, 0 FROM visits GROUP BY 1
-          UNION ALL SELECT ${day('at')}, 0, 0, 0, count(*), 0, 0, 0, 0 FROM bounced GROUP BY 1
-          UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, count(DISTINCT visitor), 0, 0 FROM ag GROUP BY 1
-          UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, 0, count(DISTINCT visitor), 0 FROM (SELECT at, visitor FROM v UNION ALL SELECT at, visitor FROM ag) u GROUP BY 1
-          ${follows ? `UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, 0, 0, count(*) FROM e WHERE ${follows} GROUP BY 1` : ''}
-          UNION ALL SELECT to_char(day, 'YYYY-MM-DD'), visitors, pageviews, visits, bounces, seconds, 0, visitors, 0 FROM a
-        ) t(date, visitors, pageviews, visits, bounces, seconds, agents, everyone, follows) GROUP BY 1`,
+        `SELECT date, sum(visitors) AS visitors, sum(engaged) AS engaged, sum(pageviews) AS pageviews, sum(visits) AS visits, sum(bounces) AS bounces,
+          sum(agents) AS agents, sum(follows) AS follow_clicks FROM (
+          SELECT ${day('at')}, count(DISTINCT visitor), count(DISTINCT visitor) FILTER (WHERE engaged), count(*), 0, 0, 0, 0 FROM v GROUP BY 1
+          UNION ALL SELECT ${day('at')}, 0, 0, 0, count(*), count(*) FILTER (WHERE bounced), 0, 0 FROM visits GROUP BY 1
+          UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, count(DISTINCT visitor), 0 FROM ag GROUP BY 1
+          ${follows ? `UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, 0, count(*) FROM e WHERE ${follows} GROUP BY 1` : ''}
+          UNION ALL SELECT to_char(day, 'YYYY-MM-DD'), visitors, 0, pageviews, visits, 0, 0, 0 FROM a
+        ) t(date, visitors, engaged, pageviews, visits, bounces, agents, follows) GROUP BY 1`,
         undefined,
         '1',
       )},
@@ -594,7 +590,7 @@ export async function digest(
   if (d.counted_from && before < d.counted_from) {
     const p = d.previous;
     if (tests.length) for (const k of Object.keys(p) as (keyof typeof p)[]) p[k] = null;
-    else p.agents = p.visitors_incl_agents = p.follow_clicks = null;
+    else p.agents = p.follow_clicks = p.engaged = p.bounce_rate = null;
   }
   return d;
 }

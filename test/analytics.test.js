@@ -7,6 +7,7 @@ import {
   digest,
   mcpCallProps,
   normalisePath,
+  recordEngaged,
   recordEvent,
   recordView,
   searchQueryProps,
@@ -237,37 +238,30 @@ test('agents are named and counted apart from visitors, the site\'s own left out
   const { query, values } = calls.at(-1);
   assert.match(query, /read AS \(\s*SELECT visitor, "createdAt" AS at, path, props->>'country' AS country, coalesce\(props->>'bot', .* FROM "Event"\s+WHERE .* AND name IN \('AI Bot Visit', 'MCP Call'\) AND visitor IS NOT NULL AND NOT coalesce\(props->>'ua', ''\) ILIKE ANY\(\$\d+::text\[\]\)/);
   assert.match(query, /'agents', \(SELECT count\(DISTINCT visitor\) FROM ag\)/);
-  // Visitors with agents are the two counts at once, so the site's own stay out of it too.
-  assert.match(query, /'visitors_incl_agents', \(SELECT count\(DISTINCT visitor\) FROM \(SELECT visitor FROM v UNION SELECT visitor FROM ag\) u\)/);
-  assert.match(query, /FROM \(SELECT at, visitor FROM v UNION ALL SELECT at, visitor FROM ag\) u GROUP BY 1/);
   assert.match(query, /'previous', json_build_object\(.*'agents', \(SELECT count\(DISTINCT visitor\) FROM ag_p\)/s);
   assert.match(query, /'top_agents', \(SELECT coalesce\(json_agg\(t\), '\[\]'\) FROM \(SELECT agent, count\(DISTINCT visitor\) AS visitors FROM ag GROUP BY 1/);
   assert.equal(values.filter(v => Array.isArray(v) && v[0] === '%-mcp-test%').length, 1);
 });
 
-test('agents counted among visitors are in the lists, and a filter narrows them as it does people', async () => {
+test('agents stay out of the lists, and a filter narrows them as it does people', async () => {
   const { sql, calls } = fakeSql();
-  await digest(sql, { days: 7 });
-  const apart = calls.at(-1).query;
-  assert.doesNotMatch(apart, /FROM ag WHERE path IS NOT NULL/);
-  await digest(sql, { days: 7, apart: false, filter: { page: '/a', device: 'agent' } });
+  await digest(sql, { days: 7, filter: { page: '/a', device: 'phone' } });
   const { query, values } = calls.at(-1);
-  assert.match(query, /UNION ALL SELECT path, count\(DISTINCT visitor\) FROM ag WHERE path IS NOT NULL GROUP BY 1/);
-  assert.match(query, /UNION ALL SELECT '\(agent\)', count\(DISTINCT visitor\) FROM ag HAVING count\(\*\) > 0/);
-  assert.match(query, /UNION ALL SELECT 'agent', count\(DISTINCT visitor\) FROM ag HAVING count\(\*\) > 0/);
-  assert.match(query, /ag AS \(\s*SELECT \* FROM read WHERE visitor IN \(SELECT visitor FROM read GROUP BY 1 HAVING bool_or\(path = \$\d+\) AND \$\d+ = 'agent'\)/);
+  assert.doesNotMatch(query, /FROM ag WHERE path IS NOT NULL|'\(agent\)'/);
+  // No agent has a device, so a device filter leaves none.
+  assert.match(query, /ag AS \(\s*SELECT \* FROM read WHERE visitor IN \(SELECT visitor FROM read GROUP BY 1 HAVING bool_or\(path = \$\d+\) AND false\)/);
   assert.match(query, /OR visitor IN \(SELECT visitor FROM ag\)/);
   const highest = Math.max(...[...query.matchAll(/\$(\d+)/g)].map(m => Number(m[1])));
   assert.equal(highest, values.length);
 });
 
-const PREVIOUS = { visitors: 5, pageviews: 9, visits: 6, bounce_rate: 50, visit_duration: 30, agents: 4, visitors_incl_agents: 6, follow_clicks: 1 };
+const PREVIOUS = { visitors: 5, engaged: 4, pageviews: 9, visits: 6, bounce_rate: 50, agents: 4, follow_clicks: 1 };
 const digestOf = digest => async query => (query.includes('json_build_object') ? [{ digest: { ...digest, previous: { ...PREVIOUS } } }] : []);
 
 test('a window before the site counted itself compares no events, and nothing when filtered', async () => {
   const since = { counted_from: new Date().toISOString().slice(0, 10) };
   const plain = await digest(digestOf(since), { days: 30 });
-  assert.deepEqual(plain.previous, { ...PREVIOUS, agents: null, visitors_incl_agents: null, follow_clicks: null });
+  assert.deepEqual(plain.previous, { ...PREVIOUS, agents: null, follow_clicks: null, engaged: null, bounce_rate: null });
   const narrowed = await digest(digestOf(since), { days: 30, filter: { device: 'phone' } });
   assert.ok(Object.values(narrowed.previous).every(v => v === null));
   const settled = await digest(digestOf({ counted_from: '2000-01-01' }), { days: 30, filter: { device: 'phone' } });
@@ -383,13 +377,20 @@ test('the view route passes a site resolver through to collect', async () => {
   assert.equal(tasks.length, 1);
 });
 
-test('a missed search the same visitor went on typing is not a gap, nor is one character', async () => {
+/** A Postgres in memory holding the analytics tables. */
+async function analyticsDb() {
   const pg = new PGlite();
   await pg.exec(`
-    CREATE TABLE "View" (id bigserial PRIMARY KEY, "siteId" text NOT NULL DEFAULT '', path text NOT NULL, source text, country text, device text NOT NULL, visitor text NOT NULL, "createdAt" timestamptz(3) NOT NULL DEFAULT now());
+    CREATE TABLE "View" (id bigserial PRIMARY KEY, "siteId" text NOT NULL DEFAULT '', path text NOT NULL, source text, country text, device text NOT NULL, visitor text NOT NULL, engaged boolean NOT NULL DEFAULT false, "createdAt" timestamptz(3) NOT NULL DEFAULT now());
     CREATE TABLE "Event" (id bigserial PRIMARY KEY, "siteId" text NOT NULL DEFAULT '', name text NOT NULL, path text, props jsonb NOT NULL DEFAULT '{}', visitor text, "createdAt" timestamptz(3) NOT NULL DEFAULT now());
     CREATE TABLE "ViewDay" ("siteId" text NOT NULL DEFAULT '', day date NOT NULL, visitors int NOT NULL, pageviews int NOT NULL, visits int NOT NULL, bounces int NOT NULL, seconds int NOT NULL,
-      pages jsonb NOT NULL DEFAULT '{}', "entryPages" jsonb NOT NULL DEFAULT '{}', sources jsonb NOT NULL DEFAULT '{}', countries jsonb NOT NULL DEFAULT '{}', devices jsonb NOT NULL DEFAULT '{}', PRIMARY KEY ("siteId", day));`);
+      pages jsonb NOT NULL DEFAULT '{}', "entryPages" jsonb NOT NULL DEFAULT '{}', sources jsonb NOT NULL DEFAULT '{}', countries jsonb NOT NULL DEFAULT '{}', devices jsonb NOT NULL DEFAULT '{}', PRIMARY KEY ("siteId", day));
+    CREATE TABLE "Salt" (day text PRIMARY KEY, value text NOT NULL);`);
+  return pg;
+}
+
+test('a missed search the same visitor went on typing is not a gap, nor is one character', async () => {
+  const pg = await analyticsDb();
   const searched = [
     // One reader's typeahead: only where they stopped is a gap, and it ended on a hit.
     ['a', 'cough cons', 0, 60], ['a', 'cough const', 0, 59], ['a', 'cough constipation', 4, 58],
@@ -410,12 +411,7 @@ test('a missed search the same visitor went on typing is not a gap, nor is one c
 });
 
 test('a referrer whose twenty visitors each read one page is a bot; one that kept a reader is not', async () => {
-  const pg = new PGlite();
-  await pg.exec(`
-    CREATE TABLE "View" (id bigserial PRIMARY KEY, "siteId" text NOT NULL DEFAULT '', path text NOT NULL, source text, country text, device text NOT NULL, visitor text NOT NULL, "createdAt" timestamptz(3) NOT NULL DEFAULT now());
-    CREATE TABLE "Event" (id bigserial PRIMARY KEY, "siteId" text NOT NULL DEFAULT '', name text NOT NULL, path text, props jsonb NOT NULL DEFAULT '{}', visitor text, "createdAt" timestamptz(3) NOT NULL DEFAULT now());
-    CREATE TABLE "ViewDay" ("siteId" text NOT NULL DEFAULT '', day date NOT NULL, visitors int NOT NULL, pageviews int NOT NULL, visits int NOT NULL, bounces int NOT NULL, seconds int NOT NULL,
-      pages jsonb NOT NULL DEFAULT '{}', "entryPages" jsonb NOT NULL DEFAULT '{}', sources jsonb NOT NULL DEFAULT '{}', countries jsonb NOT NULL DEFAULT '{}', devices jsonb NOT NULL DEFAULT '{}', PRIMARY KEY ("siteId", day));`);
+  const pg = await analyticsDb();
   const view = (visitor, source, ago) =>
     pg.query(`INSERT INTO "View" (path, source, device, visitor, "createdAt") VALUES ('/a', $1, 'computer', $2, now() - make_interval(mins => $3))`, [source, visitor, ago]);
   for (let i = 0; i < 20; i++) await view(`spam${i}`, 'spam.org', 60);
@@ -427,4 +423,56 @@ test('a referrer whose twenty visitors each read one page is a bot; one that kep
   assert.deepEqual(top_sources, [{ source: '(bot)', visitors: 20 }, { source: 'google.com', visitors: 20 }, { source: 'few.org', visitors: 19 }]);
   const filtered = await digest(sql, { days: 7, filter: { source: '(bot)' } });
   assert.equal(filtered.visitors, 20);
+});
+
+test('an engaged beacon marks the visitor\'s latest unengaged view of its page, and nothing else', async () => {
+  const { sql, calls, inserts } = fakeSql();
+  const tasks = [];
+  const post = (body, h = {}) =>
+    collect(new Request('https://radix.wiki/api/view', { method: 'POST', body: JSON.stringify(body), headers: headers({ 'x-forwarded-for': `6.6.6.${tasks.length}`, ...h }) }), { sql, defer: t => tasks.push(t) });
+  await post({ path: '/a/', engaged: true });
+  await post({ path: '/a', engaged: true }, { 'user-agent': 'GPTBot/1.0' });
+  await post({ path: '/a', engaged: 'yes' });
+  for (const t of tasks) await t();
+  const updates = calls.filter(c => c.query.startsWith('UPDATE "View" SET engaged = true'));
+  assert.equal(updates.length, 1);
+  assert.deepEqual([updates[0].values[0], updates[0].values[2]], ['', '/a']);
+  assert.match(updates[0].values[1], /^[0-9a-f]{32}$/);
+  // A beacon whose `engaged` is not `true` is a view.
+  assert.equal(inserts('View').length, 1);
+});
+
+test('engaged counts the people who engaged and bounce rate the visits with no one, compared only in a window counted from its start', async () => {
+  const pg = await analyticsDb();
+  const sql = async (query, ...values) => (await pg.query(query, values)).rows;
+  const h = ip => headers({ 'x-forwarded-for': ip });
+  for (const ip of ['1.1.1.1', '2.2.2.2', '3.3.3.3']) await recordView(sql, { headers: h(ip), path: '/a' });
+  await recordView(sql, { headers: h('1.1.1.1'), path: '/b' });
+  await recordEngaged(sql, { headers: h('1.1.1.1'), path: '/a' });
+  await recordEngaged(sql, { headers: h('2.2.2.2'), path: '/a/' });
+  // No view of that page to mark, and none from that visitor.
+  await recordEngaged(sql, { headers: h('3.3.3.3'), path: '/b' });
+  await recordEngaged(sql, { headers: h('4.4.4.4'), path: '/a' });
+
+  const d = await digest(sql, { days: 7 });
+  const today = new Date().toISOString().slice(0, 10);
+  assert.equal(d.visitors, 3);
+  assert.equal(d.engaged, 2);
+  assert.equal(d.engaged_from, today);
+  assert.equal(d.by_day.at(-1).engaged, 2);
+  assert.equal(d.previous.engaged, null);
+  // Two views, or one engaged, is no bounce: only the third visit bounced.
+  assert.equal(d.bounce_rate, 33);
+  assert.deepEqual([d.by_day.at(-1).visits, d.by_day.at(-1).bounces], [3, 1]);
+  assert.equal(d.previous.bounce_rate, null);
+  assert.equal((await digest(sql, { days: 7, filter: { page: '/b' } })).engaged, 1);
+
+  // A previous window whose first day had an engaged view is compared; one whose first day had none is not.
+  // The site counted itself before either window, so `counted_from` does not rule the comparison out.
+  await pg.query(`INSERT INTO "View" (path, device, visitor, "createdAt") VALUES ('/a', 'computer', 'first', now() - interval '20 days')`);
+  await pg.query(`INSERT INTO "View" (path, device, visitor, engaged, "createdAt") VALUES ('/a', 'computer', 'old', true, now() - interval '10 days')`);
+  assert.deepEqual((await digest(sql, { days: 7 })).previous, { visitors: 1, engaged: 1, pageviews: 1, visits: 1, bounce_rate: 0, agents: 0, follow_clicks: null });
+  await pg.query(`INSERT INTO "View" (path, device, visitor, "createdAt") VALUES ('/a', 'computer', 'older', now() - interval '13 days')`);
+  const p = (await digest(sql, { days: 7 })).previous;
+  assert.deepEqual([p.engaged, p.bounce_rate], [null, null]);
 });

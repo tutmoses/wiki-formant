@@ -6,8 +6,7 @@
 // not have to install it. The figures and the chart are `StatsFigures`, the
 // one part that holds state.
 //
-// The page's state is its query: `?days=` picks the window, `?agents=apart`
-// counts people and agents apart where visitors otherwise count both, and
+// The page's state is its query: `?days=` picks the window, and
 // `?page=`, `?entry=`, `?source=`, `?country=` and `?device=` narrow it. Every
 // row in a list is a link that adds its own, and every narrowing a link that
 // drops it. Each is `link`, so a site passing its router's link component
@@ -27,8 +26,6 @@ export interface StatsProps {
   days: number;
   /** What the digest was narrowed to, as `digest` was given it. */
   filter?: StatsFilter;
-  /** Visitors as people and agents, two figures, rather than one that counts both. */
-  apart?: boolean;
   /** The windows offered as `?days=` links on the same page. */
   ranges?: readonly number[];
   /** Every link on the page: `next/link`, say, so a window or a filter does not reload it. Each is given `prefetch={false}`. */
@@ -58,14 +55,12 @@ export function statsQuery(params: Record<string, string | string[] | undefined>
     const v = params[k];
     if (typeof v === 'string' && v) filter[k] = v.slice(0, 500);
   }
-  // `apart` is `digest`'s option too, so its lists count the visitors the chart draws.
-  return { days: statsDays(params.days, ranges), filter, apart: params.agents === 'apart' };
+  return { days: statsDays(params.days, ranges), filter };
 }
 
-/** The page at a window, a filter and a count of agents, as a query string. */
-const href = (days: number, filter: StatsFilter, apart: boolean) => {
+/** The page at a window and a filter, as a query string. */
+const href = (days: number, filter: StatsFilter) => {
   const q = new URLSearchParams({ days: daysParam(days) });
-  if (apart) q.set('agents', 'apart');
   for (const k of STATS_FILTERS) if (filter[k]) q.set(k, filter[k]);
   return `?${q}`;
 };
@@ -131,14 +126,13 @@ function StatsList({
 
 /**
  * A site's own analytics on one page: the headline figures against the window
- * before, visitors counting agents unless `apart`, whichever of them is chosen per day, and every ranked list the
+ * before, people and agents apart, whichever of them is chosen per day, and every ranked list the
  * digest carries, each row a link that narrows the page to it. Lists with
  * nothing in them are left out, but for the searches that found nothing,
- * which says it found none, so a quiet window never reads as one not counted. The digest is made with the same `apart`, so
- * the lists count the visitors the chart draws. The chart and the bars are `currentColor`
+ * which says it found none, so a quiet window never reads as one not counted. The chart and the bars are `currentColor`
  * until the importing stylesheet gives them a colour.
  */
-export function Stats({ digest: d, days, filter = {}, apart = false, ranges = STATS_RANGES, link: Link = Anchor }: StatsProps) {
+export function Stats({ digest: d, days, filter = {}, ranges = STATS_RANGES, link: Link = Anchor }: StatsProps) {
   const today = Math.floor(Date.now() / DAY_MS);
   const counted = d.counted_from ? Date.parse(d.counted_from) / DAY_MS : today;
   const narrowed = STATS_FILTERS.filter(k => filter[k]);
@@ -151,39 +145,18 @@ export function Stats({ digest: d, days, filter = {}, apart = false, ranges = ST
     : Number.isFinite(start) ? start : Math.min(today, ...d.by_day.map(r => Date.parse(r.date) / DAY_MS));
   const rows = <K extends string, M extends string>(list: Array<Record<K, string> & Record<M, number>>, k: K, m: M) =>
     list.map(r => [r[k], r[m]] as [string, number]);
-  const at = (f: StatsFilter, n = days, a = apart) => href(n, f, a);
+  const at = (f: StatsFilter, n = days) => href(n, f);
   const to = (k: keyof StatsFilter) => (v: string) => at({ ...filter, [k]: v });
 
-  // Each window is another digest, so a link rather than a button, pinned
-  // with the chart's own controls, and so is the switch that counts agents apart.
+  // Each window is another digest, so a link rather than a button, pinned with the chart's own controls.
   const controls = (
-    <>
-      <div role="group" aria-label="Window">
-        {ranges.map(n => (
-          <Link key={n} href={at(filter, n)} aria-current={n === days ? 'page' : undefined} prefetch={false}>
-            {windowLabel(n)}
-          </Link>
-        ))}
-      </div>
-      <div>
-        {/* On while visitors count agents too, off while people and agents are counted apart: a robot's head in currentColor. */}
-        <Link
-          href={at(filter, days, !apart)}
-          role="switch"
-          aria-checked={!apart}
-          aria-label="Agents counted among visitors"
-          title="Agents counted among visitors"
-          prefetch={false}
-        >
-          <svg className="chart-icon" viewBox="0 0 12 12" aria-hidden>
-            <path d="M6 1.5v2M1 6.5v2M11 6.5v2" stroke="currentColor" />
-            <rect x="2.5" y="3.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" />
-            <circle cx="4.75" cy="7" r="0.9" fill="currentColor" />
-            <circle cx="7.25" cy="7" r="0.9" fill="currentColor" />
-          </svg>
+    <div role="group" aria-label="Window">
+      {ranges.map(n => (
+        <Link key={n} href={at(filter, n)} aria-current={n === days ? 'page' : undefined} prefetch={false}>
+          {windowLabel(n)}
         </Link>
-      </div>
-    </>
+      ))}
+    </div>
   );
 
   return (
@@ -204,7 +177,7 @@ export function Stats({ digest: d, days, filter = {}, apart = false, ranges = ST
           )}
         </div>
       )}
-      <StatsFigures digest={d} first={first} apart={apart} controls={controls} />
+      <StatsFigures digest={d} first={first} controls={controls} />
       <div className="stats-lists">
         <StatsList link={Link} title="Pages" rows={rows(d.top_pages, 'page', 'visitors')} to={to('page')} />
         <StatsList link={Link} title="Entry pages" rows={rows(d.entry_pages, 'page', 'visitors')} to={to('entry')} />

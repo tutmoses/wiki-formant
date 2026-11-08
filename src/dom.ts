@@ -389,6 +389,9 @@ export function scrollTables(html: string): string {
 let beaconEndpoint = '/api/view';
 let beaconStarted = false;
 
+/** How long a view's page must be visible, in all, before its reader counts as engaged. */
+const ENGAGED_MS = 15_000;
+
 // A browser under automation (Puppeteer, Playwright, Selenium) sets
 // `navigator.webdriver`: a crawler that runs scripts, whose user agent the bot
 // pattern cannot tell from a reader's, so it sends nothing at all.
@@ -405,6 +408,11 @@ const sendBeacon = (body: object) => navigator.webdriver || navigator.sendBeacon
  * A click on a link to another host is sent as an "Outbound Link: Click" event
  * carrying its `url`. Starts once per page load however often it is called, so
  * React's doubled effects in development send one view, not two.
+ *
+ * Each view is then marked engaged, `{ path, engaged: true }`, once its reader
+ * has had the page in a visible tab for `ENGAGED_MS`, or touches, clicks, types
+ * or wheels on it first. A crawler that runs scripts renders a page and leaves
+ * within seconds and gives it no input, so engaged views are the people's.
  */
 export function startBeacon(endpoint = '/api/view'): void {
   if (beaconStarted || typeof window === 'undefined') return;
@@ -413,6 +421,27 @@ export function startBeacon(endpoint = '/api/view'): void {
 
   let last = '';
   let first = true;
+  /** The path whose view is not yet engaged, the visible time it has had, and since when it has been visible. */
+  let pending: string | null = null;
+  let seen = 0;
+  let since = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const engage = () => {
+    clearTimeout(timer);
+    if (pending !== null) sendBeacon({ path: pending, engaged: true });
+    pending = null;
+  };
+  const watch = () => {
+    clearTimeout(timer);
+    if (pending === null) return;
+    if (document.visibilityState === 'visible') {
+      since = Date.now();
+      timer = setTimeout(engage, ENGAGED_MS - seen);
+    } else if (since) {
+      seen += Date.now() - since;
+      since = 0;
+    }
+  };
   const view = () => {
     if (location.pathname === last) return;
     last = location.pathname;
@@ -423,7 +452,15 @@ export function startBeacon(endpoint = '/api/view'): void {
       utm: new URLSearchParams(location.search).get('utm_source') ?? undefined,
     });
     first = false;
+    pending = last;
+    seen = since = 0;
+    watch();
   };
+  document.addEventListener('visibilitychange', watch);
+  // Not `scroll`, which a script fires as readily as a reader. Capture, so a tap on a link engages the page it leaves.
+  for (const type of ['pointerdown', 'keydown', 'wheel', 'touchstart']) {
+    addEventListener(type, e => e.isTrusted && engage(), { capture: true, passive: true });
+  }
 
   for (const method of ['pushState', 'replaceState'] as const) {
     const write = history[method];

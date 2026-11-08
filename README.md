@@ -702,7 +702,7 @@ const SCHEMA: BlockSchema<Block> = {
 
 ## Analytics
 
-`wiki-formant/analytics`: page views and events in the site's own Postgres. No cookie and no stored address: a visitor is a hash of address and browser under a salt replaced every UTC day. Rows are kept 400 days. The tables ship in `prisma/analytics.prisma`; `ViewDay` holds days a site counted elsewhere first.
+`wiki-formant/analytics`: page views and events in the site's own Postgres. No cookie and no stored address: a visitor is a hash of address and browser under a salt replaced every UTC day. Rows are kept 400 days. A view is marked engaged once its reader has had the page visible fifteen seconds or given it input, so `engaged` counts people where `agents` counts crawlers. The tables ship in `prisma/analytics.prisma`; `ViewDay` holds days a site counted elsewhere first.
 
 ```ts
 // src/lib/track.ts
@@ -715,7 +715,7 @@ export const POST = viewRoute();
 
 - `createTracker` records only on a Vercel production deployment unless `enabled` says otherwise. `trackMcpCall` fits `McpServerConfig.onCall`; `trackSearch` normalises a query and drops an empty one; `recordEvent` is the undeferred write.
 - A proxy reaches the tracker through a dynamic `import()` inside `event.waitUntil`, since it imports the database client.
-- `digest(sql, { days })` is the site as one JSON object: visitors, agents, views, visits, bounce rate, visit length, sources, pages, countries, devices, by day, agents by name, MCP calls and searches that found nothing, less a search its visitor went on typing within five minutes and any of one character. A visit is a run of views with no gap over 30 minutes; a bounce is a one-view visit with no event of the reader's. `ownAgents` leaves the site's own out. A multi-tenant app passes `site`.
+- `digest(sql, { days })` is the site as one JSON object: people, engaged people, agents, views, visits, bounce rate, sources, pages, countries, devices, by day, agents by name, MCP calls and searches that found nothing, less a search its visitor went on typing within five minutes and any of one character. A visit is a run of views with no gap over 30 minutes; a bounce is a one-view visit its reader never engaged with. Agents are counted beside people, never among them: the ranked lists are people's. `ownAgents` leaves the site's own out. A multi-tenant app passes `site`.
 - A browser under automation (`navigator.webdriver`) sends no beacon.
 
 ## Passkeys and the stats page
@@ -741,7 +741,7 @@ return (
 
 - There is no sign-up: every passkey is saved from a single-use link `npx passkey-invite` prints. A passkey is bound to its host. Deleting a `Passkey` row signs out every session it opened. Tokens are kept only as hashes (`prisma/passkey.prisma`).
 - `gate.signedIn(cookie)` is a page's check and `gate.allows(request)` a write route's.
-- `statsQuery` reads `?days=` (1, 7, 30, 90, 365 or all), `?agents=apart` and the narrowings `?page=`, `?entry=`, `?source=`, `?country=`, `?device=`, which stack and recount every figure from the visits that pass.
+- `statsQuery` reads `?days=` (1, 7, 30, 90, 365 or all) and the narrowings `?page=`, `?entry=`, `?source=`, `?country=`, `?device=`, which stack and recount every figure from the visits that pass.
 - Each headline figure shows its change from the window before (`.stats-delta[data-better]`) and charts on press. A narrowed page over `ViewDay` totals starts at `counted_from` and says so.
 
 ## ROLA sign-in

@@ -11,9 +11,8 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { count, type Digest, type DigestDay } from './analytics.js';
 import { TimeChart, stepDecimals, type ChartAggregate, type ChartPoint } from './chart.js';
 
-// Whole seconds and percentages, unless an axis tick's step needs more to tell it from the next.
+// Whole percentages, unless an axis tick's step needs more to tell it from the next.
 const places = (step?: number) => (step ? stepDecimals(step) : 0);
-const duration = (s: number, step?: number) => (s < 60 ? `${s.toFixed(places(step))}s` : `${Math.floor(Math.round(s) / 60)}m ${Math.round(s) % 60}s`);
 const percent = (n: number, step?: number) => `${n.toFixed(places(step))}%`;
 // Views per visit sit between one and a few, so a tenth tells them apart.
 const perVisit = (n: number, step?: number) => n.toFixed(step ? stepDecimals(step) : 1);
@@ -45,23 +44,19 @@ interface Figure {
   format?: (n: number, step?: number) => string;
   /** A week or month of a count is its total; of a rate, the mean of its days. */
   aggregate?: ChartAggregate;
+  /** The first UTC day the figure was counted, before which the chart draws nothing. */
+  from?: string;
 }
 
-/** Visitors are one figure counting agents too, or `apart` two: people, and agents. */
-const figuresOf = ({ previous: p, ...d }: Digest, apart: boolean): Figure[] => [
-  ...(apart
-    ? [
-        { label: 'People', value: count(d.visitors), delta: change(d.visitors, p.visitors), day: (r: DigestDay) => r.visitors },
-        { label: 'Agents', value: count(d.agents), delta: change(d.agents, p.agents), day: (r: DigestDay) => r.agents },
-      ]
-    : [
-        {
-          label: 'Visitors',
-          value: count(d.visitors_incl_agents),
-          delta: change(d.visitors_incl_agents, p.visitors_incl_agents),
-          day: (r: DigestDay) => r.visitors_incl_agents,
-        },
-      ]),
+/**
+ * People, the ones among them who engaged, and agents, never one count of both.
+ * Engaged and bounce rate are drawn from the day engagement was first counted:
+ * before it is nothing, not days of no one engaging.
+ */
+const figuresOf = ({ previous: p, ...d }: Digest): Figure[] => [
+  { label: 'People', value: count(d.visitors), delta: change(d.visitors, p.visitors), day: r => r.visitors },
+  { label: 'Engaged', value: count(d.engaged), delta: change(d.engaged, p.engaged), day: r => r.engaged, from: d.engaged_from ?? '9999' },
+  { label: 'Agents', value: count(d.agents), delta: change(d.agents, p.agents), day: r => r.agents },
   { label: 'Page views', value: count(d.pageviews), delta: change(d.pageviews, p.pageviews), day: r => r.pageviews },
   {
     label: 'Views per visit',
@@ -78,14 +73,7 @@ const figuresOf = ({ previous: p, ...d }: Digest, apart: boolean): Figure[] => [
     day: r => (r.visits ? (100 * r.bounces) / r.visits : null),
     format: percent,
     aggregate: 'mean',
-  },
-  {
-    label: 'Visit length',
-    value: d.visit_duration == null ? '–' : duration(d.visit_duration),
-    delta: change(d.visit_duration, p.visit_duration),
-    day: r => (r.visits ? r.seconds / r.visits : null),
-    format: duration,
-    aggregate: 'mean',
+    from: d.engaged_from ?? '9999',
   },
   ...(d.follow_clicks
     ? [
@@ -100,7 +88,7 @@ const figuresOf = ({ previous: p, ...d }: Digest, apart: boolean): Figure[] => [
 ];
 
 const DAY = 86_400;
-const EMPTY: DigestDay = { date: '', visitors: 0, pageviews: 0, visits: 0, bounces: 0, seconds: 0, agents: 0, visitors_incl_agents: 0, follow_clicks: 0 };
+const EMPTY: DigestDay = { date: '', visitors: 0, engaged: 0, pageviews: 0, visits: 0, bounces: 0, agents: 0, follow_clicks: 0 };
 
 /**
  * The figures as `.stats-figures button[aria-pressed]`, each with its change
@@ -108,9 +96,9 @@ const EMPTY: DigestDay = { date: '', visitors: 0, pageviews: 0, visits: 0, bounc
  * day from `first` (a UTC day number) to today. A count's empty day is a zero;
  * a rate's is left out, since no visits is not a bounce rate of nothing.
  */
-export function StatsFigures({ digest, first, apart, controls }: { digest: Digest; first: number; apart: boolean; controls: ReactNode }) {
-  const figures = useMemo(() => figuresOf(digest, apart), [digest, apart]);
-  // By name, since a window or the agents switch can arrive without a reload and the figures shift.
+export function StatsFigures({ digest, first, controls }: { digest: Digest; first: number; controls: ReactNode }) {
+  const figures = useMemo(() => figuresOf(digest), [digest]);
+  // By name, since a window can arrive without a reload and the figures shift (Clicks to X comes and goes).
   const [chosen, choose] = useState(figures[0]!.label);
   const figure = figures.find(f => f.label === chosen) ?? figures[0]!;
   const byDay = useMemo(() => new Map(digest.by_day.map(r => [r.date, r])), [digest.by_day]);
@@ -118,7 +106,8 @@ export function StatsFigures({ digest, first, apart, controls }: { digest: Diges
     const today = Math.floor(Date.now() / 1000 / DAY);
     return Array.from({ length: today - first + 1 }, (_, i) => {
       const time = (first + i) * DAY;
-      const value = figure.day(byDay.get(new Date(time * 1000).toISOString().slice(0, 10)) ?? EMPTY);
+      const date = new Date(time * 1000).toISOString().slice(0, 10);
+      const value = figure.from && date < figure.from ? null : figure.day(byDay.get(date) ?? EMPTY);
       return value == null ? null : { time, value };
     }).filter(p => p !== null);
   }, [byDay, first, figure]);
