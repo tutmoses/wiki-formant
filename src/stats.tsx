@@ -86,6 +86,7 @@ function StatsList({
   rows,
   label = v => v,
   to,
+  empty,
   link: Link,
 }: {
   title: string;
@@ -93,9 +94,17 @@ function StatsList({
   label?: (v: string) => string;
   /** Where a row narrows the page to; a list of events, which no visit filter reaches, has none. */
   to?: (v: string) => string;
+  /** What an empty list says, for one that is kept when empty; without it, an empty list is left out. */
+  empty?: string;
   link: WikiLinkComponent;
 }) {
-  if (!rows.length) return null;
+  if (!rows.length)
+    return empty ? (
+      <section className="stats-list">
+        <h2>{title}</h2>
+        <p>{empty}</p>
+      </section>
+    ) : null;
   const max = Math.max(...rows.map(([, n]) => n));
   return (
     <section className="stats-list">
@@ -124,7 +133,8 @@ function StatsList({
  * A site's own analytics on one page: the headline figures against the window
  * before, visitors counting agents unless `apart`, whichever of them is chosen per day, and every ranked list the
  * digest carries, each row a link that narrows the page to it. Lists with
- * nothing in them are left out. The digest is made with the same `apart`, so
+ * nothing in them are left out, but for the searches that found nothing,
+ * which says it found none, so a quiet window never reads as one not counted. The digest is made with the same `apart`, so
  * the lists count the visitors the chart draws. The chart and the bars are `currentColor`
  * until the importing stylesheet gives them a colour.
  */
@@ -210,7 +220,7 @@ export function Stats({ digest: d, days, filter = {}, apart = false, ranges = ST
         <StatsList link={Link} title="Devices" rows={rows(d.devices, 'device', 'visitors')} to={to('device')} />
         <StatsList link={Link} title="Agents" rows={rows(d.top_agents, 'agent', 'visitors')} />
         <StatsList link={Link} title="Agent tool calls" rows={rows(d.agent_tool_calls, 'tool', 'events')} />
-        <StatsList link={Link} title="Searches that found nothing" rows={rows(d.gaps, 'query', 'events')} />
+        <StatsList link={Link} title="Searches that found nothing" rows={rows(d.gaps, 'query', 'events')} empty="None in this window." />
       </div>
     </div>
   );
