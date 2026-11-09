@@ -24,6 +24,11 @@ test('compact keeps open work items, pinned flags first, newest next, and caps t
   assert.equal(out.runHistory.at(-1).date, '39', 'the newest runs are the ones kept');
 });
 
+test('a null status is open, as the bin reads it, so compact keeps the item', () => {
+  const out = compact({ backlog: [{ date: '2026-10-01', item: 'FLAG FOR A HUMAN: null status', status: null }] });
+  assert.deepEqual(out.backlog.map(b => [b.item, b.status]), [['FLAG FOR A HUMAN: null status', 'open']]);
+});
+
 test('flags are capped at what the page shows, the newest kept, and work items fill behind them', () => {
   const flags = Array.from({ length: 20 }, (_, i) => ({ date: `2026-10-${String(i + 1).padStart(2, '0')}`, item: `FLAG FOR A HUMAN: ${i}` }));
   const out = compact({ backlog: [...flags, 'work'] });

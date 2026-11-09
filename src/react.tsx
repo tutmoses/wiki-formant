@@ -636,6 +636,9 @@ export function useTypeahead<T>({
       e.preventDefault();
       setHighlight(h => (h - 1 + items.length) % items.length);
     } else if (e.key === 'Enter') {
+      // The list answers the last settled query. Typed past it, Enter falls
+      // through to the form, so it submits what was typed, not a stale pick.
+      if (query !== debounced || isSearching) return;
       e.preventDefault();
       const target = items[highlight];
       if (target) onPick(target);
@@ -759,7 +762,10 @@ export function useLinkPreview<T>({
         clearTimeout(hideTimer.current);
         return;
       }
+      // A new link retires the last one's card at once: the grace is for
+      // crossing into that card, and the cursor has gone somewhere else.
       clearTimers();
+      setCard(null);
       activeHref.current = href;
 
       showTimer.current = setTimeout(async () => {
@@ -1198,12 +1204,17 @@ export function useRevisionRestore<Id>(
 ): { restore: (id: Id, label: string) => Promise<void>; busyId: Id | null; error: string | null } {
   const [busyId, setBusyId] = useState<Id | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // One restore at a time: a second, started while the first is in flight,
+  // would have its "Restoring…" cleared by the first one finishing.
+  const inFlight = useRef(false);
   const { onRestored, confirm = (label: string) => `Restore ${label}? The current state stays in the history.` } = options;
 
   const run = useCallback(
     async (id: Id, label: string) => {
+      if (inFlight.current) return;
       const question = confirm(label);
       if (question && !window.confirm(question)) return;
+      inFlight.current = true;
       setBusyId(id);
       setError(null);
       try {
@@ -1211,6 +1222,7 @@ export function useRevisionRestore<Id>(
         if (failure) setError(failure);
         else onRestored();
       } finally {
+        inFlight.current = false;
         setBusyId(null);
       }
     },

@@ -49,6 +49,7 @@ export function addCopyButtons(root: ParentNode, options: CopyButtonOptions = {}
     btn.className = className;
     btn.setAttribute('aria-label', label);
     btn.innerHTML = COPY_SVG;
+    let revert: ReturnType<typeof setTimeout> | undefined;
     btn.onclick = () => {
       const code = pre.querySelector('code')?.textContent || pre.textContent || '';
       // A rejected clipboard write (permissions, insecure origin) must not
@@ -56,7 +57,8 @@ export function addCopyButtons(root: ParentNode, options: CopyButtonOptions = {}
       navigator.clipboard.writeText(code).then(
         () => {
           btn.innerHTML = CHECK_SVG;
-          setTimeout(() => {
+          clearTimeout(revert);
+          revert = setTimeout(() => {
             btn.innerHTML = COPY_SVG;
           }, revertAfter);
         },

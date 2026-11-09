@@ -776,11 +776,14 @@ export function useWikiEditor({
       const file = e.target.files?.[0];
       if (!file || !editor) return;
       setIsUploading(true);
-      const url = await uploadImage(file);
-      if (url) editor.chain().focus().setImage({ src: url }).run();
-      setIsUploading(false);
-      // Cleared so choosing the same file twice in a row still fires a change.
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      try {
+        const url = await uploadImage(file);
+        if (url) editor.chain().focus().setImage({ src: url }).run();
+      } finally {
+        setIsUploading(false);
+        // Cleared so choosing the same file twice in a row still fires a change.
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
     },
     [editor, uploadImage],
   );

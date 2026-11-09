@@ -31,7 +31,7 @@
 // the item back in, so a run's whole-state write cannot drop it. Every mode
 // reads and writes under the row lock. Only `state` in the page's metadata is
 // written; other keys are kept. A revision bumps the page's version a minor.
-import { PINNED, addBacklog, compact, lateBacklog, render, staleWrite } from '../dist/maintenance.js';
+import { PINNED, addBacklog, compact, isOpen, lateBacklog, render, staleWrite } from '../dist/maintenance.js';
 import { bump } from '../dist/versioning.js';
 import { arg, connect, invalidate } from './_cli.mjs';
 
@@ -131,7 +131,7 @@ try {
     const kept = new Set(state.backlog.map(b => b.item));
     for (const b of input.backlog ?? []) {
       const item = typeof b === 'string' ? b : b.item;
-      if (PINNED.test(item ?? '') && (typeof b === 'string' || (b.status ?? 'open') === 'open') && !kept.has(item)) {
+      if (PINNED.test(item ?? '') && isOpen(b) && !kept.has(item)) {
         console.log(`  flag dropped over the cap: ${item}`);
       }
     }

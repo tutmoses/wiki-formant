@@ -51,8 +51,10 @@ export interface CodeTabsViewProps {
  * whatever the consumer's highlighter attached to it on every tab press.
  */
 export function CodeTabsView({ tabs, highlighted = false }: CodeTabsViewProps) {
-  const [activeTab, setActiveTab] = useState(0);
+  const [picked, setActiveTab] = useState(0);
   if (!tabs.length) return null;
+  // Clamped, so tabs removed under the selection leave the last one showing.
+  const activeTab = Math.min(picked, tabs.length - 1);
 
   return (
     <div className="code-tabs">

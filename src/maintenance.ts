@@ -29,7 +29,7 @@ interface SourceEntry {
   note?: string;
   list?: SourceListItem[];
 }
-export type BacklogEntry = string | { date?: string; item: string; status?: string };
+export type BacklogEntry = string | { date?: string; item: string; status?: string | null };
 type FeedbackEntry = string | { date?: string; note: string };
 interface RunEntry {
   date?: string;
@@ -64,6 +64,11 @@ export const PINNED = /FLAG FOR A HUMAN/i;
 const BANKED = /\bbanked\b|bot[- ]?(wall|block)|\b(403|429|999)\b|cloudflare/i;
 
 const itemOf = (b: BacklogEntry) => (typeof b === 'string' ? b : b.item);
+/**
+ * @internal The one test of open, which the bin shares: a bare string, or no
+ * status, is open; `compact` deletes anything else for good.
+ */
+export const isOpen = (b: BacklogEntry) => typeof b === 'string' || (b.status ?? 'open') === 'open';
 const recency = (a: [string, SourceEntry], b: [string, SourceEntry]) =>
   String(b[1]?.lastChecked ?? '').localeCompare(String(a[1]?.lastChecked ?? ''));
 
@@ -71,8 +76,9 @@ const recency = (a: [string, SourceEntry], b: [string, SourceEntry]) =>
 export function compact(state: LogState): LogState {
   // Undated items fall back to append order: a later index is newer.
   const open = (state.backlog ?? [])
-    .map((b, i) => ({ status: 'open', ...(typeof b === 'string' ? { date: '', item: b } : b), i }))
-    .filter(b => b.status === 'open' && b.item && (PINNED.test(b.item) || !JOURNAL.test(b.item)))
+    .filter(isOpen)
+    .map((b, i) => ({ ...(typeof b === 'string' ? { date: '', item: b } : b), status: 'open', i }))
+    .filter(b => b.item && (PINNED.test(b.item) || !JOURNAL.test(b.item)))
     .sort((a, b) => String(b.date ?? '').localeCompare(String(a.date ?? '')) || b.i - a.i);
   const backlog = [...open.filter(b => PINNED.test(b.item)).slice(0, MAX.flags), ...open.filter(b => !PINNED.test(b.item))]
     .slice(0, MAX.backlog)
