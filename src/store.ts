@@ -153,7 +153,15 @@ export function toListing<R extends { content?: unknown }>(row: R): Omit<R, 'con
 }
 
 
-const conflict = (message: string) => new HttpError(409, message);
+/**
+ * Why a save was refused, carried in the 409 body as `conflict`. `stale` and
+ * `deleted` mean reload: the page moved on, so saving again cannot succeed.
+ * `taken` means pick another slug, which reloading does not fix. A client that
+ * guessed this from its own state filed a rename of a stale page as a slug
+ * clash and kept offering Save for a 409 every retry would meet again.
+ */
+export type ConflictReason = 'stale' | 'deleted' | 'taken';
+const conflict = (reason: ConflictReason, message: string) => new HttpError(409, message, { conflict: reason });
 const SLUG_TAKEN = 'A page with that slug already exists in this category';
 
 /** Re-order rows to match an id list, dropping ids that no longer resolve. */
@@ -399,7 +407,7 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
       site, input.tagPath, input.slug, input.title, JSON.stringify(input.content), JSON.stringify(input.metadata ?? {}),
       INITIAL_VERSION, input.authorId ?? null, input.verified === true, input.message ?? 'Initial version',
     );
-    if (!page) throw conflict('A page at that path was created while this one was being written');
+    if (!page) throw conflict('taken', 'A page at that path was created while this one was being written');
     return { page, created: true, changeType: 'major', summary: 'page created' };
   };
 
@@ -412,15 +420,15 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
   const save = async (input: SaveInput<B>): Promise<SaveResult<B>> => {
     const existing = await get(input.tagPath, input.slug);
     if (!existing && input.baseVersion !== undefined) {
-      throw conflict(`This page was deleted since it was opened at v${input.baseVersion}. Saving now would create it again; reload to decide.`);
+      throw conflict('deleted', `This page was deleted since it was opened at v${input.baseVersion}. Saving now would create it again; reload to decide.`);
     }
     if (!existing) return create(input);
     if (input.baseVersion !== undefined && input.baseVersion !== existing.version) {
-      throw conflict(`This page changed since it was opened: it is at v${existing.version} now, not v${input.baseVersion}. Reload it and apply the edit again.`);
+      throw conflict('stale', `This page changed since it was opened: it is at v${existing.version} now, not v${input.baseVersion}. Reload it and apply the edit again.`);
     }
     const slug = input.newSlug && input.newSlug !== existing.slug ? input.newSlug : existing.slug;
     const slugTaken = async () => slug !== existing.slug && (await get(existing.tagPath, slug)) !== null;
-    if (await slugTaken()) throw conflict(SLUG_TAKEN);
+    if (await slugTaken()) throw conflict('taken', SLUG_TAKEN);
 
     const title = input.title ?? existing.title;
     const content = input.content ?? existing.content;
@@ -453,10 +461,10 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
     ).catch(async err => {
       // A page that took the slug after the check above fails the unique index.
       // Asked again rather than read off the error, whose shape is the driver's.
-      if (await slugTaken()) throw conflict(SLUG_TAKEN);
+      if (await slugTaken()) throw conflict('taken', SLUG_TAKEN);
       throw err;
     });
-    if (!page) throw conflict('This page was saved by someone else while this edit was being written. Reload it and apply the edit again.');
+    if (!page) throw conflict('stale', 'This page was saved by someone else while this edit was being written. Reload it and apply the edit again.');
     return { page, created: false, changeType, summary: diff.summary };
   };
 

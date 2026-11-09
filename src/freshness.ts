@@ -32,12 +32,18 @@ export function daysSince(date: Date | string | null | undefined, now: number): 
 }
 
 /**
- * Stale when the page has never been verified, or was verified longer ago than
- * `maxAgeDays`. Falls back to `updatedAt` when `lastVerifiedAt` is unset: an
- * edit is a weaker signal than a verification, but it is a signal.
+ * Days since the page was last checked: since its verification, or, unverified,
+ * since its last edit, a weaker signal but a signal. Null when it carries
+ * neither, which is never fresh; a caller that read it as 0 called an undated
+ * page new.
  */
+export function freshnessAge(page: FreshnessInput, now: number): number | null {
+  return daysSince(page.lastVerifiedAt ?? page.updatedAt, now);
+}
+
+/** Stale when undated, or checked longer ago than `maxAgeDays`. */
 export function isStale(page: FreshnessInput, now: number, maxAgeDays = DEFAULT_MAX_AGE_DAYS): boolean {
-  const age = daysSince(page.lastVerifiedAt ?? page.updatedAt, now);
+  const age = freshnessAge(page, now);
   return age === null || age > maxAgeDays;
 }
 

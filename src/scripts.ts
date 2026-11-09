@@ -175,9 +175,9 @@ export async function writeRevision(
 export async function upsertWikiPage(
   client: ScriptClient,
   input: SaveInput<AnyBlock> & { content: AnyBlock[]; siteId?: string },
-): Promise<'created' | 'updated'> {
+): Promise<'created' | 'updated' | 'unchanged'> {
   assertLinkShapes(input.content, `${input.tagPath}/${input.slug}`);
   const { siteId, ...save } = input;
-  const { created } = await storeFor(client, siteId).save(save);
-  return created ? 'created' : 'updated';
+  const { created, changeType } = await storeFor(client, siteId).save(save);
+  return created ? 'created' : changeType === 'none' ? 'unchanged' : 'updated';
 }

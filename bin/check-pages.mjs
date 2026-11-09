@@ -58,7 +58,7 @@ const get = async url => {
 
 // The sitemap is the URL list.
 async function sitemapUrls(origin) {
-  const seen = (await readSitemap(`${origin}/sitemap.xml`, url => fetch(url, { headers: { 'user-agent': UA } })).catch(() => [])).map(e => e.url);
+  const seen = (await readSitemap(`${origin}/sitemap.xml`, url => fetch(url, { headers: { 'user-agent': UA } }))).map(e => e.url);
   // A sitemap states absolute production URLs by definition, so pointing
   // --site at a dev server would otherwise crawl production and report the
   // build you were trying to replace. The path is what the sitemap contributes;
@@ -82,7 +82,12 @@ const descriptionOf = html => {
   return m ? (m[0].match(/content=["']([\s\S]*?)["']/i)?.[1] ?? '').trim() : null;
 };
 
-const urls = await sitemapUrls(site);
+// A sitemap that does not answer is a fault, not an empty site: read as no
+// URLs, a down sitemap passed the gate it exists to hold.
+const urls = await sitemapUrls(site).catch(e => {
+  console.error(`check-pages: ${site}/sitemap.xml could not be read: ${e.message}`);
+  process.exit(WARN_ONLY ? 0 : 1);
+});
 if (!urls.length) {
   console.log(`check-pages: no URLs in ${site}/sitemap.xml — nothing to check. Skipping.`);
   process.exit(0);

@@ -33,6 +33,27 @@ export interface Probe {
   walled?: boolean;
 }
 
+/**
+ * What a probe says about a link. Only `dead` is grounds to touch a citation:
+ * a wall, a lapsed certificate and a host that did not answer in time are
+ * unverifiable, and a sweep that read them off `!ok` stripped good citations.
+ */
+export type LinkVerdict =
+  | { kind: 'alive' }
+  | { kind: 'dead'; status: number }
+  | { kind: 'walled'; status: number }
+  | { kind: 'tls'; code: string }
+  | { kind: 'unreachable'; error: string };
+
+/** The one reading of a probe. A name that does not resolve is dead; any other failure to answer is not. */
+export function verdictOf(probe: Probe): LinkVerdict {
+  if (probe.ok) return { kind: 'alive' };
+  if (probe.walled) return { kind: 'walled', status: probe.status };
+  if (probe.tls) return { kind: 'tls', code: probe.tls };
+  if (probe.status === 0 && probe.code !== 'ENOTFOUND') return { kind: 'unreachable', error: probe.error ?? probe.code ?? 'no answer' };
+  return { kind: 'dead', status: probe.status };
+}
+
 export interface ProbeOptions {
   /** Ordinary per-attempt budget. */
   timeoutMs?: number;
@@ -409,9 +430,14 @@ export interface AuditOptions<B extends { type: string }> {
   containers?: (block: B) => B[][] | null;
 }
 
+export type AuditedLink = Probe & { verdict: LinkVerdict; pages: string[] };
+
 export interface LinkAudit {
   externalChecked: number;
-  brokenExternal: Array<Probe & { pages: string[] }>;
+  /** Links whose verdict is `dead`. */
+  brokenExternal: AuditedLink[];
+  /** Walled, TLS-failed or unanswered: confirm by hand, never strip. */
+  unverifiableExternal: AuditedLink[];
   brokenInternal: Array<{ url: string; pages: string[] }>;
   /** Every embed, each with the pages that carry it, for a checker that probes them. */
   embeds: Map<string, { kind: string; pages: string[] }>;
@@ -461,9 +487,11 @@ export async function auditLinks<B extends { type: string }>(pages: readonly Aud
   }
   const urls = [...external.keys()];
   const results = await mapLimit(urls, concurrency, url => probe(url));
+  const audited = results.map(r => ({ ...r, verdict: verdictOf(r), pages: external.get(r.url)! }));
   return {
     externalChecked: urls.length,
-    brokenExternal: results.filter(r => !r.ok).map(r => ({ ...r, pages: external.get(r.url)! })),
+    brokenExternal: audited.filter(r => r.verdict.kind === 'dead'),
+    unverifiableExternal: audited.filter(r => r.verdict.kind !== 'dead' && r.verdict.kind !== 'alive'),
     brokenInternal: [...internalLinks.entries()]
       .filter(([u]) => {
         const p = u.split('?')[0]!;
@@ -475,12 +503,17 @@ export async function auditLinks<B extends { type: string }>(pages: readonly Aud
   };
 }
 
+const verdictLabel = (v: LinkVerdict) =>
+  v.kind === 'walled' ? `walled ${v.status}` : v.kind === 'tls' ? `tls ${v.code}` : v.kind === 'unreachable' ? v.error : v.kind;
+
 /** The human report's first lines: what was checked, and what is broken. */
 export function printLinkAudit(audit: LinkAudit, { scope = '(entire wiki)', pagesScanned }: { scope?: string; pagesScanned: number }): void {
   console.log(`\nLink check — scope: ${scope}`);
   console.log(`Pages scanned: ${pagesScanned} | external links checked: ${audit.externalChecked}`);
   console.log(`\nBroken external (${audit.brokenExternal.length}):`);
-  for (const b of audit.brokenExternal) console.log(`  [${b.status || b.code || b.error}] ${b.url}\n      ← ${b.pages.join(', ')}`);
+  for (const b of audit.brokenExternal) console.log(`  [${b.status || b.code}] ${b.url}\n      ← ${b.pages.join(', ')}`);
+  console.log(`\nUnverifiable external — confirm by hand, never strip (${audit.unverifiableExternal.length}):`);
+  for (const b of audit.unverifiableExternal) console.log(`  [${verdictLabel(b.verdict)}] ${b.url}\n      ← ${b.pages.join(', ')}`);
   console.log(`\nBroken internal (${audit.brokenInternal.length}):`);
   for (const b of audit.brokenInternal) console.log(`  ${b.url}\n      ← ${b.pages.join(', ')}`);
 }

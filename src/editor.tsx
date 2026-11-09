@@ -654,26 +654,24 @@ export function useUrlPrompt(
 
 /**
  * An `uploadImage` that POSTs the file as `file` form data and reads `{ url }`
- * back. Two editors carried it character for character, `alert` included.
+ * back, throwing the route's own reason when there is none.
  */
-export function uploadImageTo(endpoint: string): (file: File) => Promise<string | null> {
+export function uploadImageTo(endpoint: string): (file: File) => Promise<string> {
   return async file => {
     const form = new FormData();
     form.append('file', file);
-    try {
-      const res = await fetch(endpoint, { method: 'POST', body: form });
-      const body = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok) {
-        alert(body.error || 'Upload failed');
-        return null;
-      }
-      return body.url ?? null;
-    } catch {
-      alert('Upload failed');
-      return null;
-    }
+    const res = await fetch(endpoint, { method: 'POST', body: form }).catch(() => {
+      throw new Error('The upload did not reach the server. Try again.');
+    });
+    const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+    if (!res.ok || !body.url) throw new Error(body.error || 'The upload failed. Try again.');
+    return body.url;
   };
 }
+
+/** An upload in the editor: the failure is the editor's to say, beside the field, not an `alert`. */
+export type UploadState = { status: 'idle' } | { status: 'uploading' } | { status: 'failed'; error: string };
+const UPLOAD_IDLE: UploadState = { status: 'idle' };
 
 export interface WikiEditorOptions {
   value: string;
@@ -682,8 +680,8 @@ export interface WikiEditorOptions {
   nodes?: readonly AnyExtension[];
   /** The prose class the editor body renders under. */
   proseClass: string;
-  /** Upload a chosen file, returning its URL or null. The route is the app's. */
-  uploadImage: (file: File) => Promise<string | null>;
+  /** Upload a chosen file and resolve its URL; throw with the reason it failed. The route is the app's. */
+  uploadImage: (file: File) => Promise<string>;
   /** Debounce before `onChange` fires, in ms. */
   debounceMs?: number;
 }
@@ -691,7 +689,7 @@ export interface WikiEditorOptions {
 export interface WikiEditorState {
   editor: Editor | null;
   fileInputRef: RefObject<HTMLInputElement | null>;
-  isUploading: boolean;
+  upload: UploadState;
   handleFileChange: (e: ChangeEvent<HTMLInputElement>) => Promise<void>;
   /** Open the file picker — what an upload toolbar button calls. */
   triggerUpload: () => void;
@@ -711,7 +709,8 @@ export function useWikiEditor({
   debounceMs = 150,
 }: WikiEditorOptions): WikiEditorState {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const [upload, setUpload] = useState<UploadState>(UPLOAD_IDLE);
+  const uploadAttempt = useRef(0);
   const initialValueRef = useRef(value);
   const onChangeRef = useRef(onChange);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -775,14 +774,18 @@ export function useWikiEditor({
     async (e: ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file || !editor) return;
-      setIsUploading(true);
+      // Cleared so choosing the same file twice in a row still fires a change.
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      // The state belongs to the latest upload: an earlier one landing late
+      // still places its picture but does not speak over the one in flight.
+      const attempt = ++uploadAttempt.current;
+      setUpload({ status: 'uploading' });
       try {
         const url = await uploadImage(file);
-        if (url) editor.chain().focus().setImage({ src: url }).run();
-      } finally {
-        setIsUploading(false);
-        // Cleared so choosing the same file twice in a row still fires a change.
-        if (fileInputRef.current) fileInputRef.current.value = '';
+        editor.chain().focus().setImage({ src: url }).run();
+        if (attempt === uploadAttempt.current) setUpload(UPLOAD_IDLE);
+      } catch (err) {
+        if (attempt === uploadAttempt.current) setUpload({ status: 'failed', error: err instanceof Error ? err.message : 'The upload failed. Try again.' });
       }
     },
     [editor, uploadImage],
@@ -790,7 +793,7 @@ export function useWikiEditor({
 
   const triggerUpload = useCallback(() => fileInputRef.current?.click(), []);
 
-  return { editor, fileInputRef, isUploading, handleFileChange, triggerUpload };
+  return { editor, fileInputRef, upload, handleFileChange, triggerUpload };
 }
 
 // ---- one line ---------------------------------------------------------------

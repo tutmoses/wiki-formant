@@ -477,6 +477,9 @@ export function useClickOutside<T extends HTMLElement>(onClose: () => void) {
 
 // ---- typeahead --------------------------------------------------------------
 
+const TYPEAHEAD_IDLE = { status: 'idle' } as const;
+const NO_ITEMS: never[] = [];
+
 export interface TypeaheadOptions<T> {
   /**
    * Runs the search. MUST be referentially stable — a module function, a server
@@ -498,14 +501,26 @@ export interface TypeaheadOptions<T> {
   cache?: boolean;
 }
 
+/**
+ * What the list is answering. A failed search is its own state, never an empty
+ * list: "no pages found" for a 429 tells the reader the page does not exist.
+ * `searching` keeps the last answer's items on screen until this one lands.
+ */
+export type TypeaheadResults<T> =
+  | { status: 'idle' }
+  | { status: 'searching'; query: string; items: T[] }
+  | { status: 'found'; query: string; items: T[] }
+  | { status: 'failed'; query: string };
+
 export interface TypeaheadState<T> {
   query: string;
   setQuery: (query: string) => void;
   debouncedQuery: string;
+  results: TypeaheadResults<T>;
+  /** The rows on screen: `results.items` where it has any, else none. */
   items: T[];
   highlight: number;
   setHighlight: (index: number) => void;
-  isSearching: boolean;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   /** Drop the results, keep the query. For an outside click. */
   clearItems: () => void;
@@ -550,11 +565,11 @@ export function useTypeahead<T>({
 }: TypeaheadOptions<T>): TypeaheadState<T> {
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
-  const [items, setItems] = useState<T[]>([]);
+  const [results, setResults] = useState<TypeaheadResults<T>>(TYPEAHEAD_IDLE);
   const [highlight, setHighlight] = useState(0);
-  const [isSearching, setIsSearching] = useState(false);
   const requestId = useRef(0);
   const cached = useRef(new Map<string, T[]>());
+  const items = results.status === 'searching' || results.status === 'found' ? results.items : NO_ITEMS;
 
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(query), delay);
@@ -567,38 +582,34 @@ export function useTypeahead<T>({
       // Bump the id so an in-flight request for a longer query cannot land
       // after the field has been cleared.
       requestId.current++;
-      setItems([]);
-      setIsSearching(false);
+      setResults(TYPEAHEAD_IDLE);
       return;
     }
 
     const hit = cache ? cached.current.get(q) : undefined;
     if (hit) {
       requestId.current++;
-      setItems(hit);
+      setResults({ status: 'found', query: q, items: hit });
       setHighlight(0);
-      setIsSearching(false);
       return;
     }
 
     const id = ++requestId.current;
     const controller = new AbortController();
-    setIsSearching(true);
+    setResults(r => ({ status: 'searching', query: q, items: r.status === 'searching' || r.status === 'found' ? r.items : NO_ITEMS }));
 
     fetch(q, controller.signal).then(
       rows => {
         if (id !== requestId.current) return;
         if (cache) cached.current.set(q, rows);
-        setItems(rows);
+        setResults({ status: 'found', query: q, items: rows });
         setHighlight(0);
-        setIsSearching(false);
       },
       () => {
-        // An abort is the expected path for every superseded query, so it must
-        // not surface as an error. A real failure reads as "no results".
+        // An abort is the expected path for every superseded query, and the id
+        // check drops it. A real failure is never cached, so asking again retries.
         if (id !== requestId.current) return;
-        setItems([]);
-        setIsSearching(false);
+        setResults({ status: 'failed', query: q });
       },
     );
 
@@ -609,17 +620,15 @@ export function useTypeahead<T>({
   // bring back the list the reader just closed.
   const clearItems = useCallback(() => {
     requestId.current++;
-    setItems([]);
-    setIsSearching(false);
+    setResults(TYPEAHEAD_IDLE);
   }, []);
 
   const reset = useCallback(() => {
     requestId.current++;
     setQuery('');
     setDebounced('');
-    setItems([]);
+    setResults(TYPEAHEAD_IDLE);
     setHighlight(0);
-    setIsSearching(false);
   }, []);
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -638,7 +647,7 @@ export function useTypeahead<T>({
     } else if (e.key === 'Enter') {
       // The list answers the last settled query. Typed past it, Enter falls
       // through to the form, so it submits what was typed, not a stale pick.
-      if (query !== debounced || isSearching) return;
+      if (query !== debounced || results.status !== 'found') return;
       e.preventDefault();
       const target = items[highlight];
       if (target) onPick(target);
@@ -658,10 +667,10 @@ export function useTypeahead<T>({
     query,
     setQuery,
     debouncedQuery: debounced,
+    results,
     items,
     highlight,
     setHighlight,
-    isSearching,
     onKeyDown,
     clearItems,
     reset,
@@ -678,7 +687,11 @@ export interface LinkPreviewOptions<T> {
    * is exactly the part that differs — so the whole predicate is yours.
    */
   eligible: (anchor: HTMLAnchorElement) => boolean;
-  /** Resolve a preview for a href, or null for "no card". REST or server action. */
+  /**
+   * Resolve a preview for a href, or null for "no card". REST or server action.
+   * Throw when the answer could not be read (a 429, a 5xx): null is cached for
+   * the visit, a throw is asked again on the next hover.
+   */
   fetch: (href: string) => Promise<T | null>;
   /** Must match the class on the element you spread `cardProps` onto. */
   cardClassName?: string;
@@ -771,10 +784,13 @@ export function useLinkPreview<T>({
       showTimer.current = setTimeout(async () => {
         let data = cache.current.get(href);
         if (data === undefined) {
+          // Only an answer is cached. A failed fetch shows no card this time and
+          // is asked again on the next hover, where caching it as "no preview"
+          // hid that link's card for the rest of the visit.
           try {
             data = await opts.current.fetch(href);
           } catch {
-            data = null;
+            return;
           }
           cache.current.set(href, data);
         }

@@ -40,7 +40,7 @@ const { items, total } = await store.search('validators', { take: 20 });
 await store.save({ tagPath, slug, content, authorId, message, baseVersion: page.version });
 ```
 
-- **A save is one statement**: the page update and its revision in a CTE guarded on the version read. A lost race, a stale `baseVersion`, a page deleted since or a rename onto a taken slug writes nothing and throws a 409 `HttpError`.
+- **A save is one statement**: the page update and its revision in a CTE guarded on the version read. A lost race, a stale `baseVersion`, a page deleted since or a rename onto a taken slug writes nothing and throws a 409 `HttpError` whose body names the reason as `conflict`: `stale` and `deleted` mean reload, `taken` means another slug (`ConflictReason`).
 - **The bump is the diff's**: added, removed or moved blocks are `major`, changed prose or title `minor`; `change` overrides it. A metadata-only save moves no version and writes no revision.
 - **History is diffed on read.** A revision stores the page as saved. `history(pageId, { limit })` reads one row more than it returns, so the oldest entry shown has its real predecessor.
 - **Listings carry a snippet, not the article**: `list`, `recent` and `byIds` drop `content`.
@@ -318,8 +318,8 @@ function LinkPreview() {
 - `RailShell` renders the rail's landmark, scroll wrapper and collapse states, and closes a mobile drawer on a followed link; mark the active link with `isRailLinkActive`. With `RailShell prefix="wiki-sidebar"` in a `.wiki-layout` beside `.wiki-layout__main`, `base.css` lays it out: a sticky column from 1024px, a drawer above the article below it. The site supplies `--rail-top`, `--rail-border` and the surface.
 - The breakpoint is known twice, in `matchMedia` and in CSS. `base.css` sets `--rail-floating: 1` inside its media query and the hook warns in development when the two disagree; a rail laid out by its own CSS sets the property the same way. `railBreakpointMismatch` and `readRailFloating` (`wiki-formant/sidebar`) are the mechanism.
 - `TableOfContents` is the "on this page" list with scroll-spy.
-- `useLinkPreview` is the hover card: one delegated listener, an intent delay, a grace period into the card, viewport clamping and a per-href cache. `LinkPreviewCard` is its markup (`link-preview-card`, `-banner`, `-body`, `-title`, `-excerpt`); a caller that must move the card passes its own `style`.
-- `useTypeahead` is the search field's state machine: a request-id guard, keyboard navigation, abort and a per-mount cache. `fetch` must be referentially stable. Its `combobox(listKey)` hands out `inputProps`, `listProps` and `optionProps(i)`, with `aria-activedescendant` omitted rather than emptied; `listKey` keeps two rendered lists' ids apart. The arithmetic is `wiki-formant/combobox`, which imports nothing.
+- `useLinkPreview` is the hover card: one delegated listener, an intent delay, a grace period into the card, viewport clamping and a per-href cache of answers; a `fetch` that throws is asked again on the next hover, a null is cached as no card. `LinkPreviewCard` is its markup (`link-preview-card`, `-banner`, `-body`, `-title`, `-excerpt`); a caller that must move the card passes its own `style`.
+- `useTypeahead` is the search field's state machine: a request-id guard, keyboard navigation, abort and a per-mount cache. `results` is `idle`, `searching`, `found` or `failed`, so "no results" is `found` with none and a failed search is never cached; `items` is the rows on screen. `fetch` must be referentially stable. Its `combobox(listKey)` hands out `inputProps`, `listProps` and `optionProps(i)`, with `aria-activedescendant` omitted rather than emptied; `listKey` keeps two rendered lists' ids apart. The arithmetic is `wiki-formant/combobox`, which imports nothing.
 - `useSnapRow` is a carousel as a scroll-snapped row: `step`, `go(i)` and `at`, no markup.
 - `useClickOutside` ignores a container hidden at the current breakpoint (`offsetParent`).
 - `useUnsavedChanges(dirty)` asks before leaving and returns `confirmLeave()` for a client-side navigation; `useSaveShortcut(save)` binds ⌘S / Ctrl+S; `useSearchShortcut(open)` is "/" to search, with `focusShown(input)`.
@@ -585,7 +585,7 @@ const banner = freshnessBanner(page, Date.now(), { against: 'current sources and
 const queues = maintenanceQueues(pages, { href, required, nowMs, verify, listedIds });
 ```
 
-- `freshnessBanner` is the `outdated` banner once a page goes unchecked for `maxAgeDays` (180), or null.
+- `freshnessBanner` is the `outdated` banner once a page goes unchecked for `maxAgeDays` (180), or null. `freshnessAge` is the days since a page was verified, or edited if never, and null when it carries neither, which `isStale` counts as stale.
 - `maintenanceQueues` returns the outdated, orphaned, unsourced and missing-facts queues, empty ones dropped. Pass every page but the home page and the back office. `MaintenanceQueues` draws them on a `noindex` page.
 - `citation({ publisher, title, date, url })` (`wiki-formant/react-server`) is the line `Cite` shows.
 
@@ -669,7 +669,7 @@ const url = useUrlPrompt(editor, { resolveMapUrl });
 - `WikiToolbar` shows each command the editor's extensions support (`supports`) and nothing else, in fixed groups, with the table controls while the cursor is in a table.
 - `useUrlPrompt` is the link and embed field: it opens on the current link, unlinks on an emptied one, and closes when its editor changes.
 - `WikiLine` is a one-line field with its own `marks`, undo and `onFocus`, so one toolbar can drive the field last touched. Its `style` mark is `wikiTextStyle`: a font, colour and size on a run of words, which an article editor takes through `nodes` and an app's own controls set with `setTextStyle`.
-- A link is stored as its `href` and the `link` class only; whether it is external is decided at render by `articleHtml`'s `links` pass. `uploadImageTo('/api/upload')` is the `uploadImage` an editor passes.
+- A link is stored as its `href` and the `link` class only; whether it is external is decided at render by `articleHtml`'s `links` pass. `uploadImageTo('/api/upload')` is the `uploadImage` an editor passes: it resolves the URL or throws the route's reason, and `useWikiEditor`'s `upload` is `idle`, `uploading` or `failed` with that reason for the editor to show.
 
 ## Block editor
 
@@ -805,7 +805,7 @@ import { prismaConfig } from 'wiki-formant/db';
 export default defineConfig(prismaConfig(import.meta.dirname));
 ```
 
-`wiki-formant/scripts`: what a seed or sweep script shares: `withClient` (a `pg` client that rolls back on a throw and expires the cache tag after a write), `readPage`, `writeRevision` (refused if the page moved on), `upsertWikiPage`, the block builders `content`, `banner` and `infobox`, and `assertLinkShapes`.
+`wiki-formant/scripts`: what a seed or sweep script shares: `withClient` (a `pg` client that rolls back on a throw and expires the cache tag after a write), `readPage`, `writeRevision` (refused if the page moved on), `upsertWikiPage` (`created`, `updated` or `unchanged`), the block builders `content`, `banner` and `infobox`, and `assertLinkShapes`.
 
 ```ts
 import { withClient, readPage, writeRevision } from 'wiki-formant/scripts';
@@ -815,7 +815,7 @@ await withClient(async client => {
 }, { tag: 'wiki' });
 ```
 
-`wiki-formant/link-check`: `auditLinks`, each link once with the pages that carry it, probed with `probeExternal` or the checker's own, and `printLinkAudit`.
+`wiki-formant/link-check`: `auditLinks`, each link once with the pages that carry it, probed with `probeExternal` or the checker's own, and `printLinkAudit`. `verdictOf` reads a probe as `alive`, `dead`, `walled`, `tls` or `unreachable`; only `dead` lands in `brokenExternal`, the rest in `unverifiableExternal`, which a sweep confirms by hand and never strips.
 
 `wiki-formant/knip`: the shared knip configuration, spread into each app's `knip.ts`.
 

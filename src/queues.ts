@@ -13,7 +13,7 @@
 // had none. What differs is how a page is addressed and which facts its
 // category requires, so those are the arguments.
 
-import { daysSince, isStale, DEFAULT_MAX_AGE_DAYS } from './freshness.js';
+import { freshnessAge, isStale, DEFAULT_MAX_AGE_DAYS } from './freshness.js';
 import { metaValue } from './taxonomy.js';
 
 export interface QueuePage {
@@ -105,7 +105,10 @@ export function maintenanceQueues<P extends QueuePage>(pages: readonly P[], o: Q
       description: `Not checked or changed in ${maxAgeDays} days. Re-check the facts against current sources${o.verify ? `, then ${o.verify}` : ''}.`,
       items: pages
         .filter(p => isStale(p, o.nowMs, maxAgeDays))
-        .map(p => item(p, `${daysSince(p.lastVerifiedAt ?? p.updatedAt, o.nowMs)} days`)),
+        .map(p => {
+          const age = freshnessAge(p, o.nowMs);
+          return item(p, age === null ? 'never dated' : `${age} days`);
+        }),
     },
     {
       key: 'orphaned',
