@@ -1,6 +1,6 @@
 // knip.ts — the knip configuration every app here shares: what the App
 // Router loads by convention and nothing imports, the scripts the routines
-// run from the command line, and the two dependencies no TS import names.
+// run from the command line, and the dependency no TS import names.
 // An app's `knip.ts` spreads it and adds what is its own:
 //
 //   import base from 'wiki-formant/knip';
@@ -24,8 +24,6 @@ const config = {
   ignoreDependencies: [
     // Reached through `@tailwindcss/postcss` and the `@import` in globals.css.
     'tailwindcss',
-    // Imported by the generated Prisma client.
-    '@prisma/client',
   ],
   // The Vercel CLI the scripts shell out to for a cache tag; a global, never a dependency.
   ignoreBinaries: ['vercel'],

@@ -511,7 +511,7 @@ const block = licenseBlock({ license, scope: 'The protocol compilation and prose
 export const X = xAccount({ siteName: 'AcuiQ', handle: '@acu_iq', posts: "a named trial's prescription with its citation" });
 ```
 
-- One `License` goes to `licenseBlock`, `agentCard({ license, licenseScope })` and `openApiLicense` for `info.license`.
+- One `License` goes to `licenseBlock`, `agentCard({ license, licenseScope })` and `openApiDocument`, which sets `info.license` from it.
 - `X.url` is the `sameAs`, `X.handle` the card's, `followLines(X)` goes into llms.txt and AGENTS.md, `followNote(X)` into the MCP instructions, and `<a {...followLinkProps(X)}>` is the footer link with `rel="me"`.
 
 ## Agent descriptors
@@ -527,6 +527,22 @@ export const GET = wellKnownHandler({ agentCard: AGENT_CARD, mcpManifest: mcpMan
 ```
 
 The card is served identically at `agent-card.json` and `agent.json`, and its `url` is the MCP endpoint, which answers A2A. `registryAuthHandler` serves `MCP_REGISTRY_PUBLIC_KEY` at `/.well-known/mcp-registry-auth`, 404 when unset.
+
+## OpenAPI
+
+`wiki-formant/openapi`: the frame of the spec `wellKnownHandler` serves, and the paths every site shares. A spec writes only its own paths.
+
+```ts
+import { openApiDocument, jsonBody, jsonResponse, toolBody, llmsTxtPath, mcpPath } from 'wiki-formant/openapi';
+
+export const SPEC = openApiDocument({ title, version, description, license, siteUrl: SITE_URL }, {
+  '/api/wiki/{path}': { put: { requestBody: toolBody(toolInput('edit_page'), { inPath: ['tagPath', 'slug'], refs: { Block: BLOCK_SCHEMA } }), … } },
+  '/llms.txt': llmsTxtPath('Index of every page (plain text)'),
+  '/api/mcp': mcpPath(TOOLS.map(t => t.name)),
+}, { schemas: { Block: BLOCK_SCHEMA } });
+```
+
+`toolBody` is a write tool's input schema as the REST body, so `openapiWriteParity` holds by construction. `mcpPath` states the protocol versions, the batch cap and `MCP_RATE_LIMIT_TEXT`; `llmsTxtPath` the `If-None-Match` and its 304.
 
 ## AI crawlers
 

@@ -263,6 +263,10 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
 .infobox-series { align-items: center; gap: 0.125rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--ui-border); text-align: center; font-size: var(--ui-small); color: var(--ui-muted); }
 .page-with-infobox { gap: 1.5rem; }
 
+/* `Cite` in a meta line: the summary reads as a link, the citation as a line of its own. */
+.article-cite summary { cursor: pointer; color: var(--ui-accent); }
+.article-cite code { display: block; margin-top: 0.25rem; white-space: normal; }
+
 .section-card { display: flex; flex-direction: column; gap: 0.5rem; padding: var(--ui-pad); transition: border-color 150ms; }
 .section-card:hover { border-color: var(--ui-accent); }
 
@@ -698,7 +702,7 @@ pre:hover > .code-copy-btn,
   position: absolute;
   inset: 0 auto 0 0;
   width: calc(var(--share) * 100%);
-  background: currentColor;
+  background: var(--ui-accent);
   opacity: 0.08;
   pointer-events: none;
 }
