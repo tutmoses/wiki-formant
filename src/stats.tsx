@@ -226,7 +226,7 @@ export async function StatsGate({ gate, session, invite, host, endpoint = '/api/
       <>
         {await children()}
         <div className={c.actions}>
-          <PasskeySignOut endpoint={endpoint} className={c.button} />
+          <PasskeySignOut endpoint={endpoint} className={c.button} errorClassName={c.error} />
         </div>
       </>
     );

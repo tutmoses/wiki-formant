@@ -40,21 +40,37 @@ export function sitemapEntries(xml: string): IndexNowEntry[] {
   return entries;
 }
 
+/** A sitemap read: its entries, and each child sitemap that did not answer and why. */
+export interface SitemapRead {
+  entries: IndexNowEntry[];
+  unread: { url: string; error: string }[];
+}
+
 /**
  * Every entry of the sitemap at `url`, following a sitemap index one level down
  * to at most 20 children. The `indexnow` and `check-pages` bins each parsed
  * sitemaps, and only one of them read an index. Throws when `url` itself does
- * not answer 200; a child that fails is skipped.
+ * not answer 200. A child that fails is listed in `unread`, never read as a
+ * sitemap of no pages: skipped silently, a dead child passed `check-pages` with
+ * its pages unchecked.
  */
-export async function readSitemap(url: string, fetchImpl: typeof fetch = fetch): Promise<IndexNowEntry[]> {
+export async function readSitemap(url: string, fetchImpl: typeof fetch = fetch): Promise<SitemapRead> {
   const res = await fetchImpl(url);
   if (!res.ok) throw new Error(`${url} answered ${res.status}`);
   const xml = await res.text();
-  if (!/<sitemapindex/i.test(xml)) return sitemapEntries(xml);
+  if (!/<sitemapindex/i.test(xml)) return { entries: sitemapEntries(xml), unread: [] };
   const children = [...xml.matchAll(/<loc>([\s\S]*?)<\/loc>/g)].slice(0, 20).map(m => decodeEntities(m[1]!.trim()));
-  const entries: IndexNowEntry[] = [];
-  for (const child of children) entries.push(...(await readSitemap(child, fetchImpl).catch(() => [])));
-  return entries;
+  const read: SitemapRead = { entries: [], unread: [] };
+  for (const child of children) {
+    try {
+      const sub = await readSitemap(child, fetchImpl);
+      read.entries.push(...sub.entries);
+      read.unread.push(...sub.unread);
+    } catch (e) {
+      read.unread.push({ url: child, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return read;
 }
 
 /**

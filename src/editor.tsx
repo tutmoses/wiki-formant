@@ -713,10 +713,10 @@ export function useWikiEditor({
   const uploadAttempt = useRef(0);
   const initialValueRef = useRef(value);
   const onChangeRef = useRef(onChange);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  // An edit made and not yet reported. `onUpdate` fires for edits only, never
-  // for the `setContent` that loads the stored value.
-  const pendingRef = useRef(false);
+  // The timer of an edit made and not yet reported, or null when every edit
+  // has been. `onUpdate` fires for edits only, never for the `setContent` that
+  // loads the stored value.
+  const pendingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Written AFTER render, not during: a ref mutated mid-render can tear under
   // concurrent rendering. Only read from events and timeouts, which run later.
@@ -738,10 +738,9 @@ export function useWikiEditor({
       transformPastedHTML: cleanPastedHtml,
     },
     onUpdate: ({ editor }) => {
-      clearTimeout(debounceRef.current);
-      pendingRef.current = true;
-      debounceRef.current = setTimeout(() => {
-        pendingRef.current = false;
+      if (pendingRef.current) clearTimeout(pendingRef.current);
+      pendingRef.current = setTimeout(() => {
+        pendingRef.current = null;
         onChangeRef.current(editor.getHTML());
       }, debounceMs);
     },
@@ -749,9 +748,9 @@ export function useWikiEditor({
     // before the click fires — never drops the final keystroke. A blur with no
     // edit reports nothing.
     onBlur: ({ editor }) => {
-      clearTimeout(debounceRef.current);
       if (!pendingRef.current) return;
-      pendingRef.current = false;
+      clearTimeout(pendingRef.current);
+      pendingRef.current = null;
       onChangeRef.current(editor.getHTML());
     },
     immediatelyRender: false,
@@ -762,7 +761,9 @@ export function useWikiEditor({
     },
   });
 
-  useEffect(() => () => clearTimeout(debounceRef.current), []);
+  useEffect(() => () => {
+    if (pendingRef.current) clearTimeout(pendingRef.current);
+  }, []);
 
   // Accept an outside change, but never while the author is typing into it.
   useEffect(() => {

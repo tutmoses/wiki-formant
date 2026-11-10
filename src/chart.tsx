@@ -256,12 +256,13 @@ export function TimeChart({
   className,
 }: TimeChartProps) {
   const box = useRef<HTMLDivElement>(null);
-  const chart = useRef<Series | null>(null);
   const formatRef = useRef(format);
   formatRef.current = format;
   const onViewRef = useRef(onView);
   onViewRef.current = onView;
-  const [ready, setReady] = useState(false);
+  // The drawn chart once the library has loaded, else null: the handle is the
+  // readiness, so no flag can say ready over a chart that is gone.
+  const [chart, setChart] = useState<Series | null>(null);
   const [range, setRange] = useState(initial);
   const [step, setStep] = useState<ChartStep | null>(initialStep ?? null);
   const [candles, setCandles] = useState(initialCandles);
@@ -275,6 +276,7 @@ export function TimeChart({
     const el = box.current;
     if (!el) return;
     let disposed = false;
+    let built: Series | null = null;
     import('lightweight-charts').then(({ createChart, createSeriesMarkers, AreaSeries, CandlestickSeries, HistogramSeries, ColorType, CrosshairMode, LineStyle, LineType }) => {
       if (disposed) return;
       const style = getComputedStyle(el);
@@ -346,29 +348,28 @@ export function TimeChart({
         api.panes()[1]?.setStretchFactor(1);
         return volume;
       };
-      chart.current = {
+      built = {
         api, area, candle, volume: null, addVolume, up, down, ink,
         curved: LineType.Curved, straight: LineType.Simple,
         areaMarkers: createSeriesMarkers(area, []),
         candleMarkers: createSeriesMarkers(candle, []),
       };
-      setReady(true);
+      setChart(built);
     });
     return () => {
       disposed = true;
-      chart.current?.api.remove();
-      chart.current = null;
-      setReady(false);
+      built?.api.remove();
+      setChart(null);
     };
   }, []);
 
   // Applied to the chart in place: rebuilding it would leave a new chart with nothing drawn on it.
   useEffect(() => {
-    const c = chart.current;
-    if (!ready || !c) return;
+    const c = chart;
+    if (!c) return;
     c.api.priceScale('right').applyOptions({ scaleMargins: { top: MARGIN_TOP, bottom: fromZero ? 0 : 0.1 } });
     c.area.applyOptions({ lineType: aggregate === 'last' ? c.straight : c.curved, autoscaleInfoProvider: fromZero ? fromZeroScale : ownScale });
-  }, [ready, fromZero, aggregate]);
+  }, [chart, fromZero, aggregate]);
 
   // One request per resolution for the life of the loader: every range from 30D up reads the same days.
   const cache = useRef(new Map<ChartResolution, Promise<readonly ChartPoint[]>>());
@@ -424,8 +425,8 @@ export function TimeChart({
 
   // While a resolution loads, the last one stays under the skeleton; an empty or failed one clears it.
   useEffect(() => {
-    const c = chart.current;
-    if (!ready || !c || !source) return;
+    const c = chart;
+    if (!c || !source) return;
     const shown = view?.shown ?? [];
     const asCandles = candles && !!view?.ohlc;
     const time = (p: { time: number }) => p.time as UTCTimestamp;
@@ -458,7 +459,7 @@ export function TimeChart({
     c.areaMarkers.setMarkers(asCandles ? [] : drawn);
     c.candleMarkers.setMarkers(asCandles ? drawn : []);
     c.api.timeScale().fitContent();
-  }, [ready, source, view, candles, markers]);
+  }, [chart, source, view, candles, markers]);
 
   // Reported once there are points to step, so a step read from a URL is not cleared while they load.
   const shown = !!view;
@@ -489,7 +490,7 @@ export function TimeChart({
           {tip.label}
         </span>
       )}
-      {(!ready || (!points && !status)) && <div className="chart-status skeleton" aria-hidden />}
+      {(!chart || (!points && !status)) && <div className="chart-status skeleton" aria-hidden />}
       {status && <p className="chart-status">{status}</p>}
       {(controls || ranges.length > 1 || daily || view?.ohlc) && (
         <div className="chart-controls">

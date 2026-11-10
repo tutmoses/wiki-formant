@@ -51,12 +51,15 @@ test('a submission names the host and splits at the protocol cap', async () => {
   assert.equal(calls[1].body.urlList.length, 1);
 });
 
-test('a sitemap index is read one level down, and a dead child is skipped', async () => {
+test('a sitemap index is read one level down, and a dead child is reported, not read as empty', async () => {
   const pages = {
     'https://x.test/sitemap.xml': '<sitemapindex><sitemap><loc>https://x.test/a.xml</loc></sitemap><sitemap><loc>https://x.test/gone.xml</loc></sitemap></sitemapindex>',
     'https://x.test/a.xml': '<urlset><url><loc>https://x.test/a</loc></url></urlset>',
   };
   const fetchImpl = async url => new Response(pages[url] ?? '', { status: pages[url] ? 200 : 404 });
-  assert.deepEqual(await readSitemap('https://x.test/sitemap.xml', fetchImpl), [{ url: 'https://x.test/a' }]);
+  assert.deepEqual(await readSitemap('https://x.test/sitemap.xml', fetchImpl), {
+    entries: [{ url: 'https://x.test/a' }],
+    unread: [{ url: 'https://x.test/gone.xml', error: 'https://x.test/gone.xml answered 404' }],
+  });
   await assert.rejects(readSitemap('https://x.test/none.xml', fetchImpl), /answered 404/);
 });

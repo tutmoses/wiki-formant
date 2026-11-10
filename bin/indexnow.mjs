@@ -40,11 +40,12 @@ if (live.trim() !== key) {
   process.exit(1);
 }
 
-const entries = await readSitemap(`${origin}/sitemap.xml`).catch(e => {
+const { entries, unread } = await readSitemap(`${origin}/sitemap.xml`).catch(e => {
   console.error(e.message);
   process.exit(1);
 });
 const urls = args.includes('--all') ? entries.map(e => e.url) : changedUrls(entries, Date.now() - hours * 3_600_000);
 const statuses = await submitIndexNow(key, urls);
-console.log(JSON.stringify({ origin, submitted: urls.length, statuses }));
-if (!statuses.every(s => s === 200 || s === 202)) process.exit(1);
+// What was read is submitted; a child sitemap that did not answer fails the run, since its pages were not.
+console.log(JSON.stringify({ origin, submitted: urls.length, statuses, ...(unread.length && { unread }) }));
+if (unread.length || !statuses.every(s => s === 200 || s === 202)) process.exit(1);

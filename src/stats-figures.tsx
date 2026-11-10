@@ -164,14 +164,19 @@ async function post(endpoint: string, body: unknown) {
   return res.status === 204 ? null : res.json();
 }
 
+/**
+ * A passkey button's request. `busy` holds through the reload that success
+ * starts, so the button cannot be pressed twice on the way out.
+ */
+type Attempt = { status: 'idle' } | { status: 'busy' } | { status: 'failed'; error: string };
+const IDLE: Attempt = { status: 'idle' };
+
 export function PasskeyButton({ endpoint, invite, className, errorClassName }: PasskeyButtonProps) {
   const saving = !!invite;
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState<Attempt>(IDLE);
 
   async function go() {
-    setBusy(true);
-    setError(null);
+    setAttempt({ status: 'busy' });
     try {
       const optionsJSON = await post(endpoint, { invite });
       const response = saving ? await startRegistration({ optionsJSON }) : await startAuthentication({ optionsJSON });
@@ -179,37 +184,47 @@ export function PasskeyButton({ endpoint, invite, className, errorClassName }: P
       location.replace(location.pathname + location.search.replace(/([?&])invite=[^&]*&?/, '$1').replace(/[?&]$/, ''));
     } catch (e) {
       // A prompt the person closed throws NotAllowedError, which needs no message.
-      setError(e instanceof Error && e.name !== 'NotAllowedError' ? e.message : null);
-      setBusy(false);
+      setAttempt(e instanceof Error && e.name !== 'NotAllowedError' ? { status: 'failed', error: e.message } : IDLE);
     }
   }
 
   return (
     <>
-      <button type="button" className={className} onClick={go} disabled={busy}>
+      <button type="button" className={className} onClick={go} disabled={attempt.status === 'busy'}>
         {saving ? 'Save a passkey' : 'Sign in with a passkey'}
       </button>
-      {error && (
+      {attempt.status === 'failed' && (
         <p role="alert" className={errorClassName}>
-          {error}
+          {attempt.error}
         </p>
       )}
     </>
   );
 }
 
-/** Ends the session at `endpoint` (`gate.signOut` as DELETE) and reloads the page. */
-export function PasskeySignOut({ endpoint, className }: { endpoint: string; className?: string }) {
+/**
+ * Ends the session at `endpoint` (`gate.signOut` as DELETE) and reloads the
+ * page. A sign-out the server did not take says so: reloaded, it showed the
+ * stats again with no word of why.
+ */
+export function PasskeySignOut({ endpoint, className, errorClassName }: { endpoint: string; className?: string; errorClassName?: string }) {
+  const [attempt, setAttempt] = useState<Attempt>(IDLE);
+  async function go() {
+    setAttempt({ status: 'busy' });
+    const res = await fetch(endpoint, { method: 'DELETE' }).catch(() => null);
+    if (res?.ok) return location.reload();
+    setAttempt({ status: 'failed', error: res ? `Sign-out failed (${res.status}). Try again.` : 'Sign-out did not reach the server. Try again.' });
+  }
   return (
-    <button
-      type="button"
-      className={className}
-      onClick={async () => {
-        await fetch(endpoint, { method: 'DELETE' }).catch(() => null);
-        location.reload();
-      }}
-    >
-      Sign out
-    </button>
+    <>
+      <button type="button" className={className} onClick={go} disabled={attempt.status === 'busy'}>
+        Sign out
+      </button>
+      {attempt.status === 'failed' && (
+        <p role="alert" className={errorClassName}>
+          {attempt.error}
+        </p>
+      )}
+    </>
   );
 }

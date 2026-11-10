@@ -104,8 +104,10 @@ function useCollapsibleSidebar(options: SidebarOptions = {}): SidebarState {
   // Start open on the server and on the first client paint. SSR has no viewport
   // and no storage, so any other guess is a guaranteed mismatch on some loads.
   const [open, setOpenState] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
-  const [ready, setReady] = useState(false);
+  // Unknown until the effect has read matchMedia: one value, so the rail is
+  // never mobile before it is ready, and `ready` is never set apart from it.
+  const [viewport, setViewport] = useState<'unknown' | 'mobile' | 'desktop'>('unknown');
+  const ready = viewport !== 'unknown';
   // Set as soon as the reader touches the control, so a later viewport change
   // cannot overwrite what they asked for.
   const chosen = useRef(false);
@@ -115,7 +117,7 @@ function useCollapsibleSidebar(options: SidebarOptions = {}): SidebarState {
     const stored = readStored(storageKey);
 
     const apply = (matches: boolean) => {
-      setIsMobile(matches);
+      setViewport(matches ? 'mobile' : 'desktop');
       // The breakpoint supplies a default, never an override. This is bug 1.
       setOpenState(current =>
         resolveSidebarOpen({ chosen: chosen.current, current, stored, isMobile: matches }),
@@ -135,7 +137,6 @@ function useCollapsibleSidebar(options: SidebarOptions = {}): SidebarState {
     };
 
     apply(mql.matches);
-    setReady(true);
 
     const handler = (e: MediaQueryListEvent) => apply(e.matches);
     mql.addEventListener('change', handler);
@@ -168,7 +169,7 @@ function useCollapsibleSidebar(options: SidebarOptions = {}): SidebarState {
     document.documentElement.setAttribute(SIDEBAR_ATTRIBUTE, open ? 'open' : 'closed');
   }, [open, ready]);
 
-  return { open, setOpen, toggle, isMobile, ready };
+  return { open, setOpen, toggle, isMobile: viewport === 'mobile', ready };
 }
 
 // ---- sharing that state across the layout -----------------------------------
@@ -1208,18 +1209,21 @@ export function restoreViaPost<Id>(endpoint: string): RestoreRevision<Id> {
   };
 }
 
+/** A restore: one in flight, or the last one's failure. */
+type RestoreState<Id> = { status: 'idle' } | { status: 'restoring'; id: Id } | { status: 'failed'; error: string };
+
 /**
  * Confirm, restore, report. Of the three copies one asked no confirmation, one
  * dropped a failure silently, and one reported it through `alert`. A restore
  * writes the old state forward as a new revision in all three, which is what
- * the default question says.
+ * the default question says. A `restore` that throws is a failure like one
+ * that answers with its reason: it shows as `error`, never as nothing.
  */
 export function useRevisionRestore<Id>(
   restore: RestoreRevision<Id>,
   options: { onRestored: () => void; confirm?: (label: string) => string | false },
 ): { restore: (id: Id, label: string) => Promise<void>; busyId: Id | null; error: string | null } {
-  const [busyId, setBusyId] = useState<Id | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<RestoreState<Id>>({ status: 'idle' });
   // One restore at a time: a second, started while the first is in flight,
   // would have its "Restoring…" cleared by the first one finishing.
   const inFlight = useRef(false);
@@ -1231,21 +1235,26 @@ export function useRevisionRestore<Id>(
       const question = confirm(label);
       if (question && !window.confirm(question)) return;
       inFlight.current = true;
-      setBusyId(id);
-      setError(null);
+      setState({ status: 'restoring', id });
+      let failure: string | null;
       try {
-        const failure = await restore(id);
-        if (failure) setError(failure);
-        else onRestored();
+        failure = await restore(id);
+      } catch (err) {
+        failure = err instanceof Error && err.message ? err.message : 'Restore failed.';
       } finally {
         inFlight.current = false;
-        setBusyId(null);
       }
+      setState(failure ? { status: 'failed', error: failure } : { status: 'idle' });
+      if (!failure) onRestored();
     },
     [restore, onRestored, confirm],
   );
 
-  return { restore: run, busyId, error };
+  return {
+    restore: run,
+    busyId: state.status === 'restoring' ? state.id : null,
+    error: state.status === 'failed' ? state.error : null,
+  };
 }
 
 // ---- copy to clipboard ------------------------------------------------------
@@ -1353,6 +1362,9 @@ const snapTo = (row: HTMLElement, left: number, smooth = true) =>
 
 // ---- error boundary ---------------------------------------------------------
 
+/** The boundary's children render, or what they threw does: a thrown `null` is still a failure. */
+type BoundaryState = { status: 'ok' } | { status: 'failed'; error: unknown };
+
 /**
  * The one thing hooks cannot express, so it is worth owning once.
  *
@@ -1371,12 +1383,12 @@ export class ErrorBoundary extends Component<
     fallback: (retry: () => void, error: unknown) => ReactNode;
     onError?: (error: unknown) => void;
   },
-  { failed: boolean; error: unknown }
+  BoundaryState
 > {
-  state: { failed: boolean; error: unknown } = { failed: false, error: null };
+  state: BoundaryState = { status: 'ok' };
 
-  static getDerivedStateFromError(error: unknown) {
-    return { failed: true, error };
+  static getDerivedStateFromError(error: unknown): BoundaryState {
+    return { status: 'failed', error };
   }
 
   componentDidCatch(error: unknown) {
@@ -1384,8 +1396,8 @@ export class ErrorBoundary extends Component<
   }
 
   render() {
-    if (this.state.failed) {
-      return this.props.fallback(() => this.setState({ failed: false, error: null }), this.state.error);
+    if (this.state.status === 'failed') {
+      return this.props.fallback(() => this.setState({ status: 'ok' }), this.state.error);
     }
     return this.props.children;
   }

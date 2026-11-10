@@ -38,3 +38,15 @@ test('verdictOf: only a dead link is broken; a wall, a lapsed certificate or no 
   assert.deepEqual(audit.brokenExternal, []);
   assert.deepEqual(audit.unverifiableExternal.map(b => b.verdict.kind).sort(), ['unreachable', 'walled']);
 });
+
+test('a throttled YouTube probe is walled, never a dead video', async () => {
+  const { probeExternal, verdictOf } = await import('wiki-formant/link-check');
+  const real = globalThis.fetch;
+  globalThis.fetch = async url => new Response('', { status: String(url).includes('gone1') ? 404 : 429 });
+  try {
+    assert.equal(verdictOf(await probeExternal('https://youtu.be/abcdef1')).kind, 'walled');
+    assert.equal(verdictOf(await probeExternal('https://youtu.be/gone1xx')).kind, 'dead');
+  } finally {
+    globalThis.fetch = real;
+  }
+});

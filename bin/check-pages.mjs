@@ -58,12 +58,12 @@ const get = async url => {
 
 // The sitemap is the URL list.
 async function sitemapUrls(origin) {
-  const seen = (await readSitemap(`${origin}/sitemap.xml`, url => fetch(url, { headers: { 'user-agent': UA } }))).map(e => e.url);
+  const { entries, unread } = await readSitemap(`${origin}/sitemap.xml`, url => fetch(url, { headers: { 'user-agent': UA } }));
   // A sitemap states absolute production URLs by definition, so pointing
   // --site at a dev server would otherwise crawl production and report the
   // build you were trying to replace. The path is what the sitemap contributes;
   // the origin is what you asked for.
-  return seen.map(u => {
+  const urls = entries.map(({ url: u }) => {
     try {
       const { pathname, search } = new URL(u);
       return `${origin}${pathname}${search}`;
@@ -71,6 +71,7 @@ async function sitemapUrls(origin) {
       return u;
     }
   });
+  return { urls, unread };
 }
 
 const titleOf = html => {
@@ -84,17 +85,23 @@ const descriptionOf = html => {
 
 // A sitemap that does not answer is a fault, not an empty site: read as no
 // URLs, a down sitemap passed the gate it exists to hold.
-const urls = await sitemapUrls(site).catch(e => {
+const { urls, unread } = await sitemapUrls(site).catch(e => {
   console.error(`check-pages: ${site}/sitemap.xml could not be read: ${e.message}`);
   process.exit(WARN_ONLY ? 0 : 1);
 });
+// A child sitemap that does not answer hides its pages from every check below,
+// so it is a fault of its own (`sitemapUnread`), never a site with fewer pages.
+if (!urls.length && unread.length) {
+  for (const { url, error } of unread) console.error(`check-pages: ${url} could not be read: ${error}`);
+  process.exit(WARN_ONLY ? 0 : 1);
+}
 if (!urls.length) {
   console.log(`check-pages: no URLs in ${site}/sitemap.xml — nothing to check. Skipping.`);
   process.exit(0);
 }
 
 const checked = urls.slice(0, limit);
-const faults = [];
+const faults = unread.map(({ url, error }) => ({ url, fault: 'sitemapUnread', detail: error }));
 const titles = new Map();
 
 for (const url of checked) {

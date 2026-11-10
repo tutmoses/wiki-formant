@@ -246,11 +246,14 @@ const YOUTUBE_WATCH =
  * video. oEmbed can:
  *
  *   200 → public and embeddable | 404 → deleted | 401/403 → private or embedding off
+ *
+ * A 429 is YouTube rationing the sweep, walled as `attempt` walls it: read off
+ * its status alone, `verdictOf` called every video in a throttled run dead.
  */
 async function probeYouTube(
   videoId: string,
   opts: ProbeOptions = {},
-): Promise<{ status: number; ok: boolean; reason?: string; error?: string }> {
+): Promise<Omit<Probe, 'url'> & { reason?: string }> {
   const { timeoutMs } = { ...DEFAULTS, ...opts };
   const oembed = `https://www.youtube.com/oembed?url=https%3A//www.youtube.com/watch%3Fv%3D${videoId}&format=json`;
   try {
@@ -263,7 +266,7 @@ async function probeYouTube(
     if (res.status === 401 || res.status === 403) {
       return { status: res.status, ok: false, reason: 'restricted (private or embedding disabled)' };
     }
-    return { status: res.status, ok: res.status < 400 };
+    return { status: res.status, ok: res.status < 400, ...(res.status === 429 && { walled: true }) };
   } catch (err) {
     return { status: 0, ok: false, ...describeFailure(err) };
   }
