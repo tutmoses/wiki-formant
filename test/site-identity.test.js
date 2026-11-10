@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { siteGraphLd, siteRefs, sitePageMetadata, articleLd } from 'wiki-formant/metadata';
+import { siteGraphLd, siteRefs, sitePageMetadata, articleLd, cardUrl } from 'wiki-formant/metadata';
 import { standardVersionSources } from 'wiki-formant/conformance';
 
 test('the site graph links every node by @id, and pages point at the same ids', () => {
@@ -39,6 +39,25 @@ test('BUG: the site card carries its name, locale and handle on every page', () 
   assert.equal(m.openGraph.locale, 'en_US');
   assert.equal(m.twitter.site, '@w');
   assert.equal(m.openGraph.images[0].width, 1200);
+});
+
+test('one card has one URL, whatever order its fields were written in', () => {
+  const base = 'https://w.test/og';
+  assert.equal(cardUrl(base, {}), base);
+  assert.equal(cardUrl(base, { title: '', banner: null }), base);
+  assert.equal(
+    cardUrl(base, { banner: 'https://b.test/x.png', tagPath: 'a/b', description: 'd e', title: 'T&U' }),
+    'https://w.test/og?title=T%26U&description=d+e&tagPath=a%2Fb&banner=https%3A%2F%2Fb.test%2Fx.png',
+  );
+  assert.equal(cardUrl(base, { description: 'd', eyebrow: 'E', title: 'T' }), 'https://w.test/og?title=T&eyebrow=E&description=d');
+});
+
+test('a page names its card by its fields once the site binds the route', () => {
+  const card = sitePageMetadata({ siteName: 'W', card: 'https://w.test/og.png' });
+  const m = card({ title: 't', card: { title: 'T', eyebrow: 'E' } });
+  assert.equal(m.openGraph.images[0].url, 'https://w.test/og.png?title=T&eyebrow=E');
+  assert.deepEqual(m.twitter.images, ['https://w.test/og.png?title=T&eyebrow=E']);
+  assert.throws(() => sitePageMetadata({ siteName: 'W' })({ title: 't', card: { title: 'T' } }));
 });
 
 test('the standard version sources cover every descriptor and every OpenAPI path', () => {

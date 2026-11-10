@@ -445,6 +445,7 @@ export const generateMetadata = () => ({
 ```
 
 - Next replaces `openGraph` and `twitter` per segment rather than merging, so `pageMetadata` sets both; `sitePageMetadata({ siteName, handle })` binds the fields every page's card needs.
+- `sitePageMetadata({ ..., card: `${SITE_URL}/og` })` binds the site's card route, and a page then passes `card: { title, eyebrow, description, banner }` in place of `image`. `cardUrl(base, fields)` is the same address for JSON-LD: empty fields left out, the order fixed, so one card has one URL.
 - `articleLd` requires `image`. `collectionLd` is an index over an `ItemList`. `siteGraphLd` is the Organization, WebSite and `WebAPI` `@graph` for the root layout, and `siteRefs(url)` hands out the same `@id`s for a page's `publisher` and `isPartOf`.
 - `questionPairs(html)` reads a FAQ from headings ending in `?`; `faqPageLd(pairs, url)` is null under two pairs.
 - `describe(text)` is a meta description from any prose within `DESCRIPTION_LIMIT` (160): whole sentences where they fill half, else cut at a word with an ellipsis.

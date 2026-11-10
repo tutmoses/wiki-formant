@@ -356,9 +356,43 @@ export function describe(text: string | null | undefined, limit = DESCRIPTION_LI
  * restate them; the third passed them by hand at six call sites and forgot the
  * locale at all of them.
  */
-export function sitePageMetadata(site: { siteName: string; locale?: string; handle?: string }) {
-  const bound = { locale: 'en_US', ...site };
-  return (o: Omit<PageMetadataOptions, 'siteName' | 'locale' | 'handle'>) => pageMetadata({ ...o, ...bound });
+export function sitePageMetadata(site: { siteName: string; locale?: string; handle?: string; card?: string }) {
+  const { card: base, ...rest } = site;
+  const bound = { locale: 'en_US', ...rest };
+  return ({ card, ...o }: Omit<PageMetadataOptions, 'siteName' | 'locale' | 'handle'> & { card?: CardFields }) => {
+    if (card && !base) throw new Error('sitePageMetadata: a page passed `card` but the site bound no card route');
+    return pageMetadata({ ...o, ...(card ? { image: cardUrl(base!, card) } : {}), ...bound });
+  };
+}
+
+/**
+ * What a generated card draws: the text, and a banner that replaces its art.
+ * Any other key is a parameter only one site's route reads, such as the palette
+ * a radix-wiki section picks.
+ */
+export interface CardFields {
+  title?: string;
+  eyebrow?: string;
+  description?: string;
+  banner?: string | null;
+  [param: string]: string | null | undefined;
+}
+
+const CARD_HEAD = ['title', 'eyebrow', 'description'];
+
+/**
+ * The address of a card route drawing `fields`, e.g. `cardUrl(`${SITE_URL}/og`, { title })`.
+ * Empty fields are left out, and the order is fixed (title, eyebrow,
+ * description, any site key, banner) whatever order the caller wrote, so one
+ * card has one URL and the CDN and X cache it once. Three wikis each built this
+ * query string by hand; the route that reads it is each site's own.
+ */
+export function cardUrl(base: string, fields: CardFields): string {
+  const keys = [...CARD_HEAD, ...Object.keys(fields).filter(k => !CARD_HEAD.includes(k) && k !== 'banner'), 'banner'];
+  const q = new URLSearchParams();
+  for (const k of keys) if (fields[k]) q.set(k, fields[k]!);
+  const query = q.toString();
+  return query ? `${base}?${query}` : base;
 }
 
 /** The `@id` references a page's own node points at for `publisher` and `isPartOf`. */
