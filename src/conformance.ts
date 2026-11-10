@@ -453,7 +453,6 @@ export function standardVersionSources(
   const version = (j: Record<string, unknown>) => j.version;
   return {
     card: { url: `${t.base}/.well-known/agent-card.json`, at: version },
-    legacyCard: { url: `${t.base}/.well-known/agent.json`, at: version },
     mcpManifest: { url: `${t.base}/.well-known/mcp.json`, at: version },
     serverCard: { url: `${t.endpoint}/server-card`, at: version },
     ...Object.fromEntries(openapi.map(path => [
@@ -463,21 +462,11 @@ export function standardVersionSources(
   };
 }
 
-/**
- * Both A2A well-known paths must serve the identical card. v0.3 renamed
- * agent.json to agent-card.json and defined no fallback either way, so an origin
- * that lets them drift answers two different questions to two halves of its
- * callers.
- */
-export async function agentCardParity(t: Tester): Promise<void> {
-  const [a, b] = await Promise.all([
-    fetch(`${t.base}/.well-known/agent-card.json`).then(r => r.json() as Promise<Record<string, unknown>>),
-    fetch(`${t.base}/.well-known/agent.json`).then(r => r.json() as Promise<Record<string, unknown>>),
-  ]);
-  t.check('agent card parity', JSON.stringify(a) === JSON.stringify(b), 'agent.json === agent-card.json');
+/** The A2A card at `agent-card.json`: complete, and its `url` an endpoint that answers. */
+export async function agentCardChecks(t: Tester): Promise<void> {
+  const a = await fetch(`${t.base}/.well-known/agent-card.json`).then(r => r.json() as Promise<Record<string, unknown>>);
 
-  // A card missing a required field is a card a spec-current client rejects, and
-  // parity alone happily reports two identical unusable ones.
+  // A card missing a required field is a card a spec-current client rejects.
   const required = [
     'protocolVersion',
     'name',
@@ -550,10 +539,9 @@ export async function conditionalGetChecks(t: Tester, paths: readonly string[]):
   }
 }
 
-/** The JSON descriptors every S10 origin serves: the two agent-card paths, the OpenAPI pair, the MCP manifest and the server card. */
+/** The JSON descriptors every S10 origin serves: the agent card, the OpenAPI pair, the MCP manifest and the server card. */
 export const S10_DESCRIPTORS: readonly string[] = [
   '.well-known/agent-card.json',
-  '.well-known/agent.json',
   '.well-known/openapi.json',
   'openapi.json',
   '.well-known/mcp.json',
@@ -989,7 +977,7 @@ export interface StandardSuiteConfig {
 export async function standardSuite(t: Tester, cfg: StandardSuiteConfig): Promise<Rpc> {
   const init = await transportChecks(t, t.clientName, cfg.capabilities);
   await versionCoherence(t, cfg.version, standardVersionSources(t, cfg.openapi), init.result?.serverInfo?.version);
-  await agentCardParity(t);
+  await agentCardChecks(t);
   await annotationChecks(t, { writes: cfg.writes });
   await manifestParity(t, cfg.manifest);
   if (cfg.budget) await payloadBudget(t, cfg.budget);

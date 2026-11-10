@@ -62,7 +62,7 @@ test('a page names its card by its fields once the site binds the route', () => 
 
 test('the standard version sources cover every descriptor and every OpenAPI path', () => {
   const s = standardVersionSources({ base: 'https://w.test', endpoint: 'https://w.test/api/mcp' }, ['/openapi.json', '/api/openapi.json']);
-  assert.deepEqual(Object.keys(s).sort(), ['card', 'legacyCard', 'mcpManifest', 'openapi:/api/openapi.json', 'openapi:/openapi.json', 'serverCard']);
+  assert.deepEqual(Object.keys(s).sort(), ['card', 'mcpManifest', 'openapi:/api/openapi.json', 'openapi:/openapi.json', 'serverCard']);
   assert.equal(s.serverCard.url, 'https://w.test/api/mcp/server-card');
   assert.equal(s['openapi:/openapi.json'].at({ info: { version: '1.2.0' } }), '1.2.0');
 });

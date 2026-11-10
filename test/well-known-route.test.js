@@ -5,12 +5,12 @@ import { wellKnownHandler } from 'wiki-formant/well-known';
 const GET = wellKnownHandler({ agentCard: { name: 'card' }, openapi: { openapi: '3.1.0' }, registryAuth: null });
 const get = doc => GET(new Request(`https://x.test/.well-known/${doc}`), { params: Promise.resolve({ doc }) });
 
-test('both card paths serve the one card, with a validator', async () => {
-  const a = await get('agent.json');
-  const b = await get('agent-card.json');
+test('the card is served at agent-card.json alone, with a validator', async () => {
+  const a = await get('agent-card.json');
   assert.equal(a.status, 200);
-  assert.deepEqual(await a.json(), await b.json());
+  assert.deepEqual(await a.json(), { name: 'card' });
   assert.ok(a.headers.get('etag'));
+  assert.equal((await get('agent.json')).status, 404);
 });
 
 test('a document the app did not pass is a 404, and so is a stray path', async () => {

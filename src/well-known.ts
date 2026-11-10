@@ -121,13 +121,7 @@ export interface AgentCardConfig {
   extra?: Record<string, unknown>;
 }
 
-/**
- * An A2A Agent Card. Serve the same object at both `/.well-known/agent.json`
- * and `/.well-known/agent-card.json`: v0.3 renamed the path and defined no
- * fallback in either direction, so a spec-current client probes only the new
- * one and a client on an older SDK probes only the old one. Serving one path
- * means half the callers conclude the origin has no agent at all.
- */
+/** An A2A Agent Card, served at `/.well-known/agent-card.json`, the path A2A v0.3 names. */
 export function agentCard(config: AgentCardConfig): Record<string, unknown> {
   const { name, description, url, version, skills, license, licenseScope, organization, documentationUrl, mcpEndpoint, extra } = config;
   const endpoint = mcpEndpoint === null ? url : (mcpEndpoint ?? `${url}/api/mcp`);
@@ -333,7 +327,7 @@ export const serverCardHandler = (manifest: ServerManifest): ((request: Request)
 // ---- one route for the whole directory --------------------------------------
 
 export interface WellKnownDocs {
-  /** Served at both `agent.json` and `agent-card.json`. */
+  /** `agent-card.json`. */
   agentCard?: unknown;
   /** `mcp.json`. */
   mcpManifest?: unknown;
@@ -362,7 +356,6 @@ export function wellKnownHandler(
     : typeof auth === 'function' ? auth
     : registryAuthHandler(auth?.publicKey ?? process.env.MCP_REGISTRY_PUBLIC_KEY, auth?.keyType ?? process.env.MCP_REGISTRY_KEY_TYPE);
   const served: Record<string, ((request: Request) => Response) | undefined> = {
-    'agent.json': docs.agentCard === undefined ? undefined : descriptorHandler(docs.agentCard),
     'agent-card.json': docs.agentCard === undefined ? undefined : descriptorHandler(docs.agentCard),
     'mcp.json': docs.mcpManifest === undefined ? undefined : descriptorHandler(docs.mcpManifest),
     'openapi.json': docs.openapi === undefined ? undefined : descriptorHandler(docs.openapi),

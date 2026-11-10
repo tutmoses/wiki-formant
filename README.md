@@ -196,7 +196,7 @@ const { first } = await wikiReadChecks(t, { query: 'radix', address: r => ({ tag
 process.exit(t.summary());
 ```
 
-`standardSuite(t, cfg)` runs the suites every surface runs, in order: `transportChecks` (CORS preflight, `GET`→405, 202 for a notification, `-32700`, the batch cap, honest capabilities, version negotiation), `versionCoherence` over `standardVersionSources`, `agentCardParity`, `annotationChecks`, `manifestParity`, `payloadBudget`, `conditionalGetChecks`, `descriptorChecks` (default `S10_DESCRIPTORS`) and `robotsChecks`. `budget`, `conditionalGet` and `robots` run only when given, for a surface whose fixtures exist only later in its run. It returns the `initialize` response. Each suite is exported for a surface that needs it alone.
+`standardSuite(t, cfg)` runs the suites every surface runs, in order: `transportChecks` (CORS preflight, `GET`→405, 202 for a notification, `-32700`, the batch cap, honest capabilities, version negotiation), `versionCoherence` over `standardVersionSources`, `agentCardChecks`, `annotationChecks`, `manifestParity`, `payloadBudget`, `conditionalGetChecks`, `descriptorChecks` (default `S10_DESCRIPTORS`) and `robotsChecks`. `budget`, `conditionalGet` and `robots` run only when given, for a surface whose fixtures exist only later in its run. It returns the `initialize` response. Each suite is exported for a surface that needs it alone.
 
 `wikiReadChecks(t, opts)` checks the `wiki-tools` read tools: categories, a search and the page it finds (by `address`, default `{ path }`), its twin (given `twin`), a listing, recent changes, a corpus preflight and a slice that is cut and resumes when the corpus exceeds `corpusChars`, and the teaching answers to no hits, a missing argument, an unknown tool and a missing page. `endpoint` and `label` run it against a second server. It returns `{ rows, first, page }`.
 
@@ -526,7 +526,7 @@ const AGENT_CARD = agentCard({ name, description, url: `${SITE_URL}/api/mcp`, ve
 export const GET = wellKnownHandler({ agentCard: AGENT_CARD, mcpManifest: mcpManifest({ … }), openapi: SPEC });
 ```
 
-The card is served identically at `agent-card.json` and `agent.json`, and its `url` is the MCP endpoint, which answers A2A. `registryAuthHandler` serves `MCP_REGISTRY_PUBLIC_KEY` at `/.well-known/mcp-registry-auth`, 404 when unset.
+The card is served at `agent-card.json`, and its `url` is the MCP endpoint, which answers A2A. `registryAuthHandler` serves `MCP_REGISTRY_PUBLIC_KEY` at `/.well-known/mcp-registry-auth`, 404 when unset.
 
 ## OpenAPI
 
