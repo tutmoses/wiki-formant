@@ -260,7 +260,7 @@ export const POST = (req: Request) => handleRoute(async () => {
 - `corpusEtag`, `notModified` and `textHeaders` are the parts; `corpusRoute` skips the build on a 304.
 - A URL answering JSON or markdown by `Accept` asks `wantsMarkdown(request)` and sends `VARY_ACCEPT` on both branches.
 - `descriptorResponse` serves a JSON descriptor with its own ETag and `Access-Control-Allow-Origin: *` (`descriptorHandler` in `wiki-formant/well-known` is the route).
-- Every error body is `{ error, ...extra }`. A thrown `HttpError` answers with its status; anything else is logged and answered with a 500 carrying only the handler's message (`'Search failed'`), so no exception text reaches a caller. `errors.tooManyRequests(sec)` states `Retry-After`.
+- Every error body is `{ error, ...extra }`. A thrown `HttpError` answers with its status, a thrown `Response` (`errors.tooManyRequests(sec)`, say) is the answer as built; anything else is logged and answered with a 500 carrying only the handler's message (`'Search failed'`), so no exception text reaches a caller. `errors.tooManyRequests(sec)` states `Retry-After`.
 
 ## Response headers and the Next config
 

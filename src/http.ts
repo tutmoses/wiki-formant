@@ -365,8 +365,9 @@ export class HttpError extends Error {
 }
 
 /**
- * Run a handler; a thrown `HttpError` becomes its own answer, anything else a
- * logged 500 that names nothing internal. One handler here echoed every
+ * Run a handler; a thrown `HttpError` becomes its own answer, a thrown
+ * `Response` is the answer as built (a 429 keeps its `Retry-After`), anything
+ * else a logged 500 that names nothing internal. One handler here echoed every
  * exception's message to the caller, which is how a database error's text
  * becomes public.
  */
@@ -374,6 +375,7 @@ export async function handleRoute(fn: () => Promise<Response>, errorMsg = 'Inter
   try {
     return await fn();
   } catch (error) {
+    if (error instanceof Response) return error;
     if (error instanceof HttpError) return json({ error: error.message, ...error.extra }, error.status);
     console.error(errorMsg, error);
     return errors.internal(errorMsg);

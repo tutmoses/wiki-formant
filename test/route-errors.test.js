@@ -37,6 +37,12 @@ test('a thrown HttpError is its own answer', async () => {
   assert.deepEqual(await res.json(), { error: 'symptoms is required', code: 'INVALID_PARAMS' });
 });
 
+test('a thrown Response is the answer as built, headers and all', async () => {
+  const res = await handleRoute(async () => { throw errors.tooManyRequests(30); });
+  assert.equal(res.status, 429);
+  assert.equal(res.headers.get('retry-after'), '30');
+});
+
 test('BUG: any other exception is a 500 that names nothing internal', async () => {
   // One handler echoed every exception's message, so a database error's text
   // reached the caller.
