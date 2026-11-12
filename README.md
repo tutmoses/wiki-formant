@@ -94,7 +94,7 @@ const { items, total } = await searchWiki(reading, 'validators', { page: 1, size
 - `get_page` with `blocks: true` returns the stored blocks, `id`, metadata and `version`: what an edit starts from. `forEdit` adds the app's own edit fields; `authors` names revision authors.
 - `text` should be the twin's serializer and `resolve` the page's live resolver, so a page reads the same over MCP as at its twin.
 - `get_full_corpus` is a `sizeOnly` preflight, then page-aligned slices under `maxChars` (`CORPUS_BUDGET`) with `truncated`, `nextSkip` and `clippedPage`. `corpus` returns the app's own `CorpusSection`s.
-- `privateHidden` closes the back office to every tool. `metadata`, `label`, `noMatch` and `skills` are the app's.
+- `privateHidden` closes the back office to every tool. `metadata`, `label`, `noMatch` and `skills` are the app's. `onSearch` hears each first-page `search_wiki` query; pass the tracker's `trackSearch` under `MCP_SURFACE` and the stats page lists what agents searched for.
 - Writes stay with each app.
 
 ## Taxonomy
@@ -732,7 +732,7 @@ export const POST = viewRoute();
 
 - `createTracker` records only on a Vercel production deployment unless `enabled` says otherwise. `trackMcpCall` fits `McpServerConfig.onCall`; `trackSearch` normalises a query and drops an empty one; `recordEvent` is the undeferred write.
 - A proxy reaches the tracker through a dynamic `import()` inside `event.waitUntil`, since it imports the database client.
-- `digest(sql, { days })` is the site as one JSON object: people, engaged people, agents, views, visits, bounce rate, sources, pages, countries, devices, by day, agents by name, MCP calls and searches that found nothing, less a search its visitor went on typing within five minutes and any of one character. A visit is a run of views with no gap over 30 minutes; a bounce is a one-view visit its reader never engaged with. Agents are counted beside people, never among them: the ranked lists are people's. `ownAgents` leaves the site's own out. A multi-tenant app passes `site`.
+- `digest(sql, { days })` is the site as one JSON object: people, engaged people, agents, views, visits, bounce rate, sources, pages, countries, devices, by day, agents by name, MCP calls, every search people made, every `search_wiki` query agents made, the searches of either that found nothing, and agents' `send_feedback` reports. A search its visitor went on typing within five minutes is left out, as is any of one character. A visit is a run of views with no gap over 30 minutes; a bounce is a one-view visit its reader never engaged with. Agents are counted beside people, never among them: the ranked lists are people's. `ownAgents` leaves the site's own out. A multi-tenant app passes `site`.
 - A browser under automation (`navigator.webdriver`) sends no beacon.
 
 ## Passkeys and the stats page

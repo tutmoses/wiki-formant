@@ -343,8 +343,8 @@ test('a tracker defers the MCP and search events and files a search under its re
   const events = inserts('Event').map(e => [e.values[1], e.values[2], JSON.parse(e.values[3])]);
   assert.deepEqual(events, [
     ['MCP Call', '/api/mcp', { server: 'kb', method: 'tools/call', tool: 'search', ua: 'Mozilla/5.0 (iPhone) Mobile' }],
-    ['Search Query', '/wiki/x', { q: 'nothing here', results: '0', surface: 'wiki' }],
-    ['Search Query', '/', { q: 'rooted', results: '3' }],
+    ['Search Query', '/wiki/x', { q: 'nothing here', results: '0', surface: 'wiki', ua: 'Mozilla/5.0 (iPhone) Mobile' }],
+    ['Search Query', '/', { q: 'rooted', results: '3', ua: 'Mozilla/5.0 (iPhone) Mobile' }],
   ]);
 });
 

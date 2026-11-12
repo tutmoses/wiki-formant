@@ -136,7 +136,7 @@ const DIGEST = {
   top_sources: [{ source: 'x', visitors: 4 }], top_pages: [{ page: '/', visitors: 9 }, { page: '/a', visitors: 3 }],
   entry_pages: [], from_posts: [], sibling_referrals: [], countries: [{ country: 'GB', visitors: 5 }],
   devices: [{ device: 'phone', visitors: 7 }], by_day: [], follow_clicks: null,
-  top_agents: [{ agent: 'ClaudeBot', visitors: 2 }, { agent: 'node', visitors: 1 }], agent_tool_calls: [], gaps: [],
+  top_agents: [{ agent: 'ClaudeBot', visitors: 2 }, { agent: 'node', visitors: 1 }], agent_tool_calls: [], searches: [], agent_searches: [], gaps: [], agent_feedback: [],
   counted_from: '2026-10-01', engaged_from: '2026-10-01',
 };
 

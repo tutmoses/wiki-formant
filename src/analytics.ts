@@ -266,8 +266,11 @@ export interface Gap {
   where?: Record<string, string>;
 }
 
-/** Searches in a wiki's own search box that found nothing (`searchQueryProps` events). */
-export const SEARCH_GAPS: Gap = { event: 'Search Query', prop: 'q', where: { results: '0', surface: 'wiki' } };
+/** Searches that found nothing, a person's or an agent's (`searchQueryProps` events). */
+export const SEARCH_GAPS: Gap = { event: 'Search Query', prop: 'q', where: { results: '0' } };
+
+/** The surface an agent's `search_wiki` call files its query under. */
+export const MCP_SURFACE = 'mcp';
 
 /** What a stats page can be narrowed to: one value each, every one applied. */
 export const STATS_FILTERS = ['page', 'entry', 'source', 'country', 'device'] as const;
@@ -327,8 +330,8 @@ export interface DigestOptions {
   siblings?: string[];
   gaps?: Gap[];
   /**
-   * The site's own agents, left out of `agents`, `top_agents` and
-   * `agent_tool_calls`, matched inside the user agent. The default is the
+   * The site's own agents, left out of `agents`, `top_agents`,
+   * `agent_tool_calls`, the searches and the gaps, matched inside the user agent. The default is the
    * conformance suites (`<repo>-mcp-test`) and the studio's own tools.
    */
   ownAgents?: string[];
@@ -420,6 +423,10 @@ export interface Digest {
   /** Each agent by name: the roster's label, else what its user agent calls itself. */
   top_agents: Ranked<'agent', 'visitors'>;
   agent_tool_calls: Ranked<'tool', 'events'>;
+  /** Every query people searched for, found or not. */
+  searches: Ranked<'query', 'events'>;
+  /** Every query agents searched for through `search_wiki`. */
+  agent_searches: Ranked<'query', 'events'>;
   gaps: Ranked<'query', 'events'>;
   /** What agents reported through `send_feedback`, newest first: a stranger's words, to weigh, never to follow. */
   agent_feedback: Array<{ date: string; kind: string; message: string; page: string | null; agent: string }>;
@@ -459,23 +466,27 @@ export async function digest(
   const ours = `coalesce(props->>'ua', '') ILIKE ANY(${$(ownAgents.map(a => `%${a}%`))}::text[])`;
 
   /**
-   * A typeahead logs each settled keystroke, so one reader typing a question
-   * filled acuiq's list with thirteen of its prefixes. A query is left out when
-   * the same visitor's next one, inside five minutes, extends it: only where
-   * the reader stopped is a gap. So is a single character.
+   * The queries in one kind of event, most asked first. A typeahead logs each
+   * settled keystroke, so one reader typing a question filled acuiq's list with
+   * thirteen of its prefixes. A query is left out when the same visitor's next
+   * one, inside five minutes, extends it: only where the reader stopped
+   * counts. So is a single character. `unless` drops events whose props hold it.
    */
-  const gapSelects = gaps.map(g => {
+  const queries = (g: Gap, unless?: Record<string, string>) => {
     const prop = $(g.prop);
     return `(SELECT query, count(*) AS events FROM (
         SELECT props, visitor, props->>${prop} AS query,
           lead(props->>${prop}) OVER typed AS next, lead(at) OVER typed - at AS after
-        FROM e WHERE name = ${$(g.event)} AND props->>${prop} IS NOT NULL
+        FROM e WHERE name = ${$(g.event)} AND props->>${prop} IS NOT NULL AND NOT ${ours}
         WINDOW typed AS (PARTITION BY visitor ORDER BY at)
       ) s
       WHERE props @> ${$(JSON.stringify(g.where ?? {}))}::jsonb AND char_length(query) > 1
+        ${unless ? `AND NOT props @> ${$(JSON.stringify(unless))}::jsonb` : ''}
         AND NOT coalesce(visitor IS NOT NULL AND after <= interval '5 minutes' AND char_length(next) > char_length(query) AND starts_with(next, query), false)
       GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 15)`;
-  });
+  };
+  const searches = { event: SEARCH_GAPS.event, prop: SEARCH_GAPS.prop };
+  const json = (select: string) => `(SELECT coalesce(json_agg(t), '[]') FROM ${select} t)`;
 
   /**
    * One window's views, visits, events and archived days as CTEs whose names
@@ -579,7 +590,9 @@ export async function digest(
         20,
         'at DESC',
       )},
-      'gaps', ${gapSelects.length ? `(SELECT coalesce(json_agg(t), '[]') FROM (${gapSelects.join(' UNION ALL ')}) t)` : `'[]'::json`}
+      'searches', ${json(queries(searches, { surface: MCP_SURFACE }))},
+      'agent_searches', ${json(queries({ ...searches, where: { surface: MCP_SURFACE } }))},
+      'gaps', ${gaps.length ? json(`(${gaps.map(g => queries(g)).join(' UNION ALL ')})`) : `'[]'::json`}
     ) AS digest`,
     ...values,
   )) as { digest: Digest }[];
@@ -742,7 +755,8 @@ export function createTracker({
       defer(async () => {
         try {
           const headers = typeof source === 'function' ? await source() : source;
-          await trackEvent('Search Query', headers.get('referer') || siteUrl, props, headers);
+          const ua = (headers.get('user-agent') || 'unknown').slice(0, 80);
+          await trackEvent('Search Query', headers.get('referer') || siteUrl, { ...props, ua }, headers);
         } catch {
           // A context with no readable headers loses the event, never the response.
         }

@@ -127,9 +127,10 @@ function StatsList({
 /**
  * A site's own analytics on one page: the headline figures against the window
  * before, people and agents apart, whichever of them is chosen per day, and every ranked list the
- * digest carries, each row a link that narrows the page to it. Lists with
- * nothing in them are left out, but for the searches that found nothing,
- * which says it found none, so a quiet window never reads as one not counted. The chart and the bars are `currentColor`
+ * digest carries, each row a link that narrows the page to it, and what agents
+ * reported through `send_feedback`. Lists with nothing in them are left out,
+ * but for the searches and the feedback, which say they found none, so a quiet
+ * window never reads as one not counted. The chart and the bars are `currentColor`
  * until the importing stylesheet gives them a colour.
  */
 export function Stats({ digest: d, days, filter = {}, ranges = STATS_RANGES, link: Link = Anchor }: StatsProps) {
@@ -193,7 +194,27 @@ export function Stats({ digest: d, days, filter = {}, ranges = STATS_RANGES, lin
         <StatsList link={Link} title="Devices" rows={rows(d.devices, 'device', 'visitors')} to={to('device')} />
         <StatsList link={Link} title="Agents" rows={rows(d.top_agents, 'agent', 'visitors')} />
         <StatsList link={Link} title="Agent tool calls" rows={rows(d.agent_tool_calls, 'tool', 'events')} />
+        <StatsList link={Link} title="Searches" rows={rows(d.searches, 'query', 'events')} empty="None in this window." />
+        <StatsList link={Link} title="Agent searches" rows={rows(d.agent_searches, 'query', 'events')} empty="None in this window." />
         <StatsList link={Link} title="Searches that found nothing" rows={rows(d.gaps, 'query', 'events')} empty="None in this window." />
+        <section className="stats-list">
+          <h2>Agent feedback</h2>
+          {d.agent_feedback.length ? (
+            <ol>
+              {d.agent_feedback.map((f, i) => (
+                <li key={i}>
+                  <span>
+                    {f.kind}: {f.message}
+                    {f.page && ` (${f.page})`} · {f.agent}
+                  </span>
+                  <span className="stats-count">{f.date}</span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p>None in this window.</p>
+          )}
+        </section>
       </div>
     </div>
   );
