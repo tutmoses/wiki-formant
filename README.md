@@ -466,6 +466,25 @@ return new ImageResponse(<SocialCard {...{ title, eyebrow, description }} {...fi
 - Fonts stay with the site: Next traces a font file only from a literal path in the app, and satori reads TTF or OTF.
 - `wiki-formant/seeded`'s `hashStr` and `seededRandom` are the deterministic randomness the art draws from, identical on server and browser.
 
+## Page banners
+
+`wiki-formant/banner`: the banner a page is headed with, its own picture or art seeded by the page.
+
+```tsx
+import { PageBanner, BannerArt } from 'wiki-formant/banner';
+
+<PageBanner seed={page.title + page.tagPath} picture={banner && <Image src={banner} alt="" fill preload sizes="100vw" />}>
+  <Breadcrumbs items={crumbs} />
+  <h1>{page.title}</h1>
+</PageBanner>
+<span className="card-thumb"><BannerArt seed={page.title + page.tagPath} /></span>
+```
+
+- Every page has a banner: a page without a picture gets art seeded by `seed`, the same on every render, server and browser. Seed it as the page's card thumbnail is seeded, so the two match.
+- The art is inline SVG with a class per role, coloured by custom properties: `--banner-from` and `--banner-to` the gradient (transparent unset), `--banner-mid` the blobs and half the shapes (`--ui-muted` unset), `--banner-ink` the rest and the dots (`--ui-accent` unset), over `--banner-field` (`--ui-surface` unset). A category's palette or a section's band is a style on the frame.
+- `mark` replaces the triangle with a wiki's own shape, as a path from its anchor, size and generator. `fill-opacity` on a role's class dims it under a title.
+- The frame's 4:1 is a floor, not a height (`base.css`): the trail and title grow it rather than being cropped.
+
 ## Revisions and history
 
 `wiki-formant/revisions`: what changed between two versions of a page, and which bump to ask for. `wiki-formant/history`: what each revision changed, as a history view shows it.

@@ -463,6 +463,42 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
 }
 .breadcrumbs .separator { user-select: none; }
 
+/* ---- PageBanner and BannerArt -----------------------------------------------
+   4:1 is a floor, not a height: the ratio-holder and the body share one grid
+   cell, so the row is as tall as whichever needs more, and a long title on a
+   phone grows the banner rather than losing its trail off the top. The column
+   is minmax(0, 1fr), not auto, which would size to a long title's unwrapped
+   line. `max-height` caps only the picture, never the words. */
+.page-banner {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: var(--ui-radius);
+  background: var(--banner-field, var(--ui-surface));
+}
+.page-banner::before { content: ''; grid-area: 1 / 1; aspect-ratio: 4 / 1; max-height: 12rem; }
+.page-banner > :is(img, picture, svg) { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* `relative` only so it paints above the picture. */
+.page-banner__body {
+  grid-area: 1 / 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: var(--ui-pad);
+}
+.page-banner__body > :is(h1, nav) { margin: 0; }
+.banner-art { display: block; width: 100%; height: 100%; }
+.banner-art__from { stop-color: var(--banner-from, transparent); }
+.banner-art__to { stop-color: var(--banner-to, transparent); }
+.banner-art__mid { fill: var(--banner-mid, var(--ui-muted)); }
+.banner-art__ink { fill: var(--banner-ink, var(--ui-accent)); }
+.banner-art__mid-line { fill: none; stroke: var(--banner-mid, var(--ui-muted)); }
+.banner-art__ink-line { fill: none; stroke: var(--banner-ink, var(--ui-accent)); }
+
 /* ---- Pager and SnapDots -----------------------------------------------------
    One line that never wraps, the count in tabular figures so stepping does not
    shift it. A step is a bare control: its colour, size and hit area are the
