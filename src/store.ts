@@ -52,7 +52,7 @@ export interface WikiPageRow<B = unknown> {
  * article. A category of 200 cards otherwise ships 200 block arrays to the
  * browser.
  */
-export type WikiPageListing = Omit<WikiPageRow, 'content'> & { snippet: string };
+export type WikiPageListing = Omit<WikiPageRow, 'content'> & { snippet: string; banner: string | null };
 
 export interface WikiPageRef {
   tagPath: string;
@@ -102,6 +102,12 @@ export interface WikiStoreOptions<B extends DiffBlock> {
    * article's opening; a wiki that keeps a written summary in metadata says so.
    */
   snippet?: (page: Pick<WikiPageRow<B>, 'content' | 'metadata'>) => string;
+  /**
+   * The picture a page's banner and card show, if it has one. Defaults to
+   * `metadata.banner`; a wiki whose pages carry no banner of their own may
+   * read the article's first picture instead.
+   */
+  banner?: (page: Pick<WikiPageRow<B>, 'content' | 'metadata'>) => string | null | undefined;
 }
 
 export interface SaveInput<B> {
@@ -173,9 +179,10 @@ export function orderByIds<T extends { id: string }>(rows: readonly T[], ids: re
 export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B>) {
   const site = o.siteId ?? '';
   const opening = o.snippet ?? ((page: Pick<WikiPageRow<B>, 'content'>) => describe(openingText(page.content)));
+  const bannerOf = o.banner ?? ((page: Pick<WikiPageRow<B>, 'metadata'>) => (typeof page.metadata?.banner === 'string' ? page.metadata.banner : null));
   const listing = (row: WikiPageRow): WikiPageListing => {
     const { content: _, ...rest } = row;
-    return { ...rest, snippet: opening(row as WikiPageRow<B>) };
+    return { ...rest, snippet: opening(row as WikiPageRow<B>), banner: bannerOf(row as WikiPageRow<B>) ?? null };
   };
   const hidden = [...(o.hidden ?? [])];
   const rows = async <T>(query: string, ...values: unknown[]) => (await o.sql(query, ...values)) as T[];
@@ -341,6 +348,7 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
       ...row,
       ...(withContent ? { content: content as B[] } : {}),
       score: tier,
+      banner: bannerOf({ content: content as B[], metadata: row.metadata }) ?? null,
       snippet: (headline ? decodeEntities(headline).replace(/\s+/g, ' ').trim() : '')
         || matchSnippet(content, query, () => opening({ content: content as B[], metadata: row.metadata })),
     }));

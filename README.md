@@ -43,7 +43,7 @@ await store.save({ tagPath, slug, content, authorId, message, baseVersion: page.
 - **A save is one statement**: the page update and its revision in a CTE guarded on the version read. A lost race, a stale `baseVersion`, a page deleted since or a rename onto a taken slug writes nothing and throws a 409 `HttpError` whose body names the reason as `conflict`: `stale` and `deleted` mean reload, `taken` means another slug (`ConflictReason`).
 - **The bump is the diff's**: added, removed or moved blocks are `major`, changed prose or title `minor`; `change` overrides it. A metadata-only save moves no version and writes no revision.
 - **History is diffed on read.** A revision stores the page as saved. `history(pageId, { limit })` reads one row more than it returns, so the oldest entry shown has its real predecessor.
-- **Listings carry a snippet, not the article**: `list`, `recent` and `byIds` drop `content`.
+- **Listings carry a snippet, not the article**: `list`, `recent` and `byIds` drop `content`, and carry `banner`, the page's picture for its card (`metadata.banner`, or the `banner` option's reading).
 - **Search is four tiers**: title prefix, title, literal prose, then full text on `search_tsv` with Postgres' headline as the snippet. Hidden paths, and paths under them, are left out unless named.
 - `branch` is an agent's walk of a path and everything under it; `counts` is pages per tag path.
 - Copy the models with `npx prisma-models wiki` (`--tenant` for a tenant-keyed copy), then build the full-text column with `npx fts-ddl '"WikiPage"'`.
@@ -471,16 +471,17 @@ return new ImageResponse(<SocialCard {...{ title, eyebrow, description }} {...fi
 `wiki-formant/banner`: the banner a page is headed with, its own picture or art seeded by the page.
 
 ```tsx
-import { PageBanner, BannerArt } from 'wiki-formant/banner';
+import { PageBanner, CardBanner } from 'wiki-formant/banner';
 
 <PageBanner seed={page.title + page.tagPath} picture={banner && <Image src={banner} alt="" fill preload sizes="100vw" />}>
   <Breadcrumbs items={crumbs} />
   <h1>{page.title}</h1>
 </PageBanner>
-<span className="card-thumb"><BannerArt seed={page.title + page.tagPath} /></span>
+<CardBanner seed={page.title + page.tagPath} picture={card.banner && <Image src={card.banner} alt="" fill sizes="33vw" />} />
 ```
 
-- Every page has a banner: a page without a picture gets art seeded by `seed`, the same on every render, server and browser. Seed it as the page's card thumbnail is seeded, so the two match.
+- Every page has a banner: a page without a picture gets art seeded by `seed`, the same on every render, server and browser. `CardBanner` is the same picture or art at the top of the page's card, cropped to 4:1; seed both alike, so a card and its page match.
+- A listing carries `banner`, the picture both show: `metadata.banner` unless the store's `banner` option reads it elsewhere, such as the article's first picture. `BannerArt` alone is the art for any other frame.
 - The art is inline SVG with a class per role, coloured by custom properties: `--banner-from` and `--banner-to` the gradient (transparent unset), `--banner-mid` the blobs and half the shapes (`--ui-muted` unset), `--banner-ink` the rest and the dots (`--ui-accent` unset), over `--banner-field` (`--ui-surface` unset). A category's palette or a section's band is a style on the frame.
 - `mark` replaces the triangle with a wiki's own shape, as a path from its anchor, size and generator. `fill-opacity` on a role's class dims it under a title.
 - The frame's 4:1 is a floor, not a height (`base.css`): the trail and title grow it rather than being cropped.

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { BannerArt, PageBanner } from 'wiki-formant/banner';
+import { BannerArt, CardBanner, PageBanner } from 'wiki-formant/banner';
 import { hashStr, seededRandom } from 'wiki-formant/seeded';
 
 const html = (c, p) => renderToStaticMarkup(createElement(c, p));
@@ -63,4 +63,12 @@ test('the banner shows its picture, else its art, and its words over either', ()
   assert.match(art, /<div class="page-banner__body"><h1>T<\/h1><\/div><\/div>$/);
   const pic = html(PageBanner, { seed: 's', picture: createElement('img', { src: '/b.png', alt: '' }), className: 'x' });
   assert.match(pic, /<div class="page-banner x"><img src="\/b.png" alt=""\/><\/div>$/);
+});
+
+test('a card banner is its picture, else the art its page is headed with', () => {
+  const art = html(CardBanner, { seed: 's' });
+  assert.match(art, /^<span class="card-banner" aria-hidden="true"><svg class="banner-art"/);
+  assert.ok(art.includes(html(BannerArt, { seed: 's' })), 'the same art as the page\'s banner');
+  const pic = html(CardBanner, { seed: 's', picture: createElement('img', { src: '/b.png', alt: '' }), className: 'x' });
+  assert.match(pic, /<span class="card-banner x" aria-hidden="true"><img src="\/b.png" alt=""\/><\/span>$/);
 });

@@ -105,3 +105,17 @@ export function PageBanner({ seed, picture, mark, className, style, children }: 
     </div>
   );
 }
+
+/**
+ * The same banner at the top of a page's card: its picture, else its art,
+ * in a 4:1 frame (`base.css`). Seed it as the page's header is seeded, so a
+ * card and the page it opens wear the same art. Decorative: the card's title
+ * names it.
+ */
+export function CardBanner({ seed, picture, mark, className, style }: { seed: string; picture?: ReactNode; mark?: BannerMark; className?: string; style?: CSSProperties }): ReactElement {
+  return (
+    <span className={className ? `card-banner ${className}` : 'card-banner'} style={style} aria-hidden>
+      {picture ?? <BannerArt seed={seed} mark={mark} />}
+    </span>
+  );
+}

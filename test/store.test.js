@@ -140,6 +140,18 @@ test('listings drop the hub and the content, and hidden paths arrive only when n
   assert.deepEqual((await store.byIds([cards[1].id, cards[0].id])).map(c => c.title), ['Bravo', 'Alpha']);
 });
 
+test('a listing carries its banner: metadata.banner, or what the wiki reads it from', async () => {
+  const { sql } = await db();
+  const plain = wikiStore({ sql });
+  await plain.save({ tagPath: 'docs', slug: 'a', title: 'Alpha', content: [para('a', 'One.')], metadata: { banner: 'https://x.test/a.png' } });
+  await plain.save({ tagPath: 'docs', slug: 'b', title: 'Bravo', content: [para('a', 'Two.')] });
+  assert.deepEqual((await plain.list('docs')).map(c => c.banner), ['https://x.test/a.png', null]);
+  const first = wikiStore({ sql, banner: p => p.content.map(b => /<img src="([^"]+)"/.exec(b.text ?? '')?.[1]).find(Boolean) });
+  await first.save({ tagPath: 'docs', slug: 'b', title: 'Bravo', content: [{ id: 'p', type: 'content', text: '<p><img src="https://x.test/b.png"></p>' }] });
+  assert.deepEqual((await first.list('docs')).map(c => c.banner), [null, 'https://x.test/b.png']);
+  assert.equal((await first.search('bravo')).items[0].banner, 'https://x.test/b.png');
+});
+
 test('search ranks title prefix, title, prose, then full text with a headline', async () => {
   const { sql } = await db();
   const store = wikiStore({ sql });

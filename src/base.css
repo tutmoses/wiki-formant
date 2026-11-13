@@ -463,7 +463,7 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
 }
 .breadcrumbs .separator { user-select: none; }
 
-/* ---- PageBanner and BannerArt -----------------------------------------------
+/* ---- PageBanner, CardBanner and BannerArt -----------------------------------------------
    4:1 is a floor, not a height: the ratio-holder and the body share one grid
    cell, so the row is as tall as whichever needs more, and a long title on a
    phone grows the banner rather than losing its trail off the top. The column
@@ -491,6 +491,9 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
   padding: var(--ui-pad);
 }
 .page-banner__body > :is(h1, nav) { margin: 0; }
+/* CardBanner: the same picture or art at the top of a card, cropped to 4:1. */
+.card-banner { position: relative; display: block; aspect-ratio: 4 / 1; overflow: hidden; background: var(--banner-field, var(--ui-surface)); }
+.card-banner > :is(img, picture, svg) { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .banner-art { display: block; width: 100%; height: 100%; }
 .banner-art__from { stop-color: var(--banner-from, transparent); }
 .banner-art__to { stop-color: var(--banner-to, transparent); }
