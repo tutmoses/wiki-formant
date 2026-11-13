@@ -137,6 +137,8 @@ export type ToolSchema = {
  * calls has no way to tell a lookup from one that reaches a payment processor.
  */
 export type ToolAnnotations = {
+  /** The pre-2025-06-18 home of the label; `toolCard` mirrors `McpTool.title` here. */
+  title?: string;
   /** Does not modify anything. */
   readOnlyHint?: boolean;
   /** May destroy or overwrite state (only meaningful when not read-only). */
@@ -188,6 +190,10 @@ export interface McpTool {
  * One projection because the two copies drifted: the manifest's had no
  * `outputSchema`, so a descriptor said a tool answers with prose while
  * `tools/list` said it answers with `structuredContent`.
+ *
+ * The title goes out twice, top level and in `annotations`: clients and the
+ * Claude connectors directory that read only `annotations.title` otherwise
+ * report every tool untitled.
  */
 export function toolCard(tool: {
   name: string;
@@ -203,7 +209,9 @@ export function toolCard(tool: {
     description: tool.description,
     inputSchema: tool.inputSchema,
     ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
-    ...(tool.annotations ? { annotations: tool.annotations } : {}),
+    ...(tool.annotations || tool.title
+      ? { annotations: { ...(tool.title ? { title: tool.title } : {}), ...(tool.annotations as object) } }
+      : {}),
   };
 }
 

@@ -62,7 +62,7 @@ test('the MCP manifest takes versions and tools from the transport and lists tit
   });
   assert.equal(m.mcp.protocolVersion, MCP_PROTOCOL_VERSION);
   assert.equal(m.mcp.endpoint, 'https://w.test/api/mcp');
-  assert.deepEqual(m.tools, [{ name: 't', title: 'T', description: 'x', inputSchema: { type: 'object' } }]);
+  assert.deepEqual(m.tools, [{ name: 't', title: 'T', description: 'x', inputSchema: { type: 'object' }, annotations: { title: 'T' } }]);
   assert.deepEqual(m.auth, { reads: 'none' });
 });
 

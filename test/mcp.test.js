@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   mcpResponse, mcpGet, mcpOptions, handleMcp, McpToolError, feedbackTool, FEEDBACK_INVITE, FEEDBACK_MAX,
-  MCP_LEGACY_PROTOCOL_VERSION, MCP_META, MCP_MODERN_VERSIONS, MCP_PROTOCOL_VERSIONS,
+  MCP_LEGACY_PROTOCOL_VERSION, MCP_META, MCP_MODERN_VERSIONS, MCP_PROTOCOL_VERSIONS, toolCard,
 } from 'wiki-formant/mcp';
 import { resetRateLimits } from 'wiki-formant/rate-limit';
 
@@ -76,6 +76,14 @@ test('tools/list carries annotations but never the handler', async () => {
   const tool = result.tools.find(t => t.name === 'search');
   assert.deepEqual(tool.annotations, { readOnlyHint: true, title: 'Search' });
   assert.equal(tool.handler, undefined);
+});
+
+test('toolCard mirrors a top-level title into annotations', () => {
+  const card = toolCard({ name: 't', title: 'Get it', description: 'x', inputSchema: { type: 'object' }, annotations: { readOnlyHint: true } });
+  assert.equal(card.title, 'Get it');
+  assert.deepEqual(card.annotations, { title: 'Get it', readOnlyHint: true });
+  assert.deepEqual(toolCard({ name: 't', title: 'Get it', description: 'x', inputSchema: {} }).annotations, { title: 'Get it' });
+  assert.equal(toolCard({ name: 't', description: 'x', inputSchema: {} }).annotations, undefined);
 });
 
 test('malformed JSON is -32700 and 400, never a 500', async () => {
