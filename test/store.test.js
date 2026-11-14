@@ -140,6 +140,16 @@ test('listings drop the hub and the content, and hidden paths arrive only when n
   assert.deepEqual((await store.byIds([cards[1].id, cards[0].id])).map(c => c.title), ['Bravo', 'Alpha']);
 });
 
+test('a title sort reads numbers as numbers', async () => {
+  const { sql } = await db();
+  const store = wikiStore({ sql });
+  for (const title of ['10. Badges', '2. Resources', '1. Fundamentals', 'Appendix', '9. Assets'])
+    await store.save({ tagPath: 'docs/guides', slug: title.toLowerCase().replace(/\W+/g, '-'), title, content: [para('a', title)] });
+  const order = ['1. Fundamentals', '2. Resources', '9. Assets', '10. Badges', 'Appendix'];
+  assert.deepEqual((await store.list('docs/guides')).map(c => c.title), order);
+  assert.deepEqual((await store.subtree('docs')).map(r => r.title), order);
+});
+
 test('a listing carries its banner: metadata.banner, or what the wiki reads it from', async () => {
   const { sql } = await db();
   const plain = wikiStore({ sql });

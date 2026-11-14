@@ -203,8 +203,11 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
   const getById = (id: string) =>
     one<WikiPageRow<B> & { revisionCount: number }>(`SELECT ${COLUMNS}, ${REVISION_COUNT} FROM ${PAGE} p WHERE "siteId" = $1 AND id = $2`, site, id);
 
+  // A title in natural order: every run of digits is padded to ten, so guide 10 follows guide 9 rather than guide 1.
+  const BY_TITLE = `regexp_replace(regexp_replace(title, '([0-9]+)', '0000000000\\1', 'g'), '0*([0-9]{10})', '\\1', 'g'), title`;
+
   const ORDER: Record<ListSort, string> = {
-    title: 'title ASC',
+    title: BY_TITLE,
     recent: '"updatedAt" DESC',
     // A post or an event is as recent as the day it is about.
     date: `NULLIF(metadata->>'date', '') DESC NULLS LAST, "updatedAt" DESC`,
@@ -229,7 +232,7 @@ export function wikiStore<B extends DiffBlock = DiffBlock>(o: WikiStoreOptions<B
     rows<WikiPageRef>(
       `SELECT "tagPath", slug, title FROM ${PAGE} p
         WHERE "siteId" = $1 AND "tagPath" LIKE $2 AND slug <> '' AND NOT ${hiddenSql('$3')}
-        ORDER BY title ASC`,
+        ORDER BY ${BY_TITLE}`,
       site, `${escapeLikeTerm(tagPath)}/%`, hidden,
     );
 
