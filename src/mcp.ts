@@ -937,22 +937,22 @@ export async function mcpResponse(
 ): Promise<Response> {
   // Before `request.json()`: an unparsed body must not cost a query, which is
   // also why the refusal carries a null id.
-  let headroom: Record<string, string> = {};
-  if (config.rateLimit) {
-    const verdict = rateLimit(
-      clientKey(config.rateLimit.prefix ?? 'mcp', request.headers),
-      config.rateLimit,
-    );
-    if (!verdict.ok) {
-      return withRateLimit(mcpRateLimited(verdict.retryAfterSec), verdict, config.rateLimit);
-    }
-    headroom = rateLimitHeaders(verdict, config.rateLimit);
-  }
+  const limit = config.rateLimit;
+  const key = clientKey(limit?.prefix ?? 'mcp', request.headers);
+  /** A refusal, or the headroom headers of a call the budget covered. */
+  const spend = (cost: number): Response | Record<string, string> => {
+    if (!limit) return {};
+    const verdict = rateLimit(key, { ...limit, cost });
+    return verdict.ok
+      ? rateLimitHeaders(verdict, limit)
+      : withRateLimit(mcpRateLimited(verdict.retryAfterSec), verdict, limit);
+  };
 
   // The headroom rides on every answer, not only on the 429 — a budget
   // discoverable only by exceeding it is one an agent meets when it is least
   // able to act on it.
-  const base = { ...MCP_CORS, ...headroom };
+  let headroom = spend(1);
+  if (headroom instanceof Response) return headroom;
 
   let body: unknown;
   try {
@@ -960,9 +960,18 @@ export async function mcpResponse(
   } catch {
     return Response.json(rpcError(null, -32700, 'Parse error: request body is not valid JSON.'), {
       status: 400,
-      headers: { ...base, 'MCP-Protocol-Version': requestProtocol(request) },
+      headers: { ...MCP_CORS, ...headroom, 'MCP-Protocol-Version': requestProtocol(request) },
     });
   }
+
+  // A batch pays for each call it carries: charged as one POST, a full batch
+  // rode on every token and the stated budget was a fraction of the real one.
+  // One over the cap is refused whole downstream, and its POST has paid for that.
+  if (Array.isArray(body) && body.length > 1 && body.length <= (config.maxBatch ?? DEFAULT_MAX_BATCH)) {
+    headroom = spend(body.length - 1);
+    if (headroom instanceof Response) return headroom;
+  }
+  const base = { ...MCP_CORS, ...headroom };
 
   // Tracked before either era refuses anything: a probe the server turns away,
   // and a call an agent walked away from behind a gate, are exactly the ones

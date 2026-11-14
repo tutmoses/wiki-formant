@@ -29,6 +29,11 @@ export interface RateLimitOptions {
    * the same `blockKey` once it blows one endpoint's budget.
    */
   blockKey?: string;
+  /**
+   * Tokens this call spends, 1 unless given: a batch pays for each call it
+   * carries. A cost over `capacity` can never be met.
+   */
+  cost?: number;
 }
 
 export type RateLimitResult =
@@ -101,15 +106,16 @@ export function rateLimit(key: string, opts: RateLimitOptions): RateLimitResult 
   bucket.updatedAt = now;
   buckets.set(key, bucket);
 
-  if (bucket.tokens < 1) {
+  const cost = opts.cost ?? 1;
+  if (bucket.tokens < cost) {
     if (opts.blockMs) {
       block(blockKey, now + opts.blockMs, now);
       return { ok: false, retryAfterSec: Math.ceil(opts.blockMs / 1000) };
     }
-    return { ok: false, retryAfterSec: Math.ceil((1 - bucket.tokens) / opts.refillPerSec) };
+    return { ok: false, retryAfterSec: Math.ceil((cost - bucket.tokens) / opts.refillPerSec) };
   }
 
-  bucket.tokens -= 1;
+  bucket.tokens -= cost;
   return { ok: true, remaining: Math.floor(bucket.tokens) };
 }
 

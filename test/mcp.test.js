@@ -448,6 +448,30 @@ test('a gate can withhold an entry and merge its own answer back', async () => {
   assert.equal((await res.json()).error.code, 402);
 });
 
+test('a batch is charged for each call it carries', async () => {
+  resetRateLimits();
+  const limited = { ...config, rateLimit: { capacity: 5, refillPerSec: 0.01, prefix: 'test-mcp-batch' } };
+  const post = n =>
+    mcpResponse(
+      new Request('https://x/api/mcp', {
+        method: 'POST',
+        headers: { 'x-forwarded-for': '9.9.9.8' },
+        body: JSON.stringify(Array.from({ length: n }, () => rpc('ping'))),
+      }),
+      limited,
+    );
+
+  const three = await post(3);
+  assert.equal(three.status, 200);
+  assert.equal((await three.json()).length, 3);
+  assert.equal(three.headers.get('RateLimit-Remaining'), '2');
+
+  // Two tokens left: the POST takes one, and two more calls cannot be paid for.
+  const over = await post(3);
+  assert.equal(over.status, 429);
+  assert.equal((await over.json()).error.code, -32000);
+});
+
 test('a declared budget is enforced, and every answer states the headroom', async () => {
   resetRateLimits();
   const limited = { ...config, rateLimit: { capacity: 2, refillPerSec: 0.01, prefix: 'test-mcp' } };

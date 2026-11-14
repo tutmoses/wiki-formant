@@ -299,7 +299,7 @@ if (!limit.ok) return rateLimitedResponse(limit.retryAfterSec);
 ```
 
 - `listEnvelope` is the shape every list tool answers with, its `note` on an empty page.
-- `rateLimit` is an in-memory token bucket; `blockMs` blocks an abusive key outright across every bucket naming it. `clientIp` reads `x-real-ip` first, then the leftmost `x-forwarded-for`. `MCP_RATE_LIMIT` is the MCP servers' budget.
+- `rateLimit` is an in-memory token bucket; `blockMs` blocks an abusive key outright across every bucket naming it. `cost` spends more than one token on a call, which is how `mcpResponse` charges a batch for each call it carries. `clientIp` reads `x-real-ip` first, then the leftmost `x-forwarded-for`. `MCP_RATE_LIMIT` is the MCP servers' budget.
 
 ## React
 
