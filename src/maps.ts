@@ -5,6 +5,8 @@
 // shortener hop at the bottom is the one part that makes a request, and the
 // part the two copies did NOT agree on.
 
+import type { Editor } from '@tiptap/core';
+
 export interface MapCoords {
   lat: number;
   lon: number;
@@ -172,9 +174,48 @@ export async function resolveMapUrl(url: string, endpoint = '/api/resolve-map'):
   if (direct || !isShortMapUrl(url)) return direct;
   try {
     const res = await fetch(`${endpoint}?url=${encodeURIComponent(url)}`);
+    if (!res.ok) return null;
     const { resolved } = (await res.json()) as { resolved?: string };
     return resolved ? toMapEmbedUrl(resolved) : null;
   } catch {
     return null;
   }
+}
+
+/** The `src` a shortened map link's node wears while its redirect is followed. */
+export const MAP_RESOLVING = 'about:blank';
+
+/**
+ * Settle the placeholder a shortened map link inserted: the embed once the
+ * redirect resolves, or, when it cannot (a dead link, a rate limit, a dropped
+ * request), the pasted link itself as text, so a blank frame is never left to
+ * be saved. The node is re-found by its `url`, never a captured position: the
+ * document stays editable throughout the hop.
+ */
+export function settleMapEmbed(editor: Editor, url: string, resolve: (url: string) => Promise<string | null>): void {
+  void resolve(url)
+    .catch(() => null)
+    .then(src => {
+      if (editor.isDestroyed) return;
+      let found: { pos: number; size: number } | null = null;
+      editor.state.doc.descendants((node, pos) => {
+        if (found) return false;
+        if (node.type.name === 'mapEmbed' && node.attrs.url === url && node.attrs.src === MAP_RESOLVING) {
+          found = { pos, size: node.nodeSize };
+          return false;
+        }
+        return true;
+      });
+      if (!found) return;
+      const { pos, size } = found as { pos: number; size: number };
+      if (src) {
+        editor.chain().setNodeSelection(pos).updateAttributes('mapEmbed', { src }).run();
+        return;
+      }
+      const marks = editor.schema.marks.link ? [{ type: 'link', attrs: { href: url } }] : [];
+      editor
+        .chain()
+        .insertContentAt({ from: pos, to: pos + size }, { type: 'paragraph', content: [{ type: 'text', text: url, marks }] })
+        .run();
+    });
 }

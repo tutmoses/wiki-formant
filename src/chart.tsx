@@ -260,9 +260,11 @@ export function TimeChart({
   formatRef.current = format;
   const onViewRef = useRef(onView);
   onViewRef.current = onView;
-  // The drawn chart once the library has loaded, else null: the handle is the
-  // readiness, so no flag can say ready over a chart that is gone.
-  const [chart, setChart] = useState<Series | null>(null);
+  // The charting library: the handle is the readiness, so no flag can say ready
+  // over a chart that is gone, and a library that never arrives (deploy skew,
+  // offline) says so instead of leaving the skeleton up.
+  const [lib, setLib] = useState<{ status: 'loading' } | { status: 'ready'; series: Series } | { status: 'failed' }>({ status: 'loading' });
+  const chart = lib.status === 'ready' ? lib.series : null;
   const [range, setRange] = useState(initial);
   const [step, setStep] = useState<ChartStep | null>(initialStep ?? null);
   const [candles, setCandles] = useState(initialCandles);
@@ -354,12 +356,14 @@ export function TimeChart({
         areaMarkers: createSeriesMarkers(area, []),
         candleMarkers: createSeriesMarkers(candle, []),
       };
-      setChart(built);
+      setLib({ status: 'ready', series: built });
+    }, () => {
+      if (!disposed) setLib({ status: 'failed' });
     });
     return () => {
       disposed = true;
       built?.api.remove();
-      setChart(null);
+      setLib({ status: 'loading' });
     };
   }, []);
 
@@ -471,7 +475,14 @@ export function TimeChart({
   // The steps always show where a range is drawn by day, so the buttons do not jump about; one
   // the range cannot make (any, under 24H and 7D) is disabled.
   const daily = ranges.some(r => RANGE[r].resolution === 'day');
-  const status = source && 'error' in source ? source.error : points && !view?.shown.length ? 'No data in this range' : null;
+  const status =
+    lib.status === 'failed'
+      ? 'The chart could not load. Reload the page.'
+      : source && 'error' in source
+        ? source.error
+        : points && !view?.shown.length
+          ? 'No data in this range'
+          : null;
 
   return (
     <figure className={className ? `chart ${className}` : 'chart'}>
@@ -490,7 +501,7 @@ export function TimeChart({
           {tip.label}
         </span>
       )}
-      {(!chart || (!points && !status)) && <div className="chart-status skeleton" aria-hidden />}
+      {!status && (!chart || !points) && <div className="chart-status skeleton" aria-hidden />}
       {status && <p className="chart-status">{status}</p>}
       {(controls || ranges.length > 1 || daily || view?.ohlc) && (
         <div className="chart-controls">

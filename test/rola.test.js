@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { SignJWT } from 'jose';
 import { createRola, sessionSecret, signSession, verifySession, bearerToken, rolaLoginTools } from 'wiki-formant/rola';
 import { McpToolError } from 'wiki-formant/mcp';
+import { HttpError } from 'wiki-formant/http';
 
 // prisma.challenge, as far as this module reaches into it.
 function memoryChallenges() {
@@ -98,6 +99,21 @@ test('a short or missing secret refuses to start', () => {
   assert.throws(() => sessionSecret('short'), /32 characters/);
 });
 
+test('a challenge store that does not answer is a 503 to retry, never a refused proof', async () => {
+  const challenges = { ...memoryChallenges(), async deleteMany() { throw new Error('connect ECONNREFUSED'); } };
+  const rola = createRola({ ...identity, challenges });
+  const quiet = console.error;
+  console.error = () => {};
+  try {
+    await assert.rejects(
+      rola.verifySignedChallenge({ challenge: 'ab', address: 'account_rdx1a', proof }),
+      err => err instanceof HttpError && err.status === 503,
+    );
+  } finally {
+    console.error = quiet;
+  }
+});
+
 test('bearerToken reads the Authorization header in any case', () => {
   assert.equal(bearerToken(new Headers({ Authorization: 'Bearer abc.def' })), 'abc.def');
   assert.equal(bearerToken(new Headers({ authorization: 'bearer  abc' })), 'abc');
@@ -113,6 +129,7 @@ test('rolaLoginTools: the challenge names the dApp and the origin, and a refused
     origin: 'https://caper.network',
     generateChallenge: async () => ({ challenge: 'ab', expiresAt }),
     login: async signed => {
+      if (signed.proof.signature === 'down') throw new HttpError(503, 'Sign-in is unavailable right now. Try again in a moment.');
       if (signed.proof.signature !== 'good') throw new McpToolError('Invalid signature');
       return { token: 't', expiresAt, walletAddress: signed.address };
     },
@@ -132,4 +149,5 @@ test('rolaLoginTools: the challenge names the dApp and the origin, and a refused
   const ok = await login.handler({ ...args, signature: 'good' }, {});
   assert.deepEqual({ ...ok, note: undefined }, { token: 't', tokenType: 'Bearer', expiresAt: '2026-11-01T00:05:00.000Z', walletAddress: 'account_tdx_me', note: undefined });
   await assert.rejects(login.handler({ ...args, signature: 'bad' }, {}), err => err instanceof McpToolError && err.message === 'Invalid signature' && /call get_challenge again/.test(err.details.hint));
+  await assert.rejects(login.handler({ ...args, signature: 'down' }, {}), err => err instanceof McpToolError && err.details.retryable === true && /Wait a moment/.test(err.details.hint));
 });

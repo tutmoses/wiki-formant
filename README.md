@@ -319,7 +319,7 @@ function LinkPreview() {
 - The breakpoint is known twice, in `matchMedia` and in CSS. `base.css` sets `--rail-floating: 1` inside its media query and the hook warns in development when the two disagree; a rail laid out by its own CSS sets the property the same way. `railBreakpointMismatch` and `readRailFloating` (`wiki-formant/sidebar`) are the mechanism.
 - `TableOfContents` is the "on this page" list with scroll-spy.
 - `useLinkPreview` is the hover card: one delegated listener, an intent delay, a grace period into the card, viewport clamping and a per-href cache of answers; a `fetch` that throws is asked again on the next hover, a null is cached as no card. `LinkPreviewCard` is its markup (`link-preview-card`, `-banner`, `-body`, `-title`, `-excerpt`); a caller that must move the card passes its own `style`.
-- `useTypeahead` is the search field's state machine: a request-id guard, keyboard navigation, abort and a per-mount cache. `results` is `idle`, `searching`, `found` or `failed`, so "no results" is `found` with none and a failed search is never cached; `items` is the rows on screen. `fetch` must be referentially stable. Its `combobox(listKey)` hands out `inputProps`, `listProps` and `optionProps(i)`, with `aria-activedescendant` omitted rather than emptied; `listKey` keeps two rendered lists' ids apart. The arithmetic is `wiki-formant/combobox`, which imports nothing.
+- `useTypeahead` is the search field's state machine: a request-id guard, keyboard navigation, abort and a per-mount cache. `results` is `idle`, `searching`, `found` or `failed`, so "no results" is `found` with none and a failed search is never cached; `items` is the rows on screen. `clearItems` dismisses the list and keeps the query; `reopen` asks for that query again (from the cache where it can), so a refocused field shows its list without a keystroke. `fetch` must be referentially stable. Its `combobox(listKey)` hands out `inputProps`, `listProps` and `optionProps(i)`, with `aria-activedescendant` omitted rather than emptied; `listKey` keeps two rendered lists' ids apart. The arithmetic is `wiki-formant/combobox`, which imports nothing.
 - `useSnapRow` is a carousel as a scroll-snapped row: `step`, `go(i)` and `at`, no markup.
 - `useClickOutside` ignores a container hidden at the current breakpoint (`offsetParent`).
 - `useUnsavedChanges(dirty)` asks before leaving and returns `confirmLeave()` for a client-side navigation; `useSaveShortcut(save)` binds ⌘S / Ctrl+S; `useSearchShortcut(open)` is "/" to search, with `focusShown(input)`.
@@ -670,7 +670,7 @@ toMapEmbedUrl('https://maps.apple.com/?ll=51.5,-0.12');
 export const GET = resolveMapHandler({ authorize: async () => !!(await currentUser()) });   // /api/resolve-map
 ```
 
-A short link resolves through the wiki's own route (`resolveMapUrl` is the client half): exact shortener hosts, one hop, an allowlisted landing host, a timeout and your sign-in check.
+A short link resolves through the wiki's own route (`resolveMapUrl` is the client half): exact shortener hosts, one hop, an allowlisted landing host, a timeout and your sign-in check. A pasted short link inserts as a placeholder at once and `settleMapEmbed` settles it: the embed, or, when the link cannot be resolved, the link itself as text, never a blank frame.
 
 ## Editor nodes
 
@@ -777,6 +777,7 @@ return (
 ```
 
 - There is no sign-up: every passkey is saved from a single-use link `npx passkey-invite` prints. A passkey is bound to its host. Deleting a `Passkey` row signs out every session it opened. Tokens are kept only as hashes (`prisma/passkey.prisma`).
+- A challenge store that does not answer is a 503 (`SIGN_IN_UNAVAILABLE`, `wiki-formant/http`), never a refused passkey.
 - `gate.signedIn(cookie)` is a page's check and `gate.allows(request)` a write route's.
 - `statsQuery` reads `?days=` (1, 7, 30, 90, 365 or all) and the narrowings `?page=`, `?entry=`, `?source=`, `?country=`, `?device=`, which stack and recount every figure from the visits that pass.
 - Each headline figure shows its change from the window before (`.stats-delta[data-better]`) and charts on press. A narrowed page over `ViewDay` totals starts at `counted_from` and says so.
@@ -789,7 +790,7 @@ return (
 import { createRola, sessionSecret, signSession, verifySession, bearerToken, rolaLoginTools } from 'wiki-formant/rola';
 
 const rola = createRola({ expectedOrigin, dAppDefinitionAddress, networkId, applicationName, challenges: prisma.challenge });
-const v = await rola.verifySignedChallenge(signed);        // { isValid, error? }
+const v = await rola.verifySignedChallenge(signed);        // { isValid, error? }; an outage throws a 503 HttpError
 const secret = sessionSecret(process.env.JWT_SECRET);      // throws under 32 characters
 const token = await signSession({ id: signed.address }, secret, 7 * 86400);
 const claims = await verifySession<{ id: string }>(bearerToken(request.headers) ?? cookie, secret);

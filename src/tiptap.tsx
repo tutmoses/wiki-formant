@@ -19,7 +19,7 @@ import TiptapYoutube from '@tiptap/extension-youtube';
 import TiptapCodeBlock from '@tiptap/extension-code-block';
 import { onTweetResize, tweetEmbedSrc } from './dom.js';
 import { DEFAULT_IFRAME_HOSTS } from './headers.js';
-import { resolveMapUrl as resolveMapRoute, toMapEmbedUrl } from './maps.js';
+import { isShortMapUrl, MAP_RESOLVING, resolveMapUrl as resolveMapRoute, settleMapEmbed, toMapEmbedUrl } from './maps.js';
 import { useClickOutside } from './react.js';
 import { cx } from './html.js';
 import { slugifyHeading, uniqueHeadingId } from './headings.js';
@@ -175,9 +175,9 @@ export interface MapEmbedOptions {
 /**
  * Google and Apple map links, pasted.
  *
- * A shortened link inserts immediately with `about:blank` and swaps its `src`
- * once the redirect resolves — pasting must not block on a network hop, and the
- * node has to already exist for the reader to see anything happen.
+ * A shortened link inserts immediately as a placeholder and settles once the
+ * redirect resolves (`settleMapEmbed`): the embed, or the link as text when it
+ * cannot be resolved, never a blank frame.
  */
 export function createMapEmbed({ resolveMapUrl }: MapEmbedOptions) {
   return TiptapNode.create({
@@ -223,33 +223,12 @@ export function createMapEmbed({ resolveMapUrl }: MapEmbedOptions) {
           chain().deleteRange(range).insertContent({ type: 'mapEmbed', attrs: { src, url } }).run();
           return;
         }
-        if (/maps\.app\.goo\.gl|goo\.gl\/maps/.test(url)) {
+        if (isShortMapUrl(url)) {
           chain()
             .deleteRange(range)
-            .insertContent({ type: 'mapEmbed', attrs: { src: 'about:blank', url } })
+            .insertContent({ type: 'mapEmbed', attrs: { src: MAP_RESOLVING, url } })
             .run();
-          resolveMapUrl(url).then(resolved => {
-            // The editor may have closed while the redirect was followed.
-            if (!resolved || ext.editor.isDestroyed) return;
-            // Find the placeholder by its url rather than by a captured
-            // position: the document has been editable throughout the hop.
-            const { doc } = ext.editor.state;
-            doc.descendants((node, pos) => {
-              if (
-                node.type.name === 'mapEmbed' &&
-                node.attrs.url === url &&
-                node.attrs.src === 'about:blank'
-              ) {
-                ext.editor
-                  .chain()
-                  .setNodeSelection(pos)
-                  .updateAttributes('mapEmbed', { src: resolved })
-                  .run();
-                return false;
-              }
-              return undefined;
-            });
-          });
+          settleMapEmbed(ext.editor, url, resolveMapUrl);
         }
       };
       return [

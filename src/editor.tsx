@@ -34,7 +34,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { useEditor } from '@tiptap/react';
 import { Editor as TiptapEditor, Node as TiptapNode, type AnyExtension, type Editor } from '@tiptap/core';
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
-import { toMapEmbedUrl } from './maps.js';
+import { isShortMapUrl, MAP_RESOLVING, settleMapEmbed, toMapEmbedUrl } from './maps.js';
 import { cx } from './html.js';
 
 /**
@@ -191,18 +191,16 @@ function wikiEditorExtensions({
 
 const YOUTUBE = /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/;
 const TWEET = /(?:twitter\.com|x\.com)\/\w+\/status\/(\d+)/;
-const SHORT_MAP = /maps\.app\.goo\.gl|goo\.gl\/maps/;
 
 /**
  * Turn a pasted URL into the richest node that fits it, falling back to a bare
  * iframe. Order matters: a YouTube URL is also a valid iframe source, so the
  * specific cases have to be tried before the general one.
  *
- * A shortened map link inserts IMMEDIATELY with `about:blank` and swaps its
- * `src` once the redirect resolves. Pasting must not block on a network hop,
- * and the node has to already exist for the reader to see anything happen. The
- * swap re-finds the node by its `url` attribute rather than caching a position,
- * because every keystroke between the paste and the resolve moves it.
+ * A shortened map link inserts IMMEDIATELY as a placeholder and settles once
+ * the redirect resolves (`settleMapEmbed`): pasting must not block on a
+ * network hop, and the node has to already exist for the reader to see
+ * anything happen.
  */
 function insertEmbed(
   editor: Editor,
@@ -227,18 +225,9 @@ function insertEmbed(
     return;
   }
 
-  if (SHORT_MAP.test(url)) {
-    editor.chain().focus().insertContent({ type: 'mapEmbed', attrs: { src: 'about:blank', url } }).run();
-    void resolveMapUrl(url).then(src => {
-      if (!src) return;
-      editor.state.doc.descendants((node, pos) => {
-        if (node.type.name === 'mapEmbed' && node.attrs.url === url && node.attrs.src === 'about:blank') {
-          editor.chain().setNodeSelection(pos).updateAttributes('mapEmbed', { src }).run();
-          return false;
-        }
-        return true;
-      });
-    });
+  if (isShortMapUrl(url)) {
+    editor.chain().focus().insertContent({ type: 'mapEmbed', attrs: { src: MAP_RESOLVING, url } }).run();
+    settleMapEmbed(editor, url, resolveMapUrl);
     return;
   }
 
@@ -783,6 +772,8 @@ export function useWikiEditor({
       setUpload({ status: 'uploading' });
       try {
         const url = await uploadImage(file);
+        // The editor may have closed while the file went up.
+        if (editor.isDestroyed) return;
         editor.chain().focus().setImage({ src: url }).run();
         if (attempt === uploadAttempt.current) setUpload(UPLOAD_IDLE);
       } catch (err) {

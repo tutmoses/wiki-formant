@@ -525,6 +525,12 @@ export interface TypeaheadState<T> {
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   /** Drop the results, keep the query. For an outside click. */
   clearItems: () => void;
+  /**
+   * Ask again for the query the field still holds, from the cache where it can.
+   * For a field refocused after `clearItems`: setting the same query again
+   * changes nothing, so it cannot bring the list back.
+   */
+  reopen: () => void;
   /** Drop everything. For a pick, or a closing popover. */
   reset: () => void;
   /**
@@ -568,6 +574,8 @@ export function useTypeahead<T>({
   const [debounced, setDebounced] = useState('');
   const [results, setResults] = useState<TypeaheadResults<T>>(TYPEAHEAD_IDLE);
   const [highlight, setHighlight] = useState(0);
+  // Bumped by `reopen`, so the search effect runs again over an unchanged query.
+  const [round, setRound] = useState(0);
   const requestId = useRef(0);
   const cached = useRef(new Map<string, T[]>());
   const items = results.status === 'searching' || results.status === 'found' ? results.items : NO_ITEMS;
@@ -615,7 +623,7 @@ export function useTypeahead<T>({
     );
 
     return () => controller.abort();
-  }, [debounced, fetch, minLength, cache]);
+  }, [debounced, fetch, minLength, cache, round]);
 
   // Dismissing the list also drops the search in flight, or its answer would
   // bring back the list the reader just closed.
@@ -623,6 +631,8 @@ export function useTypeahead<T>({
     requestId.current++;
     setResults(TYPEAHEAD_IDLE);
   }, []);
+
+  const reopen = useCallback(() => setRound(r => r + 1), []);
 
   const reset = useCallback(() => {
     requestId.current++;
@@ -674,6 +684,7 @@ export function useTypeahead<T>({
     setHighlight,
     onKeyDown,
     clearItems,
+    reopen,
     reset,
     combobox,
   };

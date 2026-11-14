@@ -358,6 +358,9 @@ export const errors = {
  * its own status and message by `handleRoute`. Anything else thrown is a bug,
  * answered with a generic 500 so its message never reaches the caller.
  */
+/** What a sign-in answers when its database or the ledger does not: a 503 to retry, never a refusal. */
+export const SIGN_IN_UNAVAILABLE = 'Sign-in is unavailable right now. Try again in a moment.';
+
 export class HttpError extends Error {
   constructor(public status: number, message: string, public extra?: Record<string, unknown>) {
     super(message);

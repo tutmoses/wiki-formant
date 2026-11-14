@@ -29,6 +29,7 @@ import {
 } from '@simplewebauthn/server';
 
 import type { Sql } from './analytics.js';
+import { SIGN_IN_UNAVAILABLE } from './http.js';
 import { clientKey, rateLimit, rateLimitedResponse } from './rate-limit.js';
 
 export type { Sql };
@@ -161,7 +162,14 @@ export function createPasskeyGate({ sql, rpName, cookie = 'passkey_session', ses
       const invite = typeof body?.invite === 'string' ? body.invite : undefined;
       const response = body?.response;
       const ceremony = invite ? 'registration' : 'authentication';
-      const expectedChallenge = (challenge: string) => spend(sql, ceremony, challenge);
+      // The verifier swallows whatever this throws, so a challenge store that
+      // does not answer is noted here: an outage is a 503, never a refused passkey.
+      let storeDown = false;
+      const expectedChallenge = (challenge: string) =>
+        spend(sql, ceremony, challenge).catch(err => {
+          storeDown = true;
+          throw err;
+        });
 
       if (!response) {
         if (invite && !(await live(sql, 'invite', invite))) return refuse(403, 'This invite has expired.');
@@ -187,6 +195,7 @@ export function createPasskeyGate({ sql, rpName, cookie = 'passkey_session', ses
           expectedRPID: rpID,
           requireUserVerification: false,
         }).catch(() => null);
+        if (storeDown) return refuse(503, SIGN_IN_UNAVAILABLE);
         if (!result?.verified) return refuse(400, 'That passkey could not be saved.');
         // Spent after the check, so a failed prompt leaves the invite to try again.
         if (!(await spend(sql, 'invite', invite))) return refuse(403, 'This invite has expired.');
@@ -214,6 +223,7 @@ export function createPasskeyGate({ sql, rpName, cookie = 'passkey_session', ses
         credential: { ...passkey, publicKey: new Uint8Array(Buffer.from(passkey.publicKey, 'base64url')) },
         requireUserVerification: false,
       }).catch(() => null);
+      if (storeDown) return refuse(503, SIGN_IN_UNAVAILABLE);
       if (!result?.verified) return refuse(403, 'Sign-in failed.');
       await sql(`UPDATE "Passkey" SET counter = $2 WHERE id = $1`, passkey.id, result.authenticationInfo.newCounter);
       return session(passkey.id, protocol === 'https:');

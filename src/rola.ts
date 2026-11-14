@@ -19,6 +19,7 @@
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { Rola } from '@radixdlt/rola';
 import { McpToolError, type McpTool } from './mcp.js';
+import { HttpError, SIGN_IN_UNAVAILABLE } from './http.js';
 
 export interface SignedChallenge {
   challenge: string;
@@ -52,7 +53,11 @@ export type Verification = { isValid: true } | { isValid: false; error: string }
 
 export interface RolaAuth {
   generateChallenge(): Promise<{ challenge: string; expiresAt: Date }>;
-  /** Consumes the challenge whatever the outcome, so a signature cannot be retried. */
+  /**
+   * Consumes the challenge whatever the outcome, so a signature cannot be retried.
+   * A refused proof is `{ isValid: false }`; a database or Gateway that does not
+   * answer throws a 503 `HttpError`, so an outage never reads as a bad signature.
+   */
   verifySignedChallenge(signed: SignedChallenge): Promise<Verification>;
 }
 
@@ -90,6 +95,8 @@ export function createRola({ challenges, challengeTtlSec = 300, ...identity }: R
           return { isValid: false, error: 'Sign in with an account proof' };
         }
         const result = await rola.verifySignedChallenge({ ...signed, type: 'account' });
+        // The one reason that is the Gateway not answering, not the proof failing.
+        if (result.isErr() && result.error.reason === 'couldNotVerifyPublicKeyOnLedger') throw result.error.jsError ?? result.error;
         if (result.isErr()) {
           console.error('ROLA: verification failed', result.error.reason, result.error);
           return { isValid: false, error: result.error.reason };
@@ -97,7 +104,7 @@ export function createRola({ challenges, challengeTtlSec = 300, ...identity }: R
         return { isValid: true };
       } catch (error) {
         console.error('ROLA verification error:', error);
-        return { isValid: false, error: 'Verification failed' };
+        throw new HttpError(503, SIGN_IN_UNAVAILABLE, { retryAfterSec: 30 });
       }
     },
   };
@@ -246,6 +253,12 @@ export function rolaLoginTools(o: RolaLoginToolsOptions): Array<McpTool & Requir
             note: `Send as an HTTP \`Authorization: Bearer <token>\` header on the POSTs carrying your ${carries} calls.`,
           };
         } catch (err) {
+          if (err instanceof HttpError && err.status === 503) {
+            throw new McpToolError(err.message, {
+              retryable: true,
+              hint: 'The server could not reach its database or the ledger. Wait a moment, then call get_challenge again and sign the new one.',
+            });
+          }
           if (!(err instanceof McpToolError)) throw err;
           throw new McpToolError(err.message, {
             hint: `Challenges are single-use and expire after ${minutes} minutes — call get_challenge again. The signing recipe is in its response.`,
