@@ -319,7 +319,7 @@ export function fittingTitle(
 }
 
 /** Characters a search result shows of a meta description before it cuts. */
-export const DESCRIPTION_LIMIT = 160;
+const DESCRIPTION_LIMIT = 160;
 
 /**
  * A meta description from any prose: HTML, markdown or plain. Tags, entities,

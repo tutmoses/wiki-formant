@@ -310,7 +310,7 @@ export function RelatedPages({ pages, heading, href, link: Link = Anchor, id = '
  *
  * @internal
  */
-export function jsonLdScript(data: unknown): string {
+function jsonLdScript(data: unknown): string {
   return JSON.stringify(data).replace(/</g, '\\u003c');
 }
 
@@ -786,7 +786,7 @@ export interface CiteProps {
 }
 
 /** The citation for a page, one line: `Publisher. "Title." October 22, 2026. url`, as acuiq2 first wrote it. */
-export const citation = ({ publisher, title, date, url }: Omit<CiteProps, 'className'>): string =>
+const citation = ({ publisher, title, date, url }: Omit<CiteProps, 'className'>): string =>
   `${publisher}. "${title}." ${formatDay(date, { month: 'long' })}. ${url}`;
 
 /**

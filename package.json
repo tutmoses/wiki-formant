@@ -187,11 +187,6 @@
       "import": "./dist/well-known.js",
       "default": "./dist/well-known.js"
     },
-    "./conformance": {
-      "types": "./dist/conformance.d.ts",
-      "import": "./dist/conformance.js",
-      "default": "./dist/conformance.js"
-    },
     "./sidebar": {
       "types": "./dist/sidebar.d.ts",
       "import": "./dist/sidebar.js",
@@ -322,7 +317,6 @@
   },
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json && cp src/base.css dist/base.css",
-    "test": "npm run build && node --test 'test/*.test.js'",
     "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
@@ -348,7 +342,6 @@
     "sanitize-html": "^2.17.7"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.3.9",
     "@radixdlt/rola": "^2.1.0",
     "@types/katex": "^0.16.8",
     "@types/node": "^22.0.0",
@@ -357,7 +350,6 @@
     "@types/sanitize-html": "^2.16.1",
     "@vercel/blob": "^2.8.2",
     "jose": "^6.2.12",
-    "jsdom": "^30.1.0",
     "pg": "^8.23.1",
     "react": "^19.2.4",
     "sharp": "^0.35.5",

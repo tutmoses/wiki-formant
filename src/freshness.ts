@@ -24,7 +24,7 @@ export const DEFAULT_MAX_AGE_DAYS = 180;
 const DAY_MS = 86_400_000;
 
 /** Whole days between `date` and `now`, or null when there is no usable date. */
-export function daysSince(date: Date | string | null | undefined, now: number): number | null {
+function daysSince(date: Date | string | null | undefined, now: number): number | null {
   if (!date) return null;
   const t = date instanceof Date ? date.getTime() : Date.parse(date);
   if (Number.isNaN(t)) return null;
@@ -65,7 +65,7 @@ export interface FreshnessOptions {
  *
  * @internal
  */
-export function freshnessNotice(page: FreshnessInput, against = 'current sources'): string {
+function freshnessNotice(page: FreshnessInput, against = 'current sources'): string {
   const when = page.lastVerifiedAt
     ? `last verified ${isoDate(new Date(page.lastVerifiedAt))}`
     : 'not yet verified against sources';

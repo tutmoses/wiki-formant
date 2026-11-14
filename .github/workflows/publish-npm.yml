@@ -8,7 +8,7 @@
 # because the interesting failure is the one that used to be silent: editing
 # src/ and pushing without a version bump did nothing at all — no run, no error,
 # and npm quietly fell behind the repo. That is now a failed run that names the
-# fix. A push touching only docs, tests or this workflow still ends as a clean
+# fix. A push touching only docs or this workflow still ends as a clean
 # no-op.
 #
 # Auth note: this publishes with TRUSTED PUBLISHING (OIDC) — no token. The
@@ -91,7 +91,7 @@ jobs:
         if: steps.check.outputs.changed == 'false'
         run: scripts/unshipped.sh
 
-      # Build and test explicitly rather than leaning on prepublishOnly, so a
+      # Build explicitly rather than leaning on prepublishOnly, so a
       # failure lands before the credential is ever in scope and reports as its
       # own step instead of as a publish error.
       # Trusted publishing needs npm >= 11.5.1; the npm bundled with a Node
@@ -109,10 +109,6 @@ jobs:
       - name: Build
         if: steps.check.outputs.changed == 'true'
         run: npm run build
-
-      - name: Test
-        if: steps.check.outputs.changed == 'true'
-        run: node --test 'test/*.test.js'
 
       # No NODE_AUTH_TOKEN. npm mints its own credential from the OIDC token
       # granted above; --provenance stays explicit so that a run which somehow

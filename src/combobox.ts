@@ -1,7 +1,7 @@
 // combobox.ts — the listbox contract a typeahead owes a screen reader.
 //
 // Framework-free on purpose, the same way `sidebar.ts` is: the arithmetic is
-// pure, so it can be tested without a DOM, and `react.tsx` is left holding only
+// pure, with no DOM, and `react.tsx` is left holding only
 // the hook that calls it.
 //
 // `useTypeahead` shares the state machine; this is the ARIA that goes with it:
@@ -62,12 +62,12 @@ export interface ComboboxAria {
 }
 
 /** The id of one option row, which `aria-activedescendant` names. @internal */
-export function optionId(baseId: string, listKey: string | undefined, index: number): string {
+function optionId(baseId: string, listKey: string | undefined, index: number): string {
   return `${listId(baseId, listKey)}-opt-${index}`;
 }
 
 /** @internal */
-export function listId(baseId: string, listKey?: string): string {
+function listId(baseId: string, listKey?: string): string {
   return listKey ? `${baseId}-${listKey}` : `${baseId}-list`;
 }
 

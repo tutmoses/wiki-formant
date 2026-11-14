@@ -1,5 +1,5 @@
 // maintenance.ts — what the `maintenance-log` and `mark-verified` bins share,
-// kept pure so it is tested without a database.
+// kept pure: it never touches a database.
 //
 // A wiki-sweep routine keeps its memory between runs (the rotation cursor,
 // source watermarks, backlog, feedback and run history) in one wiki page's
@@ -19,7 +19,7 @@
 // 48 on radix-wiki's log and held most of the backlog's sixty slots, and a flag
 // that no longer fits on the page is one no human reads.
 //
-// No subpath exports this: the bins and the tests import it from dist.
+// No subpath exports this: the bins import it from dist.
 
 import { escXml } from './feed.js';
 

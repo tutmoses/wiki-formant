@@ -43,7 +43,7 @@ export interface RegistryAuthRecord {
  *
  * @internal
  */
-export function registryAuthRecord(publicKey?: string, keyType?: string): RegistryAuthRecord | null {
+function registryAuthRecord(publicKey?: string, keyType?: string): RegistryAuthRecord | null {
   if (!publicKey) return null;
   return {
     // ed25519 unless a P-384 key was used instead (the LibreSSL-friendly path).
@@ -179,7 +179,7 @@ export interface ServerManifest {
 }
 
 /** @internal */
-export const SERVER_CARD_SCHEMA =
+const SERVER_CARD_SCHEMA =
   'https://static.modelcontextprotocol.io/schemas/draft/server-card.schema.json';
 
 /**
@@ -223,18 +223,17 @@ export function serverCard(
  * Three repos carried this route byte for byte — the same 404-when-unset guard,
  * the same three headers — differing only in the domain named in a comment. The
  * record was already shared; the handler around it was not, which is the half
- * that actually has behaviour to get wrong. Mount it as
- * `export const GET = registryAuthHandler()`.
+ * that actually has behaviour to get wrong. `wellKnownHandler` mounts it.
  *
  * `registryAuthRecord` stays pure — it is handed its key material and reads no
- * environment, so it can be tested and reused anywhere. The handler around it is
+ * environment, so it can be reused anywhere. The handler around it is
  * the piece whose whole job is to be mounted as a route, and a route reading its
  * own configuration is what a route is for; pass both arguments to override.
  *
  * Unset → 404 rather than a malformed record, so a missing key reads as "not
  * configured" instead of failing verification for a reason nobody sees.
  */
-export function registryAuthHandler(
+function registryAuthHandler(
   publicKey = process.env.MCP_REGISTRY_PUBLIC_KEY,
   keyType = process.env.MCP_REGISTRY_KEY_TYPE,
 ): () => Response {
@@ -313,7 +312,7 @@ export function mcpManifest(config: McpManifestConfig): Record<string, unknown> 
  * The agent cards, the manifest and the server card were each a three-line
  * route around `descriptorResponse`, written out nine times.
  */
-export function descriptorHandler(
+function descriptorHandler(
   body: unknown,
   opts: { maxAge?: number; extra?: Record<string, string> } = {},
 ): (request: Request) => Response {

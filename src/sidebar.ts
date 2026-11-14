@@ -3,13 +3,12 @@
 // Separate from `react.tsx` because that file carries `'use client'`, which
 // makes every one of its exports a client reference — and `sidebarBootScript`
 // has to be callable from a server component to reach the document head.
-// Splitting it also lets the collapse rule be tested without a DOM.
 
 /**
  * Whether the rail should be open, given what is known.
  *
  * The whole of both bug fixes lives in these three lines, so it is a named
- * function with tests rather than a condition buried in an effect:
+ * function rather than a condition buried in an effect:
  *
  *   - a choice the reader has made outranks everything, forever;
  *   - a remembered choice outranks the viewport;
@@ -54,7 +53,7 @@ export const SIDEBAR_ATTRIBUTE = 'data-sidebar';
  *
  * @internal
  */
-export const RAIL_FLOATING_PROPERTY = '--rail-floating';
+const RAIL_FLOATING_PROPERTY = '--rail-floating';
 
 /**
  * What the stylesheet currently says about the rail: `true` inside the repo's
@@ -79,7 +78,7 @@ export function readRailFloating(): boolean | null {
  * The complaint to make when CSS and JS disagree about where the rail floats,
  * or `null` when they agree or the stylesheet has not opted in.
  *
- * Pure, and separate from the reading, so the rule is testable without a DOM.
+ * Pure, and separate from the reading, so the rule needs no DOM.
  */
 export function railBreakpointMismatch({
   isMobile,

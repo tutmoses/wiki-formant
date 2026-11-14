@@ -32,7 +32,7 @@ const clip = (t: string) => (t.length > KEPT_MAX ? `${t.slice(0, 30)}…${t.slic
  *
  * @internal
  */
-export function textDiff(from: string, to: string): DiffPart[] | undefined {
+function textDiff(from: string, to: string): DiffPart[] | undefined {
   const a = stripHtml(from);
   const b = stripHtml(to);
   if (a === b) return undefined;

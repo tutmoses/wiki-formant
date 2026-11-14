@@ -42,7 +42,7 @@ export function safeLinkHref(raw: string | null | undefined): string | null {
 }
 
 /** An author-supplied URL is fine iff it is empty (unset) or resolves safely. @internal */
-export const okUrl = (u: unknown): boolean =>
+const okUrl = (u: unknown): boolean =>
   typeof u === 'string' && (u === '' || safeLinkHref(u) !== null);
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
@@ -78,7 +78,7 @@ export function validateLinkGroups(groups: unknown): boolean {
 }
 
 /** `[{ label, language?, code }]` — a code-tabs block's tabs. `code` is source text, escaped when it renders. @internal */
-export function validateCodeTabs(tabs: unknown): boolean {
+function validateCodeTabs(tabs: unknown): boolean {
   return (
     Array.isArray(tabs) &&
     tabs.every(
@@ -92,7 +92,7 @@ export function validateCodeTabs(tabs: unknown): boolean {
 }
 
 /** `[{ value, label, suffix? }]` — a stats block's cards. @internal */
-export function validateStatItems(items: unknown): boolean {
+function validateStatItems(items: unknown): boolean {
   return (
     Array.isArray(items) &&
     items.every(
@@ -106,7 +106,7 @@ export function validateStatItems(items: unknown): boolean {
 }
 
 /** `[{ id, date, end?, text }]` — an events block's events, each dated by `EVENT_DATE` and ending no earlier than it starts. @internal */
-export function validateEventItems(items: unknown): boolean {
+function validateEventItems(items: unknown): boolean {
   return (
     Array.isArray(items) &&
     items.every(
@@ -123,7 +123,7 @@ export function validateEventItems(items: unknown): boolean {
 }
 
 /** `[{ days, opens, closes }]` — a place's regular hours, each row one day or more and two times of day. @internal */
-export function validateHours(hours: unknown): boolean {
+function validateHours(hours: unknown): boolean {
   return (
     Array.isArray(hours) &&
     hours.length <= 21 &&
@@ -142,7 +142,7 @@ export function validateHours(hours: unknown): boolean {
 }
 
 /** `[{ id, name?, image?, address?, map?, phone?, email?, hours?, timeZone?, note? }]` — a locations block's places, each with its address or its hours. @internal */
-export function validatePlaces(items: unknown): boolean {
+function validatePlaces(items: unknown): boolean {
   return (
     Array.isArray(items) &&
     items.every(
@@ -201,7 +201,7 @@ export interface CoreAtomicValidatorOptions {
  * `count` and `pages` the same. A scope field (`tagPath`, `section`, `under`)
  * is a string when present, and `pageId` checks a list's picked keys too.
  */
-export function coreAtomicValidator(
+function coreAtomicValidator(
   opts: CoreAtomicValidatorOptions = {},
 ): (block: Record<string, unknown>) => boolean {
   const { pageId = () => true, maxRows = MAX_BLOCK_ROWS } = opts;
@@ -273,7 +273,7 @@ export interface BlockIssue {
  * leaves an agent writing through MCP to guess, and one repo's seed guard had
  * to walk the tree a second time just to name the offending link.
  */
-export function createBlockValidator(opts: BlockValidatorOptions) {
+function createBlockValidator(opts: BlockValidatorOptions) {
   const { isKnownType, isAtomicType, validateAtomic } = opts;
 
   const check = (block: unknown, path: string, nested: boolean, out: BlockIssue[]): void => {
@@ -354,7 +354,7 @@ export function describeBlockIssues(issues: readonly BlockIssue[], max = 3): str
  * A copy of a block with a fresh id at every level, so a duplicated container
  * does not share child ids with its original.
  */
-export function duplicateBlockIds<B extends { type: string; id: string }>(
+function duplicateBlockIds<B extends { type: string; id: string }>(
   block: B,
   newId: () => string = () => crypto.randomUUID(),
 ): B {

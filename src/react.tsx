@@ -1536,7 +1536,7 @@ const MATH = /\$\$|\\\(|\\\[/;
  * the app installs. Typeset maths carries no delimiter, so a second pass finds
  * nothing to do.
  */
-export async function renderMath(root: HTMLElement): Promise<void> {
+async function renderMath(root: HTMLElement): Promise<void> {
   if (!MATH.test(root.textContent ?? '')) return;
   const [{ default: render }] = await Promise.all([import('katex/contrib/auto-render'), import('katex/dist/katex.min.css' as string)]);
   render(root, {

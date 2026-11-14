@@ -35,7 +35,7 @@ export const escXml = (s: string): string => s.replace(/[&<>"']/g, c => XML_ESCA
  *
  * @internal
  */
-export const cdata = (html: string): string => `<![CDATA[${html.replace(/]]>/g, ']]&gt;')}]]>`;
+const cdata = (html: string): string => `<![CDATA[${html.replace(/]]>/g, ']]&gt;')}]]>`;
 
 /**
  * Aggregators hard-truncate a description around 150 characters. Trimming on a
@@ -72,7 +72,7 @@ export interface FeedItem {
   categories?: string[];
 }
 
-export function renderItem(item: FeedItem): string {
+function renderItem(item: FeedItem): string {
   return [
     '    <item>',
     `      <title>${escXml(item.title)}</title>`,
@@ -114,7 +114,7 @@ export interface FeedChannel {
  *
  * @internal
  */
-export function renderFeed(channel: FeedChannel, items: readonly FeedItem[]): string {
+function renderFeed(channel: FeedChannel, items: readonly FeedItem[]): string {
   const newest = lastBuild(channel, items);
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',

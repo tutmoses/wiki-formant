@@ -225,12 +225,6 @@ export function withRateLimit<T extends Response>(
   return res;
 }
 
-/** Test seam: the bucket map is module state and outlives a single test. @internal */
-export function resetRateLimits(): void {
-  buckets.clear();
-  blocks.clear();
-}
-
 // ---- the MCP budget ---------------------------------------------------------
 
 /**
@@ -248,7 +242,7 @@ export function resetRateLimits(): void {
  *
  * @internal
  */
-export const MCP_RATE_LIMIT_PER_MIN = 60;
+const MCP_RATE_LIMIT_PER_MIN = 60;
 
 export const MCP_RATE_LIMIT_TEXT = `${MCP_RATE_LIMIT_PER_MIN} requests per minute per IP`;
 

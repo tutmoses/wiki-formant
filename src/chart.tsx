@@ -60,7 +60,7 @@ const DAILY_RANGES: readonly ChartRange[] = ['30d', '90d', '1y', 'all'];
  * that makes 200 or fewer. None is finer than the points' own `spacing`: weekly
  * readings have no day.
  */
-export function chartSteps(span: number, spacing = DAY): { steps: ChartStep[]; fallback: ChartStep } {
+function chartSteps(span: number, spacing = DAY): { steps: ChartStep[]; fallback: ChartStep } {
   const fine = STEPS.filter(s => STEP[s].span >= spacing * 0.9);
   const steps = fine.length ? fine : ['month' as const];
   return { steps, fallback: steps.find(s => span / STEP[s].span <= 200) ?? steps.at(-1)! };
@@ -91,7 +91,7 @@ function bucketStart(time: number, step: ChartStep): number {
  *
  * @internal
  */
-export function bucketChart(points: readonly ChartPoint[], step: ChartStep, aggregate: ChartAggregate): ChartPoint[] {
+function bucketChart(points: readonly ChartPoint[], step: ChartStep, aggregate: ChartAggregate): ChartPoint[] {
   const out: ChartPoint[] = [];
   let n = 0;
   let bucket: number | undefined;
@@ -121,7 +121,7 @@ export function bucketChart(points: readonly ChartPoint[], step: ChartStep, aggr
  *
  * @internal
  */
-export function placeMarkers(markers: readonly ChartMarker[], shown: readonly ChartPoint[], step: ChartStep | null): ChartMarker[] {
+function placeMarkers(markers: readonly ChartMarker[], shown: readonly ChartPoint[], step: ChartStep | null): ChartMarker[] {
   const first = shown[0];
   const last = shown.at(-1);
   if (!first || !last) return [];

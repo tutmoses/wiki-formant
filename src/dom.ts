@@ -81,7 +81,7 @@ export function addCopyButtons(root: ParentNode, options: CopyButtonOptions = {}
  *
  * @internal
  */
-export const TWITTER_ORIGIN = 'https://platform.twitter.com';
+const TWITTER_ORIGIN = 'https://platform.twitter.com';
 
 /** The embed iframe's src. `dnt=true` opts the embed out of Twitter's tracking. */
 export const tweetEmbedSrc = (tweetId: string | number): string =>

@@ -17,10 +17,10 @@
 
 import { decodeEntities } from './markdown.js';
 
-export const INDEXNOW_ENDPOINT = 'https://api.indexnow.org/indexnow';
+const INDEXNOW_ENDPOINT = 'https://api.indexnow.org/indexnow';
 
 /** The protocol's cap on the URLs in one POST. */
-export const INDEXNOW_BATCH = 10_000;
+const INDEXNOW_BATCH = 10_000;
 
 export interface IndexNowEntry {
   url: string;
@@ -28,7 +28,7 @@ export interface IndexNowEntry {
 }
 
 /** The `<loc>` and `<lastmod>` of every `<url>` in a sitemap. */
-export function sitemapEntries(xml: string): IndexNowEntry[] {
+function sitemapEntries(xml: string): IndexNowEntry[] {
   const entries: IndexNowEntry[] = [];
   for (const [, body = ''] of xml.matchAll(/<url>([\s\S]*?)<\/url>/g)) {
     const loc = /<loc>([\s\S]*?)<\/loc>/.exec(body)?.[1];

@@ -68,7 +68,7 @@ export function toolBody(
 }
 
 /** The validator a recrawling agent sends: a match costs a 304 rather than the body. */
-export const IF_NONE_MATCH = {
+const IF_NONE_MATCH = {
   name: 'If-None-Match',
   in: 'header',
   required: false,
@@ -76,7 +76,7 @@ export const IF_NONE_MATCH = {
   description: 'ETag from an earlier fetch. A match returns 304 with no body.',
 };
 
-export const NOT_MODIFIED = { description: 'Unchanged since the supplied validator' };
+const NOT_MODIFIED = { description: 'Unchanged since the supplied validator' };
 
 /** `/llms.txt`, answered from one corpus validator. */
 export const llmsTxtPath = (summary: string) => ({

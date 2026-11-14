@@ -167,13 +167,13 @@ export const metaValue = (page: { metadata?: unknown }, key: string): string => 
 };
 
 /** Bucket for titles that don't start with a letter (numerals, `$CAPER`). @internal */
-export function firstLetter(title: string): string {
+function firstLetter(title: string): string {
   const ch = title.trim()[0]?.toUpperCase() ?? '';
   return ch >= 'A' && ch <= 'Z' ? ch : '#';
 }
 
 /** Adding a filter already active removes it, so every chip is its own off-switch. @internal */
-export function toggleFilter(filters: FacetFilters, key: string, value: string): FacetFilters {
+function toggleFilter(filters: FacetFilters, key: string, value: string): FacetFilters {
   const next = { ...filters };
   if (next[key] === value) delete next[key];
   else next[key] = value;

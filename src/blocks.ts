@@ -393,7 +393,7 @@ export function someBlock<B>(
  * fence outgrows any backtick run in the code, so a sample that itself
  * contains a fence cannot close this one early.
  */
-export function codeTabsToMarkdown(tabs: readonly CodeTab[]): string {
+function codeTabsToMarkdown(tabs: readonly CodeTab[]): string {
   return tabs
     .map(t => {
       const longest = Math.max(0, ...(t.code.match(/`+/g) ?? []).map(run => run.length));
@@ -407,12 +407,12 @@ export function codeTabsToMarkdown(tabs: readonly CodeTab[]): string {
 }
 
 /** A maintenance notice as a blockquote. `label` is the caller's display string. @internal */
-export function bannerToMarkdown(label: string, text?: string | null): string {
+function bannerToMarkdown(label: string, text?: string | null): string {
   return `> **[${label}]**${text ? ` ${inlineToMarkdown(text)}` : ''}`;
 }
 
 /** A numbered citation list, or `''` when there is nothing to cite. @internal */
-export function referencesToMarkdown(
+function referencesToMarkdown(
   items: readonly ReferenceItem[],
   title = 'References',
 ): string {
@@ -424,18 +424,18 @@ export function referencesToMarkdown(
 }
 
 /** Metric cards as a bullet list, or `''` when empty. */
-export function statsToMarkdown(items: readonly StatItem[]): string {
+function statsToMarkdown(items: readonly StatItem[]): string {
   if (!items.length) return '';
   return items.map(s => `- **${plainText(String(s.value))}${s.suffix ?? ''}** — ${inlineToMarkdown(s.label)}`).join('\n');
 }
 
 /** A quotation over its attribution. @internal */
-export function testimonialToMarkdown(quote: string, author: string, role?: string | null): string {
+function testimonialToMarkdown(quote: string, author: string, role?: string | null): string {
   return `> ${quote.trim().split(/\n+/).map(inlineToMarkdown).join('\n> ')}\n>\n> — ${[author, role].filter(Boolean).map(w => inlineToMarkdown(w!)).join(', ')}`;
 }
 
 /** Grouped links under their headings, with an optional lead paragraph. @internal */
-export function linkGridToMarkdown(
+function linkGridToMarkdown(
   groups: readonly LinkGridGroup[],
   intro?: string | null,
 ): string {
@@ -520,14 +520,14 @@ function eventSections({ upcoming, past, items, day }: EventsData) {
 }
 
 /** Events under their headings, split by the day the twin is read, as the page is. */
-export function eventsToMarkdown(block: EventsData): string {
+function eventsToMarkdown(block: EventsData): string {
   return eventSections(block)
     .map(s => `## ${inlineToMarkdown(s.heading)}\n\n${s.items.map(e => `- ${eventWhen(e)}: ${inlineToMarkdown(e.text)}${s.now(e) ? ' (now on)' : ''}`).join('\n')}`)
     .join('\n\n');
 }
 
 /** Events as prose, `12 Nov 2026: Group show, London` a line, under their headings. */
-export function eventsToText(block: EventsData): string {
+function eventsToText(block: EventsData): string {
   return eventSections(block)
     .map(s => `${plainText(s.heading)}\n${s.items.map(e => `${eventWhen(e)}: ${stripHtml(e.text).replace(/\s+/g, ' ')}${s.now(e) ? ' (now on)' : ''}`).join('\n')}`)
     .join('\n\n');
@@ -545,7 +545,7 @@ const tel = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`;
 const addressLine = (address?: string) => address?.trim().split(/\n+/).join(', ');
 
 /** Each place under its name, its hours as rows, and none of whether it is open: a twin is read at no particular moment. */
-export function locationsToMarkdown({ heading, items }: LocationsData): string {
+function locationsToMarkdown({ heading, items }: LocationsData): string {
   const level = heading ? '###' : '##';
   const place = (p: PlaceItem) => {
     const map = mapHref(p);
@@ -565,7 +565,7 @@ export function locationsToMarkdown({ heading, items }: LocationsData): string {
 }
 
 /** Each place as prose: its name, address, hours a row to a line, note, phone and email. */
-export function locationsToText({ heading, items }: LocationsData): string {
+function locationsToText({ heading, items }: LocationsData): string {
   const place = (p: PlaceItem) =>
     [
       p.name && plainText(p.name),

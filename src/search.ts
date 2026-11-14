@@ -57,7 +57,7 @@ export function proseSql(content = 'content'): string {
  *
  * @internal
  */
-export const PROSE_PATTERN = '<[^>]*>|&nbsp;|\\\\[nrt"\\\\/]|", "|\\["|"\\]';
+const PROSE_PATTERN = '<[^>]*>|&nbsp;|\\\\[nrt"\\\\/]|", "|\\["|"\\]';
 
 /**
  * The generated column behind the full-text tier: title at weight A, prose at
@@ -66,7 +66,7 @@ export const PROSE_PATTERN = '<[^>]*>|&nbsp;|\\\\[nrt"\\\\/]|", "|\\["|"\\]';
  *
  * @internal
  */
-export function searchTsvSql(content = 'content', title = 'title'): string {
+function searchTsvSql(content = 'content', title = 'title'): string {
   return `setweight(to_tsvector('english', coalesce(${title},'')), 'A') || ` +
     `setweight(to_tsvector('english', coalesce(${proseSql(content)}, '')), 'B')`;
 }

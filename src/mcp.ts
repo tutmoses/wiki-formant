@@ -406,13 +406,13 @@ export const withAdjustments = <T extends object>(
 // ---- agent feedback -------------------------------------------------------------
 
 /** The tool an agent reports through. A server listing it is told so on every miss. */
-export const FEEDBACK_TOOL = 'send_feedback';
+const FEEDBACK_TOOL = 'send_feedback';
 
-export const FEEDBACK_KINDS = ['missing', 'wrong', 'broken', 'suggestion'] as const;
+const FEEDBACK_KINDS = ['missing', 'wrong', 'broken', 'suggestion'] as const;
 export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
 
 /** The longest message kept: the bound an event's string prop is stored at. */
-export const FEEDBACK_MAX = 300;
+const FEEDBACK_MAX = 300;
 
 export interface AgentFeedback {
   kind: FeedbackKind;
@@ -523,7 +523,7 @@ const rpcError = (id: RpcId, code: number, message: string, data?: object) => ({
  * shape when it withholds a call: acuiq2's x402 gate had grown two more copies
  * of it doing so.
  */
-export const toolText = (
+const toolText = (
   id: RpcRequest['id'],
   text: string,
   isError = false,
@@ -836,7 +836,7 @@ async function handleRpc(
 }
 
 /** Dispatch a parsed body. `null` means notification-only — answer 202, not 200. @internal */
-export async function handleMcp(
+async function handleMcp(
   body: RpcRequest | RpcRequest[],
   config: McpServerConfig,
   dispatch: Dispatch = { protocolVersion: ASSUMED_VERSION, era: 'legacy' },

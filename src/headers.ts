@@ -36,7 +36,7 @@ export const DEFAULT_IFRAME_HOSTS: readonly string[] = [
 ];
 
 /** `frame-src` sources for a host list — the one a sanitiser was given. @internal */
-export const frameSources = (hosts: readonly string[] = DEFAULT_IFRAME_HOSTS): string[] =>
+const frameSources = (hosts: readonly string[] = DEFAULT_IFRAME_HOSTS): string[] =>
   hosts.length ? hosts.map(h => `https://${h}`) : ["'none'"];
 
 /** CSP directive names this builder writes, in the order it writes them. */
@@ -52,7 +52,7 @@ export type CspDirective =
  *
  * @internal
  */
-export const BASE_CSP: Readonly<Partial<Record<CspDirective, readonly string[]>>> = {
+const BASE_CSP: Readonly<Partial<Record<CspDirective, readonly string[]>>> = {
   'default-src': ["'self'"],
   'base-uri': ["'self'"],
   'object-src': ["'none'"],
@@ -70,7 +70,7 @@ export const BASE_CSP: Readonly<Partial<Record<CspDirective, readonly string[]>>
 };
 
 /** A `'sha256-…'` source for one inline script's body, so a nonced policy still runs it. */
-export const scriptHash = (body: string): string => `'sha256-${createHash('sha256').update(body, 'utf8').digest('base64')}'`;
+const scriptHash = (body: string): string => `'sha256-${createHash('sha256').update(body, 'utf8').digest('base64')}'`;
 
 /**
  * The policy string: `BASE_CSP` with each directive in `directives` replacing
@@ -100,7 +100,7 @@ export function contentSecurityPolicy(
  * caller's because only the caller knows what dev means for it. An origin that
  * sets its policy per request (a nonce) passes none.
  */
-export function securityHeaders(csp?: string | null): HeaderEntry[] {
+function securityHeaders(csp?: string | null): HeaderEntry[] {
   return [
     ...(csp ? [{ key: 'Content-Security-Policy', value: csp }] : []),
     { key: 'X-Frame-Options', value: 'DENY' },

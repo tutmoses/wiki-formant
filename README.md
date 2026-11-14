@@ -175,46 +175,6 @@ export const OPTIONS = () => mcpOptions();
 - `readArgs` reads raw arguments as typed, clamped values and records every override; `withAdjustments` puts them on the result as `adjustments`.
 - `feedbackTool(record, noun)` is `send_feedback`. Listed, `initialize` appends `FEEDBACK_INVITE` and an empty `listEnvelope` page or an `McpToolError` carries a one-line pointer to it.
 
-## Conformance
-
-`wiki-formant/conformance`: the half of an MCP conformance run that is not about one server's tools. Every value it compares against is imported from `wiki-formant/mcp`.
-
-```ts
-import { createTester, standardSuite, wikiReadChecks } from 'wiki-formant/conformance';
-
-const t = createTester({ base: 'https://example.com', clientName: 'my-mcp-test' });
-const init = await standardSuite(t, {
-  version: serverManifest.version,
-  openapi: ['/openapi.json', '/.well-known/openapi.json'],
-  writes: ['create_page', 'send_feedback'],
-  manifest: { writeAuth: true },
-  budget: [{ name: 'search_wiki', args: { query: 'x' } }, { name: 'get_full_corpus', maxBytes: 260_000 }],
-  conditionalGet: ['llms.txt'],
-  robots: ['/api/mcp', '/llms.txt', '/.well-known/agent-card.json'],
-});
-const { first } = await wikiReadChecks(t, { query: 'radix', address: r => ({ tagPath: r.tagPath, slug: r.slug }), twin: r => `${r.path}.md` });
-process.exit(t.summary());
-```
-
-`standardSuite(t, cfg)` runs the suites every surface runs, in order: `transportChecks` (CORS preflight, `GET`→405, 202 for a notification, `-32700`, the batch cap, honest capabilities, version negotiation), `versionCoherence` over `standardVersionSources`, `agentCardChecks`, `annotationChecks`, `manifestParity`, `payloadBudget`, `conditionalGetChecks`, `descriptorChecks` (default `S10_DESCRIPTORS`) and `robotsChecks`. `budget`, `conditionalGet` and `robots` run only when given, for a surface whose fixtures exist only later in its run. It returns the `initialize` response. Each suite is exported for a surface that needs it alone.
-
-`wikiReadChecks(t, opts)` checks the `wiki-tools` read tools: categories, a search and the page it finds (by `address`, default `{ path }`), its twin (given `twin`), a listing, recent changes, a corpus preflight and a slice that is cut and resumes when the corpus exceeds `corpusChars`, and the teaching answers to no hits, a missing argument, an unknown tool and a missing page. `endpoint` and `label` run it against a second server. It returns `{ rows, first, page }`.
-
-- `payloadBudget` weighs every listed call and every read-only tool with no required arguments, and asserts a JSON answer carries `structuredContent`.
-- `conditionalGetChecks` wants a 304 on `If-None-Match` (alone and in a list) and a `Last-Modified`; `descriptorChecks` wants an ETag and a `max-age` on a JSON descriptor.
-- `t.rpcAt(endpoint, …)` and `t.callAt` drive another endpoint with the same backoff, User-Agent and tally.
-
-The drift checks hold a server to what its own site does:
-
-- `manifestParity(t, { writeAuth? })`: `/.well-known/mcp.json` is `tools/list`, names the endpoint, and states write auth only beside a write tool.
-- `rowParity(t, label, mcp, rest)`: a tool's rows and the GET API's are identical and not empty.
-- `twinParity(t, label, twinUrl, text)`: a tool's text is the page's markdown twin, past frontmatter and title.
-- `editReadChecks(t, { path, rows?, validate?, endpoint?, label? })`: rows carry ids, `get_page` with `blocks: true` returns blocks the site's `validate` accepts, and the history's newest revision is that version.
-- `roundTrip(t, label, { read, write })`: a write takes its read back unchanged.
-- `openapiWriteParity(t, [[path, method, tool], …], specUrl?)`: every field an OpenAPI write documents, the tool takes.
-- `rolaOriginCheck(t)`: the ROLA recipe names the origin under test.
-- `freshAfterWriteChecks(t, urls, write, { shows?, gone? })`: each URL shows the write within five seconds. Run it against a deployment, since with no CDN it passes trivially.
-
 ## Markdown twins
 
 `wiki-formant/markdown`: `htmlToMarkdown` keeps the structure an agent cites by (headings, lists, tables, code, emphasis); `markdownDocument` adds the frontmatter.
@@ -259,7 +219,7 @@ export const POST = (req: Request) => handleRoute(async () => {
 
 - `corpusEtag`, `notModified` and `textHeaders` are the parts; `corpusRoute` skips the build on a 304.
 - A URL answering JSON or markdown by `Accept` asks `wantsMarkdown(request)` and sends `VARY_ACCEPT` on both branches.
-- `descriptorResponse` serves a JSON descriptor with its own ETag and `Access-Control-Allow-Origin: *` (`descriptorHandler` in `wiki-formant/well-known` is the route).
+- `descriptorResponse` serves a JSON descriptor with its own ETag and `Access-Control-Allow-Origin: *`.
 - Every error body is `{ error, ...extra }`. A thrown `HttpError` answers with its status, a thrown `Response` (`errors.tooManyRequests(sec)`, say) is the answer as built; anything else is logged and answered with a 500 carrying only the handler's message (`'Search failed'`), so no exception text reaches a caller. `errors.tooManyRequests(sec)` states `Retry-After`.
 
 ## Response headers and the Next config
@@ -276,7 +236,7 @@ export default withWikiDefaults({ async redirects() { /* … */ } } satisfies Ne
 
 `withWikiDefaults(config, { csp })` adds:
 
-- `securityHeaders` on every route, `csp` enforced in production only (Next's dev runtime is inline and `eval`); an origin with a per-request nonce passes none.
+- The security headers on every route, `csp` enforced in production only (Next's dev runtime is inline and `eval`); an origin with a per-request nonce passes none.
 - `/openapi.json` rewritten to `/.well-known/openapi.json` first in `beforeFiles`, merged with the app's own `rewrites()` in either form.
 - AVIF before WebP, `turbopackFileSystemCacheForBuild: false` (Vercel restores a stale build cache), and `distDir` from `STUDIO_DIST_DIR` for radix-studio's second dev server.
 
@@ -325,7 +285,7 @@ function LinkPreview() {
 - `useUnsavedChanges(dirty)` asks before leaving and returns `confirmLeave()` for a client-side navigation; `useSaveShortcut(save)` binds ⌘S / Ctrl+S; `useSearchShortcut(open)` is "/" to search, with `focusShown(input)`.
 - `SortHeader` renders `useTableSort`'s `headerProps(key)` as a `<th aria-sort>` holding a `<button>`, the markup `sortTables` writes.
 - `useBlockOperations(blocks, setBlocks, { duplicate })` and `BlockActions` are a block list's five edits and their buttons; `useRevisionRestore(restore, { onRestored })` confirms and restores, `restoreViaPost(endpoint)` being the usual `restore`.
-- `useArticlePasses(ref, [blocks])` runs `wiki-formant/dom`'s passes and `renderMath` (KaTeX, an optional peer, loaded only when a page has `$$…$$`, `\[…\]` or `\(…\)`).
+- `useArticlePasses(ref, [blocks])` runs `wiki-formant/dom`'s passes and renders math with KaTeX (an optional peer, loaded only when a page has `$$…$$`, `\[…\]` or `\(…\)`).
 - `<Beacon />` sends page views and outbound clicks to `wiki-formant/analytics`.
 
 `useClickOutside`, `useSnapRow` and the editor hooks ship no class names.
@@ -397,9 +357,9 @@ if (issues.length) return errors.badRequest(`Invalid content: ${describeBlockIss
 // Invalid content: [2].columns[0].blocks[1]: malformed linkGrid block
 ```
 
-- A check for a core type narrows the package's (`core` is passed in). `coreAtomicValidator` and `createBlockValidator` are the parts.
+- A check for a core type narrows the package's (`core` is passed in).
 - `MAX_BLOCK_ROWS` caps `recentPages.limit` and `pageIds`, since both end in a database `take:`; `blockLimit` is the read side.
-- `safeLinkHref` and `okUrl` are the link checks the views rely on.
+- `safeLinkHref` is the link check the views rely on.
 
 ## Block views
 
@@ -448,7 +408,7 @@ export const generateMetadata = () => ({
 - `sitePageMetadata({ ..., card: `${SITE_URL}/og` })` binds the site's card route, and a page then passes `card: { title, eyebrow, description, banner }` in place of `image`. `cardUrl(base, fields)` is the same address for JSON-LD: empty fields left out, the order fixed, so one card has one URL.
 - `articleLd` requires `image`. `collectionLd` is an index over an `ItemList`. `siteGraphLd` is the Organization, WebSite and `WebAPI` `@graph` for the root layout, and `siteRefs(url)` hands out the same `@id`s for a page's `publisher` and `isPartOf`.
 - `questionPairs(html)` reads a FAQ from headings ending in `?`; `faqPageLd(pairs, url)` is null under two pairs.
-- `describe(text)` is a meta description from any prose within `DESCRIPTION_LIMIT` (160): whole sentences where they fill half, else cut at a word with an ellipsis.
+- `describe(text)` is a meta description from any prose within 160 characters: whole sentences where they fill half, else cut at a word with an ellipsis.
 
 ## Social cards
 
@@ -481,7 +441,7 @@ import { PageBanner, CardBanner } from 'wiki-formant/banner';
 ```
 
 - Every page has a banner: a page without a picture gets art seeded by `seed`, the same on every render, server and browser. `CardBanner` is the same picture or art at the top of the page's card, cropped to 4:1; seed both alike, so a card and its page match.
-- A listing carries `banner`, the picture both show: `metadata.banner` unless the store's `banner` option reads it elsewhere, such as the article's first picture. `BannerArt` alone is the art for any other frame.
+- A listing carries `banner`, the picture both show: `metadata.banner` unless the store's `banner` option reads it elsewhere, such as the article's first picture.
 - The art is inline SVG with a class per role, coloured by custom properties: `--banner-from` and `--banner-to` the gradient (transparent unset), `--banner-mid` the blobs and half the shapes (`--ui-muted` unset), `--banner-ink` the rest and the dots (`--ui-accent` unset), over `--banner-field` (`--ui-surface` unset). A category's palette or a section's band is a style on the frame.
 - `mark` replaces the triangle with a wiki's own shape, as a path from its anchor, size and generator. `fill-opacity` on a role's class dims it under a title.
 - The frame's 4:1 is a floor, not a height (`base.css`): the trail and title grow it rather than being cropped.
@@ -546,7 +506,7 @@ const AGENT_CARD = agentCard({ name, description, url: `${SITE_URL}/api/mcp`, ve
 export const GET = wellKnownHandler({ agentCard: AGENT_CARD, mcpManifest: mcpManifest({ … }), openapi: SPEC });
 ```
 
-The card is served at `agent-card.json`, and its `url` is the MCP endpoint, which answers A2A. `registryAuthHandler` serves `MCP_REGISTRY_PUBLIC_KEY` at `/.well-known/mcp-registry-auth`, 404 when unset.
+The card is served at `agent-card.json`, and its `url` is the MCP endpoint, which answers A2A. The well-known routes serve `MCP_REGISTRY_PUBLIC_KEY` at `/.well-known/mcp-registry-auth`, 404 when unset.
 
 ## OpenAPI
 
@@ -575,7 +535,7 @@ trackAiBot(request, event, () => import('@/lib/track'));   // in proxy.ts
 const rules = crawlerRules({ allow: '/', disallow, aiAllow });
 ```
 
-- Every agent group allows `AGENT_SURFACE_PATHS` (`/api/mcp`, `/llms.txt`, `/openapi.json`, `/.well-known/`); `aiAllow` adds the origin's own.
+- Every agent group allows the agent surface (`/api/mcp`, `/llms.txt`, `/openapi.json`, `/.well-known/`); `aiAllow` adds the origin's own.
 - Search engines get the HTML site and no twins (`/*.md$`, plus `searchDisallow`). The `?_rsc=` prefetch payload is refused in every group.
 - `trackAiBot` counts a rostered crawler anywhere, and anything but a search engine asking for what only agents read. `load` is a dynamic import so the proxy does not load a database client.
 
@@ -624,7 +584,6 @@ const queues = maintenanceQueues(pages, { href, required, nowMs, verify, listedI
 
 - `freshnessBanner` is the `outdated` banner once a page goes unchecked for `maxAgeDays` (180), or null. `freshnessAge` is the days since a page was verified, or edited if never, and null when it carries neither, which `isStale` counts as stale.
 - `maintenanceQueues` returns the outdated, orphaned, unsourced and missing-facts queues, empty ones dropped. Pass every page but the home page and the back office. `MaintenanceQueues` draws them on a `noindex` page.
-- `citation({ publisher, title, date, url })` (`wiki-formant/react-server`) is the line `Cite` shows.
 
 ## Sanitising stored HTML
 
@@ -638,7 +597,7 @@ const safe = mapBlockTree(blocks, b => sanitizeCoreLeaf(b, clean), BLOCK_SHAPE);
 ```
 
 - The default list is what `wiki-formant/tiptap`'s nodes store plus a presentational SVG subset. Extend `tags`, `attributes`, `classes` and `schemesByTag` from your stored HTML, never from memory.
-- A YouTube iframe comes out as the `YouTube` node's markup, whoever wrote it, and `base.css` draws it as a 16:9 player.
+- A YouTube iframe comes out as the YouTube node's markup, whoever wrote it, and `base.css` draws it as a 16:9 player.
 - Classes pass by name only, since a site's own utilities can draw over the chrome.
 - `sanitizeLine(html, { links })` cleans what a `WikiLine` stores: its marks and `wikiTextStyle`'s spans. `sanitizeCoreLeaf` runs it over the core leaves' one-line fields (a figure, a quote and who said it, the events' and places' headings, a place's name), which `block-views` draws as HTML.
 
@@ -674,7 +633,7 @@ A short link resolves through the wiki's own route (`resolveMapUrl` is the clien
 
 ## Editor nodes
 
-`wiki-formant/tiptap`: the custom nodes: `Iframe`, `YouTube` (with its paste rule), `TwitterEmbed`, `createMapEmbed`, `createCodeBlock`, `createTabs` and `createHeadingIds`.
+`wiki-formant/tiptap`: the custom nodes: `embedNodes` (an iframe, YouTube with its paste rule, an X post and a map), `createCodeBlock`, `createTabs` and `createHeadingIds`.
 
 ```ts
 import { embedNodes, createCodeBlock, createTabs, createHeadingIds } from 'wiki-formant/tiptap';
@@ -683,7 +642,7 @@ const { TabGroup, TabItem } = createTabs();
 const nodes = [...embedNodes({ resolveMapUrl }), createCodeBlock({ classNames, icons }), TabGroup, TabItem, createHeadingIds({ slug })];
 ```
 
-- `embedNodes` turns a pasted YouTube, X or map link into its player. `Iframe` and the map node draw only an https src on `DEFAULT_IFRAME_HOSTS` (`embedSrc`), since the editor draws stored HTML where its author is signed in.
+- `embedNodes` turns a pasted YouTube, X or map link into its player. The iframe and map nodes draw only an https src on `DEFAULT_IFRAME_HOSTS`, since the editor draws stored HTML where its author is signed in.
 - The node views draw in default classes `base.css` styles; `classNames` and `icons` replace them.
 - `createTabs` returns both nodes, since one is unsatisfiable without the other. A short map link inserts at once and swaps its `src` when it resolves.
 - `createHeadingIds` gives each heading the id its published copy will carry.
@@ -735,7 +694,7 @@ const SCHEMA: BlockSchema<Block> = {
 - The core fields are `CodeTabsFields`, `StatsFields`, `TestimonialFields`, `EventsFields`, `LocationsFields`, `ReferencesFields`, `LinkGridFields`, `BannerFields`, `PageListFields`, `ListFields`, `ColumnsFields` and `InfoboxFields`. `Field`, `Choice` and `LimitField` are for a wiki's own types.
 - A type the build does not know is shown by its raw type and carried through untouched.
 - Keep the kit and schema stable (a module constant or `useMemo`): both reach every card through context.
-- An editor that draws blocks in place hosts the fields in `<BlockFieldsKit kit={KIT}>` with `<BlockToolbar>` and `<AddBlockMenu>`.
+- An editor that draws blocks in place hosts the fields in `<BlockFieldsKit kit={KIT}>`.
 
 ## Analytics
 
@@ -820,7 +779,6 @@ const tools = rolaLoginTools({
 - The default step is the finest that makes 200 points or fewer; no step is finer than the points. `aggregate` is `last` for a price, `sum` for a count, `mean` for a rate. A stepped range starts on a whole week or month.
 - Points with `open`, `high` and `low` get a candles switch; with `volume`, a volume pane. A zero-volume point leaves its slot empty.
 - `format` gets the tick spacing too; `stepDecimals` and `formatChartValue` keep ticks at one precision. `markers` are tooltips on the last point at or before each event.
-- `chartSteps` is exported for a chart drawn elsewhere.
 
 ## Base stylesheet
 

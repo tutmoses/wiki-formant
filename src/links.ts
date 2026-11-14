@@ -24,7 +24,7 @@ import { getAttr, removeAttr, stripTags } from './html.js';
  *
  * @internal
  */
-export function fallbackAnchorText(href: string): string {
+function fallbackAnchorText(href: string): string {
   if (href.startsWith('#')) return href.slice(1).replace(/-/g, ' ') || 'section';
   if (href.startsWith('/')) {
     const last = href.split('/').filter(Boolean).pop();

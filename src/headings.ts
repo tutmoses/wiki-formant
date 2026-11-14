@@ -126,7 +126,7 @@ export function headingsFrom(html: string): Heading[] {
  *
  * @internal
  */
-export function headingOutline(html: string): Heading[] {
+function headingOutline(html: string): Heading[] {
   const out: Heading[] = [];
   for (const [, tag, attrs, content] of html.matchAll(HEADING)) {
     const text = stripTags(content ?? '');

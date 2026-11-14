@@ -33,7 +33,7 @@ import { CODE_LANGS, DEFAULT_LANG } from './blocks.js';
  * stored HTML on the origin where its author is signed in, and a
  * `javascript:` src runs there under any CSP with 'unsafe-inline' script.
  */
-export function embedSrc(src: unknown): string | null {
+function embedSrc(src: unknown): string | null {
   if (typeof src !== 'string') return null;
   try {
     const u = new URL(src);
@@ -43,7 +43,7 @@ export function embedSrc(src: unknown): string | null {
   }
 }
 
-export const Iframe = TiptapNode.create({
+const Iframe = TiptapNode.create({
   name: 'iframe',
   group: 'block',
   atom: true,
@@ -65,7 +65,7 @@ export const Iframe = TiptapNode.create({
 // ---- youtube ----------------------------------------------------------------
 
 /** The stock extension plus the paste rule it does not ship with. */
-export const YouTube = TiptapYoutube.extend({
+const YouTube = TiptapYoutube.extend({
   addPasteRules() {
     return [
       {
@@ -101,7 +101,7 @@ function TwitterEmbedView({ node }: { node: any }) {
   );
 }
 
-export const TwitterEmbed = TiptapNode.create({
+const TwitterEmbed = TiptapNode.create({
   name: 'twitterEmbed',
   group: 'block',
   atom: true,
@@ -179,7 +179,7 @@ export interface MapEmbedOptions {
  * redirect resolves (`settleMapEmbed`): the embed, or the link as text when it
  * cannot be resolved, never a blank frame.
  */
-export function createMapEmbed({ resolveMapUrl }: MapEmbedOptions) {
+function createMapEmbed({ resolveMapUrl }: MapEmbedOptions) {
   return TiptapNode.create({
     name: 'mapEmbed',
     group: 'block',

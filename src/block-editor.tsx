@@ -340,7 +340,7 @@ function grouped(options: readonly BlockOption[]): [string, BlockOption[]][] {
  * Escape. A long menu opens on a box that finds a type by name, Enter taking
  * the first found. Nothing to offer, no button.
  */
-export function AddBlockMenu({ options, onPick, icon, below = false, label = 'Add block' }: AddBlockMenuProps) {
+function AddBlockMenu({ options, onPick, icon, below = false, label = 'Add block' }: AddBlockMenuProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const close = useCallback(() => {
@@ -467,7 +467,7 @@ export interface BlockToolbarProps extends Pick<BlockActionsProps, 'index' | 'to
 }
 
 /** A block's name and its controls: add below, move up and down, duplicate, delete. */
-export function BlockToolbar({ label, icon, index, total, ops, icons, options, onAdd, children }: BlockToolbarProps) {
+function BlockToolbar({ label, icon, index, total, ops, icons, options, onAdd, children }: BlockToolbarProps) {
   return (
     <div className="block-toolbar">
       <span className="block-toolbar__label">

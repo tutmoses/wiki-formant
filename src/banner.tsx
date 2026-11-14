@@ -38,7 +38,7 @@ const LINE = ['banner-art__mid-line', 'banner-art__ink-line'] as const;
  * unless set, `--banner-mid` the blobs and half the shapes, `--banner-ink`
  * the other half and the dots.
  */
-export function BannerArt({ seed, mark = triangle, className = 'banner-art' }: { seed: string; mark?: BannerMark; className?: string }): ReactElement {
+function BannerArt({ seed, mark = triangle, className = 'banner-art' }: { seed: string; mark?: BannerMark; className?: string }): ReactElement {
   const hash = hashStr(seed);
   const rand = seededRandom(hash);
   const id = `banner-${hash.toString(36)}`;

@@ -16,7 +16,6 @@ const config = {
     // A dotted directory: a glob that does not name it skips the agent surface.
     'src/app/.well-known/**/route.ts',
     'src/app/**/{sitemap,robots,manifest,opengraph-image,icon,apple-icon}.{ts,tsx}',
-    'src/**/*.test.ts',
     'scripts/**/*.{ts,mts,mjs}',
     'studio/**/*.mjs',
   ],

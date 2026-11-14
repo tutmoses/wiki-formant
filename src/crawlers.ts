@@ -36,7 +36,7 @@ export interface AiCrawler {
  *
  * @internal
  */
-export const AI_CRAWLERS: readonly AiCrawler[] = [
+const AI_CRAWLERS: readonly AiCrawler[] = [
   { token: 'GPTBot', label: 'GPTBot', fetches: true },
   { token: 'ChatGPT-User', label: 'ChatGPT', fetches: true },
   { token: 'OAI-SearchBot', label: 'OAISearchBot', fetches: true },
@@ -62,7 +62,7 @@ export const AI_CRAWLERS: readonly AiCrawler[] = [
 ];
 
 /** The event label for a user agent, or null when it is not a known crawler. @internal */
-export function detectAiBot(userAgent: string | null | undefined): string | null {
+function detectAiBot(userAgent: string | null | undefined): string | null {
   if (!userAgent) return null;
   for (const crawler of AI_CRAWLERS) {
     if (crawler.fetches && userAgent.includes(crawler.token)) return crawler.label;
@@ -88,7 +88,7 @@ export interface RobotsGroup {
  *
  * @internal
  */
-export const AGENT_SURFACE_PATHS: readonly string[] = [
+const AGENT_SURFACE_PATHS: readonly string[] = [
   '/api/mcp',
   '/llms.txt',
   '/openapi.json',
@@ -103,10 +103,10 @@ export const AGENT_SURFACE_PATHS: readonly string[] = [
  *
  * @internal
  */
-export const RSC_DISALLOW: readonly string[] = ['/*?_rsc=', '/*&_rsc='];
+const RSC_DISALLOW: readonly string[] = ['/*?_rsc=', '/*&_rsc='];
 
 /** The search engines that get the HTML site and none of its twins. @internal */
-export const SEARCH_ENGINES: readonly string[] = ['Googlebot', 'Bingbot'];
+const SEARCH_ENGINES: readonly string[] = ['Googlebot', 'Bingbot'];
 
 /**
  * Every group robots.txt needs: the wildcard, one per AI crawler, one per

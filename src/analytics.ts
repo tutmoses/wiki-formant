@@ -49,7 +49,7 @@ const DAY_MS = 86_400_000;
 const BOT = /bot|crawl|spider|slurp|headless|lighthouse|prerender|preview/i;
 
 /** iPadOS reports itself as a Mac, so its views count as a computer's. @internal */
-export const deviceOf = (ua: string): 'phone' | 'tablet' | 'computer' =>
+const deviceOf = (ua: string): 'phone' | 'tablet' | 'computer' =>
   /iPad|Tablet|Android(?!.*Mobile)/i.test(ua) ? 'tablet' : /Mobi|iPhone|Android/i.test(ua) ? 'phone' : 'computer';
 
 const bareHost = (host: string) => host.toLowerCase().replace(/:\d+$/, '').replace(/^www\./, '');
@@ -60,7 +60,7 @@ const bareHost = (host: string) => host.toLowerCase().replace(/:\d+$/, '').repla
  *
  * @internal
  */
-export function sourceOf(referrer: unknown, utm: unknown, host: string): string | null {
+function sourceOf(referrer: unknown, utm: unknown, host: string): string | null {
   if (typeof utm === 'string' && utm.trim()) return utm.trim().toLowerCase().slice(0, 100);
   if (typeof referrer !== 'string' || !referrer) return null;
   try {
@@ -72,7 +72,7 @@ export function sourceOf(referrer: unknown, utm: unknown, host: string): string 
 }
 
 /** A browser path as stored: decoded, one leading slash, no trailing one. Null when it will not decode. @internal */
-export function normalisePath(path: string): string | null {
+function normalisePath(path: string): string | null {
   try {
     const p = decodeURIComponent(path.split(/[?#]/)[0]!.slice(0, 500));
     return `/${p.replace(/^\/+|\/+$/g, '')}`;
@@ -131,7 +131,7 @@ export interface ViewInput {
 }
 
 /** Count one page view, unless a bot sent it. Never rejects. @internal */
-export function recordView(sql: Sql, { headers, path, referrer, utm, site = '' }: ViewInput): Promise<void> {
+function recordView(sql: Sql, { headers, path, referrer, utm, site = '' }: ViewInput): Promise<void> {
   const ua = headers.get('user-agent') ?? '';
   const page = normalisePath(path);
   if (!ua || BOT.test(ua) || page === null) return Promise.resolve();
@@ -153,7 +153,7 @@ export function recordView(sql: Sql, { headers, path, referrer, utm, site = '' }
  * engaged: the beacon's second word on a view, sent once its reader engaged
  * (`startBeacon`). Never rejects. @internal
  */
-export function recordEngaged(sql: Sql, { headers, path, site = '' }: Omit<ViewInput, 'referrer' | 'utm'>): Promise<void> {
+function recordEngaged(sql: Sql, { headers, path, site = '' }: Omit<ViewInput, 'referrer' | 'utm'>): Promise<void> {
   const page = normalisePath(path);
   if (page === null) return Promise.resolve();
   return quietly(async () =>
@@ -234,7 +234,7 @@ const BEACONS: RateLimitOptions = { capacity: 30, refillPerSec: 0.5 };
  * The whole beacon route: `export const POST = (r: Request) => collect(r, { sql, defer: after })`.
  * Answers 204 whatever happens, before anything is written, so a reader never waits on it.
  */
-export async function collect(request: Request, { sql, defer, site, rateLimit: limit = BEACONS }: CollectOptions): Promise<Response> {
+async function collect(request: Request, { sql, defer, site, rateLimit: limit = BEACONS }: CollectOptions): Promise<Response> {
   const done = new Response(null, { status: 204 });
   const { headers } = request;
   if (BOT.test(headers.get('user-agent') ?? '') || !rateLimit(clientKey('beacon', headers), limit).ok) return done;
@@ -655,7 +655,7 @@ export interface SearchQueryInput {
  *
  * @internal
  */
-export function searchQueryProps({
+function searchQueryProps({
   query,
   results,
   surface,

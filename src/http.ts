@@ -202,7 +202,7 @@ export const VARY_ACCEPT = { Vary: 'Accept' } as const;
  *
  * @internal
  */
-export function descriptorHeaders(
+function descriptorHeaders(
   etag: string,
   opts: { maxAge?: number; extra?: Record<string, string> } = {},
 ): Record<string, string> {

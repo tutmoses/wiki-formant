@@ -89,7 +89,7 @@ const TLS_CODES = new Set([
  *
  * @internal
  */
-export const TRANSIENT_CODES = new Set([
+const TRANSIENT_CODES = new Set([
   'UND_ERR_CONNECT_TIMEOUT',
   'UND_ERR_SOCKET',
   'UND_ERR_HEADERS_TIMEOUT',
@@ -104,7 +104,7 @@ export const TRANSIENT_CODES = new Set([
 type CausedError = Error & { cause?: { code?: string }; code?: string };
 
 /** A failure as a report row: the message, the code, and the TLS caveat. @internal */
-export function describeFailure(err: unknown): Pick<Probe, 'error' | 'code' | 'tls' | 'note'> {
+function describeFailure(err: unknown): Pick<Probe, 'error' | 'code' | 'tls' | 'note'> {
   const e = err as CausedError;
   if (e?.name === 'AbortError') return { error: 'timeout' };
   const code = e?.cause?.code ?? e?.code;
@@ -129,7 +129,7 @@ export function describeFailure(err: unknown): Pick<Probe, 'error' | 'code' | 't
  *
  * @internal
  */
-export function probeUrlFor(url: string): string {
+function probeUrlFor(url: string): string {
   const npm = url.match(/^https:\/\/(?:www\.)?npmjs\.com\/package\/(.+?)\/?$/);
   return npm ? `https://registry.npmjs.org/${npm[1]}` : url;
 }
@@ -321,7 +321,7 @@ export function extractLinks(html: string): Array<{ href: string; text: string }
 }
 
 /** Every `<iframe>` and `<img>` source in a fragment. @internal */
-export function extractEmbeds(html: string): Array<{ kind: string; url: string }> {
+function extractEmbeds(html: string): Array<{ kind: string; url: string }> {
   const out: Array<{ kind: string; url: string }> = [];
   for (const m of html.matchAll(EMBED_RE)) {
     if (m[1] && m[2]) out.push({ kind: m[1].toLowerCase(), url: m[2] });

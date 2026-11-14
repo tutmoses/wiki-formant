@@ -41,7 +41,7 @@ const daysParam = (n: number) => (Number.isFinite(n) ? String(n) : 'all');
 const windowLabel = (n: number) => (n === 1 ? '24H' : n === 365 ? '1Y' : Number.isFinite(n) ? `${n}D` : 'All');
 
 /** A `?days=` value as one of `ranges`, else `fallback`. @internal */
-export const statsDays = (param: unknown, ranges: readonly number[] = STATS_RANGES, fallback = 30) =>
+const statsDays = (param: unknown, ranges: readonly number[] = STATS_RANGES, fallback = 30) =>
   ranges.find(n => daysParam(n) === param) ?? fallback;
 
 /**

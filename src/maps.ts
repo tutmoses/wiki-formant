@@ -25,7 +25,7 @@ function mapsEmbedUrl(lat: number, lon: number, zoom = 15): string {
  *
  * @internal
  */
-export function extractCoordsFromUrl(url: string): MapCoords | null {
+function extractCoordsFromUrl(url: string): MapCoords | null {
   const coords = url.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*),?(\d+\.?\d*)?z?/);
   if (coords) return { lat: +coords[1]!, lon: +coords[2]!, zoom: coords[3] ? +coords[3] : undefined };
 

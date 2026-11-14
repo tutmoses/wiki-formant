@@ -217,7 +217,7 @@ export function diffBlocks<B extends DiffBlock, L = unknown>(
  *
  * @internal
  */
-export function classifyChanges(changes: readonly BlockChange<unknown>[], titleChanged: boolean): ChangeType {
+function classifyChanges(changes: readonly BlockChange<unknown>[], titleChanged: boolean): ChangeType {
   if (changes.some(c => c.action === 'added' || c.action === 'removed' || c.action === 'moved')) {
     return 'major';
   }

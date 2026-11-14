@@ -60,7 +60,7 @@ export interface LicenseBlockOptions {
  *
  * @internal
  */
-export function licenseLines({
+function licenseLines({
   license,
   scope = 'This content',
   scopeVerb = 'is',
