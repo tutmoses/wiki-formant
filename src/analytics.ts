@@ -344,7 +344,7 @@ export interface DigestOptions {
   /**
    * The site's own agents, left out of `agents`, `top_agents`,
    * `agent_tool_calls`, the searches and the gaps, matched inside the user agent. The default is the
-   * conformance suites (`<repo>-mcp-test`) and the studio's own tools.
+   * studio's own tools.
    */
   ownAgents?: string[];
   /**
@@ -455,7 +455,7 @@ export interface Digest {
  */
 export async function digest(
   sql: Sql,
-  { site = '', days, handle, siblings = [], gaps = [SEARCH_GAPS], ownAgents = ['-mcp-test', 'radix-studio'], filter = {} }: DigestOptions,
+  { site = '', days, handle, siblings = [], gaps = [SEARCH_GAPS], ownAgents = ['radix-studio'], filter = {} }: DigestOptions,
 ): Promise<Digest> {
   // The window is the database's clock, which stamped the rows; the app's can run behind it.
   // All time is a century: further back than any row, and still an int to Postgres.
