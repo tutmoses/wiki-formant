@@ -196,6 +196,13 @@ export function recordEvent(sql: Sql, { name, props = {}, url, headers, site = '
   });
 }
 
+/** The events this package's own recorders write: the tracker's three and `trackAiBot`'s. */
+const OWN_EVENTS = ['MCP Call', 'Search Query', 'Agent Feedback', 'AI Bot Visit'] as const;
+export type TrackerEvent = (typeof OWN_EVENTS)[number];
+
+/** An event name as it is compared, so a beacon cannot pass one off in another case or behind a space. */
+const eventKey = (name: string) => name.trim().toLowerCase();
+
 /** What a page sends: a view, with `engaged` its reader's engagement, or with `name` an event. */
 export interface Beacon {
   path: string;
@@ -224,6 +231,8 @@ export interface CollectOptions {
   /** The site a beacon counts toward, or null to drop it. A single-site app omits it. */
   site?: (request: Request, path: string) => string | null | Promise<string | null>;
   rateLimit?: RateLimitOptions;
+  /** The events the server records, by `eventKey`: a beacon naming one is dropped. */
+  reserved: ReadonlySet<string>;
 }
 
 // A person reads a few pages a minute. This leaves room for a fast reader and
@@ -234,7 +243,7 @@ const BEACONS: RateLimitOptions = { capacity: 30, refillPerSec: 0.5 };
  * The whole beacon route: `export const POST = (r: Request) => collect(r, { sql, defer: after })`.
  * Answers 204 whatever happens, before anything is written, so a reader never waits on it.
  */
-async function collect(request: Request, { sql, defer, site, rateLimit: limit = BEACONS }: CollectOptions): Promise<Response> {
+async function collect(request: Request, { sql, defer, site, rateLimit: limit = BEACONS, reserved }: CollectOptions): Promise<Response> {
   const done = new Response(null, { status: 204 });
   const { headers } = request;
   if (BOT.test(headers.get('user-agent') ?? '') || !rateLimit(clientKey('beacon', headers), limit).ok) return done;
@@ -243,6 +252,9 @@ async function collect(request: Request, { sql, defer, site, rateLimit: limit = 
   const raw = typeof body?.path === 'string' ? body.path : null;
   const path = raw === null ? null : normalisePath(raw);
   if (!body || raw === null || !path) return done;
+  // What the server recorded is read as fact, by the stats page, the digest and
+  // whatever an app ranks from its events, so a page cannot say it for it.
+  if (typeof body.name === 'string' && reserved.has(eventKey(body.name))) return done;
   const key = site ? await site(request, path) : '';
   if (key === null) return done;
 
@@ -672,7 +684,7 @@ function searchQueryProps({
 
 // ---- the app binding --------------------------------------------------------
 
-export interface TrackerOptions {
+export interface TrackerOptions<E extends string = never> {
   sql: Sql;
   /** `after` in Next: the write runs once the response has gone. */
   defer: (task: () => Promise<unknown>) => void;
@@ -683,19 +695,26 @@ export interface TrackerOptions {
   enabled?: boolean;
   /** Where an event with no page of its own is filed: a search with no referer. Default `/`. */
   siteUrl?: string;
+  /**
+   * The events the app's server code records through `trackEvent`, which takes
+   * these and this module's own and no other name. The beacon route drops a
+   * beacon naming any of them.
+   */
+  events?: readonly E[];
 }
 
 /** Headers in hand, or a reader for them run inside the deferred write: Next's `headers`. */
 export type HeaderSource = HeaderReader | (() => HeaderReader | Promise<HeaderReader>);
 
-export interface Tracker {
+export interface Tracker<E extends string = never> {
   /**
-   * Record one event. `headers` are the request of whoever caused it, so the
+   * Record one event, one of `TrackerOptions.events` or this module's own:
+   * a name declared nowhere is one a page could send. `headers` are the request of whoever caused it, so the
    * event joins their visitor, an agent's included; omit them for an event no
    * visitor caused. Never rejects, and the caller defers it: `event.waitUntil`
    * in a proxy, `after` in a route.
    */
-  trackEvent(name: string, url: string, props: Record<string, string | number>, headers?: HeaderReader): Promise<void>;
+  trackEvent(name: E | TrackerEvent, url: string, props: Record<string, string | number>, headers?: HeaderReader): Promise<void>;
   /**
    * An "MCP Call" event, deferred. The signature is `McpServerConfig.onCall`'s
    * plus a server name, so a one-server site passes it as `onCall` as it is.
@@ -731,14 +750,16 @@ export interface Tracker {
  *
  *   trackAiBot(request, event, () => import('@/lib/track'));
  */
-export function createTracker({
+export function createTracker<const E extends string = never>({
   sql,
   defer,
   enabled = typeof process !== 'undefined' && process.env.VERCEL_ENV === 'production',
   siteUrl = '/',
-}: TrackerOptions): Tracker {
-  const trackEvent: Tracker['trackEvent'] = (name, url, props, headers) =>
+  events = [],
+}: TrackerOptions<E>): Tracker<E> {
+  const trackEvent: Tracker<E>['trackEvent'] = (name, url, props, headers) =>
     enabled ? recordEvent(sql, { name, url, props, headers }) : Promise.resolve();
+  const reserved = new Set([...OWN_EVENTS, ...events].map(eventKey));
 
   return {
     trackEvent,
@@ -769,7 +790,7 @@ export function createTracker({
     },
     viewRoute(opts = {}) {
       return async request =>
-        enabled ? collect(request, { sql, defer, ...opts }) : new Response(null, { status: 204 });
+        enabled ? collect(request, { sql, defer, reserved, ...opts }) : new Response(null, { status: 204 });
     },
   };
 }
