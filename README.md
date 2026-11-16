@@ -642,7 +642,7 @@ const { TabGroup, TabItem } = createTabs();
 const nodes = [...embedNodes({ resolveMapUrl }), createCodeBlock({ classNames, icons }), TabGroup, TabItem, createHeadingIds({ slug })];
 ```
 
-- `embedNodes` turns a pasted YouTube, X or map link into its player. The iframe and map nodes draw only an https src on `DEFAULT_IFRAME_HOSTS`, since the editor draws stored HTML where its author is signed in.
+- `embedNodes` turns a pasted YouTube, X or map link into its player. The iframe and map nodes draw only an https src on `DEFAULT_IFRAME_HOSTS`, since the editor draws stored HTML where its author is signed in; a site whose sanitiser takes its own `iframeHosts` passes `embedNodes` the same list, or the editor draws those frames empty and a save strips them.
 - The node views draw in default classes `base.css` styles; `classNames` and `icons` replace them.
 - `createTabs` returns both nodes, since one is unsatisfiable without the other. A short map link inserts at once and swaps its `src` when it resolves.
 - `createHeadingIds` gives each heading the id its published copy will carry.

@@ -28,39 +28,42 @@ import { CODE_LANGS, DEFAULT_LANG } from './blocks.js';
 // ---- iframe -----------------------------------------------------------------
 
 /**
- * An embed's address, if it is https on a host the sanitiser and the CSP
- * admit; otherwise null, and the node draws an empty frame. The editor draws
- * stored HTML on the origin where its author is signed in, and a
- * `javascript:` src runs there under any CSP with 'unsafe-inline' script.
+ * An embed's address, if it is https on one of `hosts`, the ones the
+ * sanitiser and the CSP admit; otherwise null, and the node draws an empty
+ * frame. The editor draws stored HTML on the origin where its author is
+ * signed in, and a `javascript:` src runs there under any CSP with
+ * 'unsafe-inline' script.
  */
-function embedSrc(src: unknown): string | null {
+function embedSrc(src: unknown, hosts: readonly string[] = DEFAULT_IFRAME_HOSTS): string | null {
   if (typeof src !== 'string') return null;
   try {
     const u = new URL(src);
-    return u.protocol === 'https:' && DEFAULT_IFRAME_HOSTS.includes(u.hostname) ? u.href : null;
+    return u.protocol === 'https:' && hosts.includes(u.hostname) ? u.href : null;
   } catch {
     return null;
   }
 }
 
-const Iframe = TiptapNode.create({
-  name: 'iframe',
-  group: 'block',
-  atom: true,
-  addAttributes() {
-    return { src: { default: null }, width: { default: '100%' }, height: { default: '400' } };
-  },
-  parseHTML() {
-    return [{ tag: 'iframe' }];
-  },
-  renderHTML({ HTMLAttributes }) {
-    return [
-      'div',
-      { 'data-iframe-embed': '', class: 'iframe-embed' },
-      ['iframe', mergeAttributes({ ...HTMLAttributes, src: embedSrc(HTMLAttributes.src) }, { frameborder: '0', allowfullscreen: 'true' })],
-    ];
-  },
-});
+/** Any other frame, on the hosts the app's sanitiser keeps: one it drew empty, a save would strip. */
+const createIframe = (hosts: readonly string[]) =>
+  TiptapNode.create({
+    name: 'iframe',
+    group: 'block',
+    atom: true,
+    addAttributes() {
+      return { src: { default: null }, width: { default: '100%' }, height: { default: '400' } };
+    },
+    parseHTML() {
+      return [{ tag: 'iframe' }];
+    },
+    renderHTML({ HTMLAttributes }) {
+      return [
+        'div',
+        { 'data-iframe-embed': '', class: 'iframe-embed' },
+        ['iframe', mergeAttributes({ ...HTMLAttributes, src: embedSrc(HTMLAttributes.src, hosts) }, { frameborder: '0', allowfullscreen: 'true' })],
+      ];
+    },
+  });
 
 // ---- youtube ----------------------------------------------------------------
 
@@ -250,10 +253,13 @@ function createMapEmbed({ resolveMapUrl }: MapEmbedOptions) {
  * picked its embeds by hand, and one that left `TwitterEmbed` out kept a
  * pasted post as a bare link. `resolveMapUrl` follows a shortened map link,
  * through `/api/resolve-map` unless an app routes it another way.
+ * `iframeHosts` is the list the app's sanitiser and `frame-src` take, where
+ * it has one of its own: the editor then draws, and saves, every frame the
+ * page shows.
  */
-export const embedNodes = ({ resolveMapUrl = resolveMapRoute }: Partial<MapEmbedOptions> = {}) => [
+export const embedNodes = ({ resolveMapUrl = resolveMapRoute, iframeHosts = DEFAULT_IFRAME_HOSTS }: Partial<MapEmbedOptions> & { iframeHosts?: readonly string[] } = {}) => [
   YouTube,
-  Iframe,
+  createIframe(iframeHosts),
   TwitterEmbed,
   createMapEmbed({ resolveMapUrl }),
 ];
