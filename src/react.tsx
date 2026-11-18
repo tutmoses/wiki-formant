@@ -1484,6 +1484,35 @@ export function RailShell({ children, prefix, label, className }: RailShellProps
 }
 
 /**
+ * The rail's open/close button: a menu glyph, a cross while the rail is open.
+ *
+ * It goes at the leading edge of the site's header, outside the rail: a closed
+ * rail is gone, and on a phone an open one is a drawer above the article, so a
+ * button anywhere below the header ends up under the menu it closes. Render it
+ * only where there is a rail, inside the same `SidebarProvider`.
+ *
+ * `wiki-formant/base.css` draws it as `.wiki-rail__toggle`, on the `--ui-*`
+ * tokens.
+ */
+export function RailToggle() {
+  const { open, toggle } = useSidebar();
+  return (
+    <button
+      type="button"
+      className="wiki-rail__toggle"
+      onClick={toggle}
+      aria-expanded={open}
+      aria-label="Toggle menu"
+      title={open ? 'Close menu' : 'Open menu'}
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden focusable="false">
+        <path d={open ? 'M18 6 6 18M6 6l12 12' : 'M4 5h16M4 12h16M4 19h16'} />
+      </svg>
+    </button>
+  );
+}
+
+/**
  * Is this rail link the one the reader is on?
  *
  * `tree` marks a link that owns its descendants — a section that should stay lit

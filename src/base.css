@@ -410,6 +410,9 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
 .wiki-rail__toc-item { border-inline-start: 2px solid var(--ui-border); font-size: var(--ui-small); text-decoration: none; transition: color 150ms, border-color 150ms; }
 .wiki-rail__toc-item:hover, .wiki-rail__toc-item--active { border-inline-start-color: var(--ui-accent); color: var(--ui-accent); }
 .wiki-rail__toc-item--active { font-weight: 600; }
+/* `RailToggle`, in the header: a 20px glyph in a 36px button. */
+.wiki-rail__toggle { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 0.5rem; border: 0; border-radius: var(--ui-radius); background: none; color: inherit; cursor: pointer; transition: background-color 150ms; }
+.wiki-rail__toggle:hover { background: var(--ui-surface-2); }
 
 /* ---- stored tab groups (activateTabGroups) --------------------------------
    Only the active panel shows. Before the script runs, the first tab's content
