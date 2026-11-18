@@ -94,7 +94,7 @@ const { items, total } = await searchWiki(reading, 'validators', { page: 1, size
 - `get_page` with `blocks: true` returns the stored blocks, `id`, metadata and `version`: what an edit starts from. `forEdit` adds the app's own edit fields; `authors` names revision authors.
 - `text` should be the twin's serializer and `resolve` the page's live resolver, so a page reads the same over MCP as at its twin.
 - `get_full_corpus` is a `sizeOnly` preflight, then page-aligned slices under `maxChars` (`CORPUS_BUDGET`) with `truncated`, `nextSkip` and `clippedPage`. `corpus` returns the app's own `CorpusSection`s.
-- `privateHidden` closes the back office to every tool. `metadata`, `label`, `noMatch` and `skills` are the app's. `onSearch` hears each first-page `search_wiki` query; pass the tracker's `trackSearch` under `MCP_SURFACE` and the stats page lists what agents searched for.
+- `privateHidden` closes the back office to every tool. `metadata`, `label`, `noMatch` and `skills` are the app's. `onSearch` hears each first-page `search_wiki` query, except one narrowed by `tagPath` that found nothing; pass the tracker's `trackSearch` under `MCP_SURFACE` and the stats page lists what agents searched for.
 - Writes stay with each app.
 
 ## Taxonomy

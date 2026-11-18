@@ -64,7 +64,9 @@ export interface WikiToolsOptions<B extends DiffBlock> {
   /**
    * Each `search_wiki` query, on its first page, with how many pages it found:
    * `(request, q, n) => trackSearch(request.headers, q, n, MCP_SURFACE)`, so the
-   * stats page lists what agents searched for beside what people did.
+   * stats page lists what agents searched for beside what people did. A search
+   * narrowed by `tagPath` that finds nothing is not reported: it would read as
+   * a gap in the site.
    */
   onSearch?: (request: Request, query: string, results: number) => void;
   /** A2A skills by tool, beside the defaults. */
@@ -211,7 +213,8 @@ export function wikiReadTools<B extends DiffBlock>(o: WikiToolsOptions<B>): Wiki
         const size = r.num('pageSize', 20, 1, 50);
         if (!query) throw new McpToolError('`query` is empty. Pass a keyword to search for, or call list_pages to enumerate a branch instead.');
         const { items, total, corrected } = await searchWiki(o, query, { tagPath, page, size });
-        if (page === 1 && ctx.request) o.onSearch?.(ctx.request, query, total);
+        // A miss under a tagPath says the section lacks it, not the site.
+        if (page === 1 && ctx.request && (total || !tagPath)) o.onSearch?.(ctx.request, query, total);
         return withAdjustments(r, {
           query,
           ...(corrected ? { corrected } : {}),
