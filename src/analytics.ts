@@ -14,9 +14,14 @@
 //
 // The package owns the SQL; the app owns the connection. `Sql` is one function
 // that runs a parameterised statement, which Prisma, `pg` and postgres.js can
-// all supply in a line. The four tables it needs are Prisma models shipped in
+// all supply in a line. The five tables it needs are Prisma models shipped in
 // `prisma/analytics.prisma`, which the `prisma-models` bin copies into the
 // app's schema folder, so `prisma db push` keeps them.
+//
+// An agent's reads are kept by the day, not one by one: `AgentDay` holds one
+// row for each agent on each UTC day, with what it is, where it began, how
+// many requests it made and the tools it called. A crawler makes thousands of
+// requests a day, and a row for each has `digest` read them all to count it once.
 //
 // `ViewDay` holds days a site counted somewhere else before it counted its
 // own, one row a day with each breakdown as `{ value: visitors }`. Nothing
@@ -101,6 +106,7 @@ async function todaysSalt(sql: Sql): Promise<string> {
     await sql('DELETE FROM "Salt" WHERE day < $1', day);
     await sql('DELETE FROM "View" WHERE "createdAt" < $1', cutoff);
     await sql('DELETE FROM "Event" WHERE "createdAt" < $1', cutoff);
+    await sql('DELETE FROM "AgentDay" WHERE day < $1::date', cutoff);
   }
   const [row] = (await sql('SELECT value FROM "Salt" WHERE day = $1', day)) as { value: string }[];
   salts.set(sql, { day, value: row!.value });
@@ -178,20 +184,50 @@ export interface EventInput {
   site?: string;
 }
 
-/** Record one named event. Never rejects. */
+/** An agent's requests: `trackAiBot`'s and an MCP server's. `AgentDay` counts them; `Event` holds none. */
+const AGENT_EVENTS: readonly string[] = ['AI Bot Visit', 'MCP Call'];
+
+/** Two `{ name: count }` objects as one, each name's counts added. */
+const addCounts = (a: string, b: string) =>
+  `(SELECT coalesce(jsonb_object_agg(key, n), '{}') FROM (
+      SELECT key, sum(value::int) AS n FROM (SELECT * FROM jsonb_each_text(${a}) UNION ALL SELECT * FROM jsonb_each_text(${b})) each GROUP BY 1
+    ) added)`;
+
+/**
+ * Record one named event. One of `AGENT_EVENTS` adds to its agent's day and
+ * writes no row of its own; an agent that sends no user agent is no visitor,
+ * and is not counted. Never rejects.
+ */
 export function recordEvent(sql: Sql, { name, props = {}, url, headers, site = '' }: EventInput): Promise<void> {
   return quietly(async () => {
     let path: string | null = null;
     if (url) path = normalisePath(new URL(url, 'http://x').pathname);
     // An agent's country is where its requests came from, so the stats page's countries can count it.
     const country = headers?.get('x-vercel-ip-country')?.slice(0, 2);
+    const visitor = headers?.get('user-agent') ? await visitorOf(sql, site, headers) : null;
+    if (!AGENT_EVENTS.includes(name))
+      return sql(
+        'INSERT INTO "Event" ("siteId", name, path, props, visitor) VALUES ($1, $2, $3, $4::jsonb, $5)',
+        site,
+        name.slice(0, 64),
+        path,
+        JSON.stringify(country ? { ...props, country } : props),
+        visitor,
+      );
+    if (!visitor) return;
     return sql(
-      'INSERT INTO "Event" ("siteId", name, path, props, visitor) VALUES ($1, $2, $3, $4::jsonb, $5)',
+      `INSERT INTO "AgentDay" ("siteId", day, visitor, bot, ua, country, entry, tools)
+       VALUES ($1, (now() AT TIME ZONE 'UTC')::date, $2, $3, $4, $5, $6, $7::jsonb)
+       ON CONFLICT ("siteId", day, visitor) DO UPDATE SET hits = "AgentDay".hits + 1,
+         bot = coalesce("AgentDay".bot, EXCLUDED.bot), entry = coalesce("AgentDay".entry, EXCLUDED.entry),
+         tools = ${addCounts('"AgentDay".tools', 'EXCLUDED.tools')}`,
       site,
-      name.slice(0, 64),
+      visitor,
+      props.bot ?? null,
+      String(props.ua ?? headers?.get('user-agent') ?? '').slice(0, 80),
+      country ?? null,
       path,
-      JSON.stringify(country ? { ...props, country } : props),
-      headers?.get('user-agent') ? await visitorOf(sql, site, headers) : null,
+      JSON.stringify(props.method === 'tools/call' ? { [props.tool ?? '(none)']: 1 } : {}),
     );
   });
 }
@@ -320,15 +356,16 @@ const VISIT_TEST: Record<keyof StatsFilter, (value: string, s: string) => string
 };
 
 /**
- * Each filter as a test on one agent: its reads in the window are its visit,
- * the first its entry page, and its country the one its requests came from.
- * No request of an agent's carries a source or a device, so neither passes one.
+ * Each filter as a test on one agent's day: its first read is its entry page,
+ * and its country the one its requests came from. Its day keeps no read after
+ * the first, and no request of an agent's carries a source or a device, so no
+ * agent passes a page, a source or a device.
  */
 const AGENT_TEST: Record<keyof StatsFilter, (value: string) => string> = {
-  page: v => `bool_or(path = ${v})`,
-  entry: v => `(array_agg(path ORDER BY at))[1] = ${v}`,
+  page: () => 'false',
+  entry: v => `entry = ${v}`,
   source: () => 'false',
-  country: v => `bool_or(country = ${v})`,
+  country: v => `country = ${v}`,
   device: () => 'false',
 };
 
@@ -359,10 +396,11 @@ export interface DigestOptions {
 type Ranked<K extends string, M extends string> = Array<Record<K, string> & Record<M, number>>;
 
 /**
- * An agent's name from its event: the roster's label, else what its user agent
+ * An agent's name: the roster's label `bot`, else what its user agent `ua`
  * calls itself, `compatible; X` or the first product token.
  */
-const AGENT_NAME = `coalesce(props->>'bot', substring(props->>'ua' from 'compatible; ?([^/;) ]+)'), nullif(split_part(split_part(props->>'ua', '/', 1), ' ', 1), ''), '(unknown)')`;
+const agentName = (bot: string, ua: string) =>
+  `coalesce(${bot}, substring(${ua} from 'compatible; ?([^/;) ]+)'), nullif(split_part(split_part(${ua}, '/', 1), ' ', 1), ''), '(unknown)')`;
 
 /** One UTC day of the figures a digest totals; a visit falls on the day it began. */
 export interface DigestDay {
@@ -449,7 +487,8 @@ export interface Digest {
  * Visitor figures count distinct visitors, so a person who comes back on
  * another day counts once for each day. Days in `ViewDay` add to the visitor,
  * page, visit, source, country, device and per-day figures; events have no
- * history.
+ * history. Agents are kept by the day (`AgentDay`), so the first day of a
+ * window counts whole for them.
  * The window before is the same chain of views, visits and events a second
  * time, `_p` on every name, so its figures are the headline's to the letter.
  */
@@ -474,8 +513,9 @@ export async function digest(
   const tests = given.map(([k, v]) => (s: string) => VISIT_TEST[k](v, s));
   const agentTests = given.map(([k, v]) => AGENT_TEST[k](v));
   const day = (at: string) => `to_char(${at} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`;
-  /** The site's own agents, as a test on an event's user agent. */
-  const ours = `coalesce(props->>'ua', '') ILIKE ANY(${$(ownAgents.map(a => `%${a}%`))}::text[])`;
+  /** The site's own agents, as a test on a user agent. */
+  const own = $(ownAgents.map(a => `%${a}%`));
+  const ours = (ua = `props->>'ua'`) => `coalesce(${ua}, '') ILIKE ANY(${own}::text[])`;
 
   /**
    * The queries in one kind of event, most asked first. A typeahead logs each
@@ -489,7 +529,7 @@ export async function digest(
     return `(SELECT query, count(*) AS events FROM (
         SELECT props, visitor, props->>${prop} AS query,
           lead(props->>${prop}) OVER typed AS next, lead(at) OVER typed - at AS after
-        FROM e WHERE name = ${$(g.event)} AND props->>${prop} IS NOT NULL AND NOT ${ours}
+        FROM e WHERE name = ${$(g.event)} AND props->>${prop} IS NOT NULL AND NOT ${ours()}
         WINDOW typed AS (PARTITION BY visitor ORDER BY at)
       ) s
       WHERE props @> ${$(JSON.stringify(g.where ?? {}))}::jsonb AND char_length(query) > 1
@@ -508,6 +548,8 @@ export async function digest(
     const ago = (k: number) => `now() - make_interval(days => ${k} * $2::int)`;
     const dayAgo = (k: number) => `(now() AT TIME ZONE 'UTC' - make_interval(days => ${k} * $2::int))::date`;
     const at = `"createdAt" >= ${ago(back + 1)}${back ? ` AND "createdAt" < ${ago(back)}` : ''}`;
+    /** The same window over rows kept by the day, whose first day counts whole. */
+    const days = `day >= ${dayAgo(back + 1)}${back ? ` AND day < ${dayAgo(back)}` : ''}`;
     return `viewed${s} AS (
       SELECT id, path, source, country, device, visitor, engaged, "createdAt" AS at FROM "View" WHERE "siteId" = $1 AND ${at}
     ), marked${s} AS (
@@ -523,16 +565,14 @@ export async function digest(
       FROM numbered${s} GROUP BY visitor, visit${tests.length ? ` HAVING ${tests.map(t => t(s)).join(' AND ')}` : ''}
     ), v${s} AS (
       ${tests.length ? `SELECT n.id, n.path, n.source, n.country, n.device, n.visitor, n.engaged, n.at FROM numbered${s} n JOIN visits${s} USING (visitor, visit)` : `SELECT * FROM viewed${s}`}
-    ), read${s} AS (
-      SELECT visitor, "createdAt" AS at, path, props->>'country' AS country, ${AGENT_NAME} AS agent FROM "Event"
-      WHERE "siteId" = $1 AND ${at} AND name IN ('AI Bot Visit', 'MCP Call') AND visitor IS NOT NULL AND NOT ${ours}
     ), ag${s} AS (
-      SELECT * FROM read${s}${agentTests.length ? ` WHERE visitor IN (SELECT visitor FROM read${s} GROUP BY 1 HAVING ${agentTests.join(' AND ')})` : ''}
+      SELECT visitor, day, tools, ${agentName('bot', 'ua')} AS agent FROM "AgentDay"
+      WHERE "siteId" = $1 AND ${days} AND NOT ${ours('ua')}${agentTests.map(t => ` AND ${t}`).join('')}
     ), e${s} AS (
       SELECT name, props, visitor, "createdAt" AS at FROM "Event" WHERE "siteId" = $1 AND ${at}
       ${tests.length ? `AND (visitor IN (SELECT visitor FROM v${s}) OR visitor IN (SELECT visitor FROM ag${s}))` : ''}
     ), a${s} AS (
-      SELECT * FROM "ViewDay" WHERE "siteId" = $1 AND day >= ${dayAgo(back + 1)}${back ? ` AND day < ${dayAgo(back)}` : ''}${tests.length ? ' AND false' : ''}
+      SELECT * FROM "ViewDay" WHERE "siteId" = $1 AND ${days}${tests.length ? ' AND false' : ''}
     ), archived${s} AS (
       SELECT coalesce(sum(visitors), 0) AS visitors, coalesce(sum(pageviews), 0) AS pageviews, coalesce(sum(visits), 0) AS visits FROM a${s}
     )`;
@@ -579,7 +619,7 @@ export async function digest(
           sum(agents) AS agents, sum(follows) AS follow_clicks FROM (
           SELECT ${day('at')}, count(DISTINCT visitor), count(DISTINCT visitor) FILTER (WHERE engaged), count(*), 0, 0, 0, 0 FROM v GROUP BY 1
           UNION ALL SELECT ${day('at')}, 0, 0, 0, count(*), count(*) FILTER (WHERE bounced), 0, 0 FROM visits GROUP BY 1
-          UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, count(DISTINCT visitor), 0 FROM ag GROUP BY 1
+          UNION ALL SELECT to_char(day, 'YYYY-MM-DD'), 0, 0, 0, 0, 0, count(DISTINCT visitor), 0 FROM ag GROUP BY 1
           ${follows ? `UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, 0, count(*) FROM e WHERE ${follows} GROUP BY 1` : ''}
           UNION ALL SELECT to_char(day, 'YYYY-MM-DD'), visitors, 0, pageviews, visits, 0, 0, 0 FROM a
         ) t(date, visitors, engaged, pageviews, visits, bounces, agents, follows) GROUP BY 1`,
@@ -590,15 +630,10 @@ export async function digest(
         follows ? `(SELECT json_build_object('events', count(*), 'visitors', count(DISTINCT visitor)) FROM e WHERE ${follows})` : 'NULL'
       },
       'top_agents', ${list('SELECT agent, count(DISTINCT visitor) AS visitors FROM ag GROUP BY 1', 10)},
-      'agent_tool_calls', ${list(
-        `SELECT coalesce(props->>'tool', '(none)') AS tool, count(*) AS events FROM e
-         WHERE name = 'MCP Call' AND props->>'method' = 'tools/call' AND NOT ${ours}
-         GROUP BY 1`,
-        10,
-      )},
+      'agent_tool_calls', ${list('SELECT key AS tool, sum(value::int) AS events FROM ag, jsonb_each_text(ag.tools) GROUP BY 1', 10)},
       'agent_feedback', ${list(
-        `SELECT ${day('at')} AS date, props->>'kind' AS kind, props->>'message' AS message, props->>'page' AS page, ${AGENT_NAME} AS agent
-         FROM e WHERE name = 'Agent Feedback' AND NOT ${ours}`,
+        `SELECT ${day('at')} AS date, props->>'kind' AS kind, props->>'message' AS message, props->>'page' AS page, ${agentName(`props->>'bot'`, `props->>'ua'`)} AS agent
+         FROM e WHERE name = 'Agent Feedback' AND NOT ${ours()}`,
         20,
         'at DESC',
       )},

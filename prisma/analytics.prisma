@@ -33,6 +33,24 @@ model Event {
   @@index([siteId, name, createdAt])
 }
 
+// One agent on one UTC day: an AI crawler, an MCP client or anything else
+// reading the machine surface. Its requests add to `hits` and its tool calls to
+// `tools` ({ tool: calls }); `entry` is the first path it asked for.
+model AgentDay {
+  siteId  String   @default("")
+  day     DateTime @db.Date
+  visitor String
+  // The crawler roster's label, null for an agent on no roster.
+  bot     String?
+  ua      String
+  country String?
+  entry   String?
+  hits    Int      @default(1)
+  tools   Json     @default("{}")
+
+  @@id([siteId, day, visitor])
+}
+
 model Salt {
   day   String @id
   value String

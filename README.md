@@ -699,7 +699,7 @@ const SCHEMA: BlockSchema<Block> = {
 
 ## Analytics
 
-`wiki-formant/analytics`: page views and events in the site's own Postgres. No cookie and no stored address: a visitor is a hash of address and browser under a salt replaced every UTC day. Rows are kept 400 days. A view is marked engaged once its reader has had the page visible fifteen seconds or given it input, so `engaged` counts people where `agents` counts crawlers. The tables ship in `prisma/analytics.prisma`; `ViewDay` holds days a site counted elsewhere first.
+`wiki-formant/analytics`: page views and events in the site's own Postgres. No cookie and no stored address: a visitor is a hash of address and browser under a salt replaced every UTC day. Rows are kept 400 days. A view is marked engaged once its reader has had the page visible fifteen seconds or given it input, so `engaged` counts people where `agents` counts crawlers. The tables ship in `prisma/analytics.prisma`; `ViewDay` holds days a site counted elsewhere first, and `AgentDay` one row for each agent on each day, so an agent's requests are counted and not kept.
 
 ```ts
 // src/lib/track.ts
