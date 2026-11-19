@@ -22,6 +22,7 @@ import { Fragment, useState, useSyncExternalStore, type ImgHTMLAttributes, type 
 import { eventBegun, eventWhen, splitEvents, today } from './blocks.js';
 import type { CodeTab, EventItem, LinkGridGroup, PlaceItem, ReferenceItem, ResolvedPageRef, StatItem } from './blocks.js';
 import { clock, DEFAULT_ZONE, hoursRows, mapEmbed, mapHref, openState, type Hours } from './hours.js';
+import { slugifyHeading } from './headings.js';
 import { Anchor } from './react-server.js';
 import type { WikiLinkComponent } from './react-server.js';
 import { safeLinkHref } from './validation.js';
@@ -30,6 +31,8 @@ import { BANNER_LABELS, BANNER_MESSAGES, bannerVariant, plainText } from './text
 
 /** A one-line field as the HTML it holds, cleaned by `sanitizeCoreLeaf` (`sanitizeLine`) on its way here. */
 const line = (html: string) => ({ dangerouslySetInnerHTML: { __html: html } });
+/** A block's own heading: its words, and the id a text block's heading of the same words has, so a link to `#where-to-find-us` lands on either. */
+const headed = (html: string) => ({ id: slugifyHeading(plainText(html)) || undefined, ...line(html) });
 
 
 // ---- codeTabs ---------------------------------------------------------------
@@ -386,7 +389,7 @@ export function EventsView({ items, upcoming, past, day }: EventsViewProps) {
       ).map(([heading, rows], ended) =>
         rows.length ? (
           <Fragment key={ended}>
-            <h2 {...line(heading)} />
+            <h2 {...headed(heading)} />
             <ol className="event-list">
               {rows.map((e, i) => (
                 <li key={e.id ?? i}>
@@ -468,7 +471,7 @@ export function LocationsView({ heading, map, items }: LocationsViewProps) {
   const Name = heading ? 'h3' : 'h2';
   return (
     <section className="locations">
-      {heading && <h2 {...line(heading)} />}
+      {heading && <h2 {...headed(heading)} />}
       <ul className="places">
         {items.map((p, i) => {
           const link = safeLinkHref(mapHref(p));
