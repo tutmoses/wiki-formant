@@ -739,7 +739,8 @@ return (
 - There is no sign-up: every passkey is saved from a single-use link `npx passkey-invite` prints. A passkey is bound to its host. Deleting a `Passkey` row signs out every session it opened. Tokens are kept only as hashes (`prisma/passkey.prisma`).
 - A challenge store that does not answer is a 503 (`SIGN_IN_UNAVAILABLE`, `wiki-formant/http`), never a refused passkey.
 - `gate.signedIn(cookie)` is a page's check and `gate.allows(request)` a write route's.
-- `statsQuery` reads `?days=` (1, 7, 30, 90, 365 or all) and the narrowings `?page=`, `?entry=`, `?source=`, `?country=`, `?device=`, which stack and recount every figure from the visits that pass.
+- `statsQuery` reads `?days=` (1, 7, 30, 90, 365 or all) and the narrowings `?segment=`, `?page=`, `?entry=`, `?source=`, `?country=`, `?device=`, which stack and recount every figure from the visits that pass.
+- `?segment=engaged` is the visitors who engaged, with every visit of theirs; `?segment=agents` is the agents, each one's day a visit and its requests that visit's views. The page offers both beside the windows, so any figure reads for either: the bounce rate of engaged visitors, an agent's views per visit.
 - Each headline figure shows its change from the window before (`.stats-delta[data-better]`) and charts on press. A narrowed page over `ViewDay` totals starts at `counted_from` and says so.
 
 ## ROLA sign-in

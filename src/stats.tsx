@@ -6,15 +6,15 @@
 // not have to install it. The figures and the chart are `StatsFigures`, the
 // one part that holds state.
 //
-// The page's state is its query: `?days=` picks the window, and
+// The page's state is its query: `?days=` picks the window, and `?segment=`,
 // `?page=`, `?entry=`, `?source=`, `?country=` and `?device=` narrow it. Every
-// row in a list is a link that adds its own, and every narrowing a link that
-// drops it. Each is `link`, so a site passing its router's link component
+// row in a list is a link that adds its own, the segments sit beside the
+// windows, and every narrowing is a link that drops it. Each is `link`, so a site passing its router's link component
 // changes the window or the filter without reloading the page, and the chart
 // redraws in place. None is prefetched: each is a digest query.
 
 import type { CSSProperties, ReactNode } from 'react';
-import { STATS_FILTERS, count, type Digest, type StatsFilter } from './analytics.js';
+import { STATS_FILTERS, STATS_SEGMENTS, count, type Digest, type StatsFilter } from './analytics.js';
 import type { PasskeyGate } from './passkey.js';
 import { Anchor, type WikiLinkComponent } from './react-server.js';
 import { PasskeyButton, PasskeySignOut, StatsFigures } from './stats-figures.js';
@@ -73,7 +73,7 @@ const country = (code: string) => {
     return code;
   }
 };
-const NAMES: Record<keyof StatsFilter, string> = { page: 'Page', entry: 'Entry page', source: 'Source', country: 'Country', device: 'Device' };
+const NAMES: Record<keyof StatsFilter, string> = { segment: 'Segment', page: 'Page', entry: 'Entry page', source: 'Source', country: 'Country', device: 'Device' };
 const DAY_MS = 86_400_000;
 
 function StatsList({
@@ -135,11 +135,13 @@ function StatsList({
  */
 export function Stats({ digest: d, days, filter = {}, ranges = STATS_RANGES, link: Link = Anchor }: StatsProps) {
   const today = Math.floor(Date.now() / DAY_MS);
-  const counted = d.counted_from ? Date.parse(d.counted_from) / DAY_MS : today;
+  // A narrowed page starts where its figures do: a segment's on the first day it was counted, any other's on the site's.
+  const since = filter.segment ? d.engaged_from : d.counted_from;
+  const counted = since ? Date.parse(since) / DAY_MS : today;
   const narrowed = STATS_FILTERS.filter(k => filter[k]);
   // A rolling window of n days touches n + 1 UTC dates, the first of them in
   // part. All time starts at the first day anything was counted, and a
-  // narrowed window at the first day the site counted itself.
+  // narrowed window at `since`.
   const start = Number.isFinite(days) ? today - days : -Infinity;
   const first = narrowed.length
     ? Math.max(start, counted)
@@ -149,15 +151,24 @@ export function Stats({ digest: d, days, filter = {}, ranges = STATS_RANGES, lin
   const at = (f: StatsFilter, n = days) => href(n, f);
   const to = (k: keyof StatsFilter) => (v: string) => at({ ...filter, [k]: v });
 
-  // Each window is another digest, so a link rather than a button, pinned with the chart's own controls.
+  // Each window or segment is another digest, so a link rather than a button, pinned with the chart's own controls.
   const controls = (
-    <div role="group" aria-label="Window">
-      {ranges.map(n => (
-        <Link key={n} href={at(filter, n)} aria-current={n === days ? 'page' : undefined} prefetch={false}>
-          {windowLabel(n)}
-        </Link>
-      ))}
-    </div>
+    <>
+      <div role="group" aria-label="Window">
+        {ranges.map(n => (
+          <Link key={n} href={at(filter, n)} aria-current={n === days ? 'page' : undefined} prefetch={false}>
+            {windowLabel(n)}
+          </Link>
+        ))}
+      </div>
+      <div role="group" aria-label="Segment">
+        {([undefined, ...STATS_SEGMENTS] as const).map(s => (
+          <Link key={s ?? ''} href={at({ ...filter, segment: s })} aria-current={s === filter.segment ? 'page' : undefined} prefetch={false}>
+            {s ? s[0]!.toUpperCase() + s.slice(1) : 'Everyone'}
+          </Link>
+        ))}
+      </div>
+    </>
   );
 
   return (
@@ -173,8 +184,10 @@ export function Stats({ digest: d, days, filter = {}, ranges = STATS_RANGES, lin
               </li>
             ))}
           </ul>
-          {start < counted && d.counted_from && (
-            <p>Narrowed figures start on {d.counted_from}, the first day this site counted its own visits.</p>
+          {start < counted && since && (
+            <p>
+              Narrowed figures start on {since}, the first day this {filter.segment ? 'segment was counted' : 'site counted its own visits'}.
+            </p>
           )}
         </div>
       )}
