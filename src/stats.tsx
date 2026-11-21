@@ -126,7 +126,8 @@ function StatsList({
 
 /**
  * A site's own analytics on one page: the headline figures against the window
- * before, people and agents apart, whichever of them is chosen per day, and every ranked list the
+ * before, for people, engaged people or agents as the segment switch picks,
+ * whichever of them is chosen per day, and every ranked list the
  * digest carries, each row a link that narrows the page to it, and what agents
  * reported through `send_feedback`. Lists with nothing in them are left out,
  * but for the searches and the feedback, which say they found none, so a quiet
@@ -139,6 +140,8 @@ export function Stats({ digest: d, days, filter = {}, ranges = STATS_RANGES, lin
   const since = filter.segment ? d.engaged_from : d.counted_from;
   const counted = since ? Date.parse(since) / DAY_MS : today;
   const narrowed = STATS_FILTERS.filter(k => filter[k]);
+  // The segment shows as the switch beside the windows, so only the other narrowings are chips.
+  const chips = narrowed.filter(k => k !== 'segment');
   // A rolling window of n days touches n + 1 UTC dates, the first of them in
   // part. All time starts at the first day anything was counted, and a
   // narrowed window at `since`.
@@ -164,27 +167,31 @@ export function Stats({ digest: d, days, filter = {}, ranges = STATS_RANGES, lin
       <div role="group" aria-label="Segment">
         {([undefined, ...STATS_SEGMENTS] as const).map(s => (
           <Link key={s ?? ''} href={at({ ...filter, segment: s })} aria-current={s === filter.segment ? 'page' : undefined} prefetch={false}>
-            {s ? s[0]!.toUpperCase() + s.slice(1) : 'Everyone'}
+            {s ? s[0]!.toUpperCase() + s.slice(1) : 'People'}
           </Link>
         ))}
       </div>
     </>
   );
 
+  const late = narrowed.length > 0 && start < counted && since;
+
   return (
     <div className="stats">
-      {narrowed.length > 0 && (
+      {(chips.length > 0 || late) && (
         <div className="stats-filters">
-          <ul aria-label="Narrowed to">
-            {narrowed.map(k => (
-              <li key={k}>
-                <Link href={at({ ...filter, [k]: undefined })} title="Remove" prefetch={false}>
-                  {NAMES[k]}: {k === 'country' ? country(filter[k]!) : filter[k]} ×
-                </Link>
-              </li>
-            ))}
-          </ul>
-          {start < counted && since && (
+          {chips.length > 0 && (
+            <ul aria-label="Narrowed to">
+              {chips.map(k => (
+                <li key={k}>
+                  <Link href={at({ ...filter, [k]: undefined })} title="Remove" prefetch={false}>
+                    {NAMES[k]}: {k === 'country' ? country(filter[k]!) : filter[k]} ×
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          {late && (
             <p>
               Narrowed figures start on {since}, the first day this {filter.segment ? 'segment was counted' : 'site counted its own visits'}.
             </p>

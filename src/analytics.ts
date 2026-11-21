@@ -397,8 +397,9 @@ export interface DigestOptions {
   /**
    * Narrows every figure to the visits that pass, and the events to their
    * visitors; an agent passes as `AGENT_TEST` has it. Under the `agents`
-   * segment the page views, visits, bounces and entry pages are the agents'
-   * (`STATS_SEGMENTS`), where everywhere else they are people's. `ViewDay` keeps no
+   * segment the visitors, page views, visits, bounces and entry pages are the agents'
+   * (`STATS_SEGMENTS`), where everywhere else they are people's, and there are no
+   * `follow_clicks`. `ViewDay` keeps no
    * visits, so a narrowed digest leaves it out and starts at `counted_from`,
    * and has no `previous_visitors`.
    */
@@ -522,14 +523,15 @@ export async function digest(
   const merged = (label: string, column: string, live: string) =>
     `SELECT k AS ${label}, sum(n) AS visitors FROM (${live} UNION ALL SELECT key, value::int FROM a, jsonb_each_text(a."${column}")) t(k, n) GROUP BY 1`;
 
-  /** Clicks on links to the site's own X account, among `e`. */
-  const follows = handle && `name = 'Outbound Link: Click' AND props->>'url' ILIKE ANY(${$([`%x.com/${handle}%`, `%twitter.com/${handle}%`])}::text[])`;
+  /** The agents segment: no person passes it, and each agent's day joins `visits` as visit 0. */
+  const agentsOnly = filter.segment === 'agents';
+  /** Clicks on links to the site's own X account, among `e`; an agent clicks none. */
+  const follows =
+    handle && !agentsOnly && `name = 'Outbound Link: Click' AND props->>'url' ILIKE ANY(${$([`%x.com/${handle}%`, `%twitter.com/${handle}%`])}::text[])`;
   /** Each filter given, its value a parameter that the test on visits and the one on agents share. */
   const given = STATS_FILTERS.flatMap(k => (filter[k] ? [[k, $(filter[k])] as const] : []));
   const tests = given.map(([k, v]) => (s: string) => VISIT_TEST[k](v, s));
   const agentTests = given.map(([k, v]) => AGENT_TEST[k](v));
-  /** The agents segment: no person passes it, and each agent's day joins `visits` as visit 0. */
-  const agentsOnly = filter.segment === 'agents';
   const day = (at: string) => `to_char(${at} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`;
   /** The site's own agents, as a test on a user agent. */
   const own = $(ownAgents.map(a => `%${a}%`));
@@ -607,7 +609,7 @@ export async function digest(
     return `CASE WHEN ${first(' WHERE engaged')} = ${first('')} THEN ${figure} END`;
   };
   /** One window's headline figures, as `json_build_object` arguments. */
-  const headline = (s: string) => `'visitors', (SELECT count(DISTINCT visitor) FROM v${s}) + (SELECT visitors FROM archived${s}),
+  const headline = (s: string) => `'visitors', ${agentsOnly ? `(SELECT count(DISTINCT visitor) FROM ag${s})` : `(SELECT count(DISTINCT visitor) FROM v${s}) + (SELECT visitors FROM archived${s})`},
       'engaged', ${engagement(s, `(SELECT count(DISTINCT visitor) FROM v${s} WHERE engaged)`)},
       'pageviews', (SELECT coalesce(sum(views), 0) FROM visits${s}) + (SELECT pageviews FROM archived${s}),
       'visits', (SELECT count(*) FROM visits${s}) + (SELECT visits FROM archived${s}),
@@ -643,7 +645,7 @@ export async function digest(
           sum(agents) AS agents, sum(follows) AS follow_clicks FROM (
           SELECT ${day('at')}, count(DISTINCT visitor), count(DISTINCT visitor) FILTER (WHERE engaged), count(*), 0, 0, 0, 0 FROM v GROUP BY 1
           UNION ALL SELECT ${day('at')}, 0, 0, 0, count(*), count(*) FILTER (WHERE bounced), 0, 0 FROM visits GROUP BY 1
-          UNION ALL SELECT to_char(day, 'YYYY-MM-DD'), 0, 0, ${agentsOnly ? 'sum(hits)' : '0'}, 0, 0, count(DISTINCT visitor), 0 FROM ag GROUP BY 1
+          UNION ALL SELECT to_char(day, 'YYYY-MM-DD'), ${agentsOnly ? 'count(DISTINCT visitor), 0, sum(hits)' : '0, 0, 0'}, 0, 0, count(DISTINCT visitor), 0 FROM ag GROUP BY 1
           ${follows ? `UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, 0, count(*) FROM e WHERE ${follows} GROUP BY 1` : ''}
           UNION ALL SELECT to_char(day, 'YYYY-MM-DD'), visitors, 0, pageviews, visits, 0, 0, 0 FROM a
         ) t(date, visitors, engaged, pageviews, visits, bounces, agents, follows) GROUP BY 1`,

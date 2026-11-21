@@ -49,14 +49,13 @@ interface Figure {
 }
 
 /**
- * People, the ones among them who engaged, and agents, never one count of both.
- * Engaged and bounce rate are drawn from the day engagement was first counted:
- * before it is nothing, not days of no one engaging.
+ * The segment's visitors, people unless the segment is agents, and what they
+ * did; who they are is the segment's to choose, not a figure's. Bounce rate is
+ * drawn from the day engagement was first counted: before it is nothing, not
+ * days of no one engaging.
  */
 const figuresOf = ({ previous: p, ...d }: Digest): Figure[] => [
-  { label: 'People', value: count(d.visitors), delta: change(d.visitors, p.visitors), day: r => r.visitors },
-  { label: 'Engaged', value: count(d.engaged), delta: change(d.engaged, p.engaged), day: r => r.engaged, from: d.engaged_from ?? '9999' },
-  { label: 'Agents', value: count(d.agents), delta: change(d.agents, p.agents), day: r => r.agents },
+  { label: 'Visitors', value: count(d.visitors), delta: change(d.visitors, p.visitors), day: r => r.visitors },
   { label: 'Page views', value: count(d.pageviews), delta: change(d.pageviews, p.pageviews), day: r => r.pageviews },
   {
     label: 'Views per visit',

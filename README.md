@@ -740,7 +740,7 @@ return (
 - A challenge store that does not answer is a 503 (`SIGN_IN_UNAVAILABLE`, `wiki-formant/http`), never a refused passkey.
 - `gate.signedIn(cookie)` is a page's check and `gate.allows(request)` a write route's.
 - `statsQuery` reads `?days=` (1, 7, 30, 90, 365 or all) and the narrowings `?segment=`, `?page=`, `?entry=`, `?source=`, `?country=`, `?device=`, which stack and recount every figure from the visits that pass.
-- `?segment=engaged` is the visitors who engaged, with every visit of theirs; `?segment=agents` is the agents, each one's day a visit and its requests that visit's views. The page offers both beside the windows, so any figure reads for either: the bounce rate of engaged visitors, an agent's views per visit.
+- `?segment=engaged` is the visitors who engaged, with every visit of theirs; `?segment=agents` is the agents, each one's day a visit and its requests that visit's views, and `visitors` the agents. The page switches between people, engaged and agents beside the windows, so its one Visitors figure and every other reads for each: the bounce rate of engaged visitors, an agent's views per visit. The segment is the switch, never a chip.
 - Each headline figure shows its change from the window before (`.stats-delta[data-better]`) and charts on press. A narrowed page over `ViewDay` totals starts at `counted_from` and says so.
 
 ## ROLA sign-in
