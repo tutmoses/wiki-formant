@@ -325,10 +325,11 @@ export const STATS_FILTERS = ['segment', 'page', 'entry', 'source', 'country', '
 /**
  * Who `segment` narrows to. `engaged` is the visitors who engaged, with every
  * visit of theirs. `agents` is the agents, each one's day a visit and its
- * requests that visit's views, so a bounce is an agent that asked once. Any
- * other value is no one.
+ * requests that visit's views, so a bounce is an agent that asked once. `all`
+ * is people and agents together, each counted as its own segment counts it.
+ * Any other value is no one.
  */
-export const STATS_SEGMENTS = ['engaged', 'agents'] as const;
+export const STATS_SEGMENTS = ['engaged', 'agents', 'all'] as const;
 export type StatsFilter = Partial<Record<(typeof STATS_FILTERS)[number], string>>;
 
 /** A count as a stats page prints it. Here, not in the `'use client'` figures, because
@@ -356,7 +357,7 @@ const visitSource = (s: string) => {
  * visit's: an engaged visitor's visits pass, the ones that bounced included.
  */
 const VISIT_TEST: Record<keyof StatsFilter, (value: string, s: string) => string> = {
-  segment: (v, s) => `${v} = 'engaged' AND visitor IN (SELECT visitor FROM viewed${s} WHERE engaged)`,
+  segment: (v, s) => `(${v} = 'all' OR ${v} = 'engaged' AND visitor IN (SELECT visitor FROM viewed${s} WHERE engaged))`,
   page: v => `bool_or(path = ${v})`,
   entry: v => `(array_agg(path ORDER BY at, id))[1] = ${v}`,
   source: (v, s) => `coalesce(${visitSource(s)}, '(none)') = ${v}`,
@@ -371,7 +372,7 @@ const VISIT_TEST: Record<keyof StatsFilter, (value: string, s: string) => string
  * agent passes a page, a source or a device.
  */
 const AGENT_TEST: Record<keyof StatsFilter, (value: string) => string> = {
-  segment: v => `${v} = 'agents'`,
+  segment: v => `${v} IN ('agents', 'all')`,
   page: () => 'false',
   entry: v => `entry = ${v}`,
   source: () => 'false',
@@ -398,8 +399,8 @@ export interface DigestOptions {
    * Narrows every figure to the visits that pass, and the events to their
    * visitors; an agent passes as `AGENT_TEST` has it. Under the `agents`
    * segment the visitors, page views, visits, bounces and entry pages are the agents'
-   * (`STATS_SEGMENTS`), where everywhere else they are people's, and there are no
-   * `follow_clicks`. `ViewDay` keeps no
+   * (`STATS_SEGMENTS`), and there are no `follow_clicks`; under `all` they are
+   * people's and agents' together; everywhere else they are people's. `ViewDay` keeps no
    * visits, so a narrowed digest leaves it out and starts at `counted_from`,
    * and has no `previous_visitors`.
    */
@@ -523,8 +524,10 @@ export async function digest(
   const merged = (label: string, column: string, live: string) =>
     `SELECT k AS ${label}, sum(n) AS visitors FROM (${live} UNION ALL SELECT key, value::int FROM a, jsonb_each_text(a."${column}")) t(k, n) GROUP BY 1`;
 
-  /** The agents segment: no person passes it, and each agent's day joins `visits` as visit 0. */
+  /** The agents segment: no person passes it. */
   const agentsOnly = filter.segment === 'agents';
+  /** Segments that count agents: each agent's day joins `visits` as visit 0, and its visitor `visitors`. */
+  const withAgents = agentsOnly || filter.segment === 'all';
   /** Clicks on links to the site's own X account, among `e`; an agent clicks none. */
   const follows =
     handle && !agentsOnly && `name = 'Outbound Link: Click' AND props->>'url' ILIKE ANY(${$([`%x.com/${handle}%`, `%twitter.com/${handle}%`])}::text[])`;
@@ -586,7 +589,7 @@ export async function digest(
       SELECT visitor, visit, min(at) AS at, count(*) AS views, count(*) = 1 AND NOT bool_or(engaged) AS bounced,
         (array_agg(path ORDER BY at, id))[1] AS entry, ${visitSource(s)} AS source
       FROM numbered${s} GROUP BY visitor, visit${tests.length ? ` HAVING ${tests.map(t => t(s)).join(' AND ')}` : ''}
-      ${agentsOnly ? `UNION ALL SELECT visitor, 0, day::timestamp AT TIME ZONE 'UTC', hits, hits = 1, entry, NULL FROM ag${s}` : ''}
+      ${withAgents ? `UNION ALL SELECT visitor, 0, day::timestamp AT TIME ZONE 'UTC', hits, hits = 1, entry, NULL FROM ag${s}` : ''}
     ), v${s} AS (
       ${tests.length ? `SELECT n.id, n.path, n.source, n.country, n.device, n.visitor, n.engaged, n.at FROM numbered${s} n JOIN visits${s} USING (visitor, visit)` : `SELECT * FROM viewed${s}`}
     ), e${s} AS (
@@ -609,7 +612,9 @@ export async function digest(
     return `CASE WHEN ${first(' WHERE engaged')} = ${first('')} THEN ${figure} END`;
   };
   /** One window's headline figures, as `json_build_object` arguments. */
-  const headline = (s: string) => `'visitors', ${agentsOnly ? `(SELECT count(DISTINCT visitor) FROM ag${s})` : `(SELECT count(DISTINCT visitor) FROM v${s}) + (SELECT visitors FROM archived${s})`},
+  const headline = (s: string) => `'visitors', (SELECT count(DISTINCT visitor) FROM v${s}) + (SELECT visitors FROM archived${s})${
+        withAgents ? ` + (SELECT count(DISTINCT visitor) FROM ag${s})` : ''
+      },
       'engaged', ${engagement(s, `(SELECT count(DISTINCT visitor) FROM v${s} WHERE engaged)`)},
       'pageviews', (SELECT coalesce(sum(views), 0) FROM visits${s}) + (SELECT pageviews FROM archived${s}),
       'visits', (SELECT count(*) FROM visits${s}) + (SELECT visits FROM archived${s}),
@@ -645,7 +650,7 @@ export async function digest(
           sum(agents) AS agents, sum(follows) AS follow_clicks FROM (
           SELECT ${day('at')}, count(DISTINCT visitor), count(DISTINCT visitor) FILTER (WHERE engaged), count(*), 0, 0, 0, 0 FROM v GROUP BY 1
           UNION ALL SELECT ${day('at')}, 0, 0, 0, count(*), count(*) FILTER (WHERE bounced), 0, 0 FROM visits GROUP BY 1
-          UNION ALL SELECT to_char(day, 'YYYY-MM-DD'), ${agentsOnly ? 'count(DISTINCT visitor), 0, sum(hits)' : '0, 0, 0'}, 0, 0, count(DISTINCT visitor), 0 FROM ag GROUP BY 1
+          UNION ALL SELECT to_char(day, 'YYYY-MM-DD'), ${withAgents ? 'count(DISTINCT visitor), 0, sum(hits)' : '0, 0, 0'}, 0, 0, count(DISTINCT visitor), 0 FROM ag GROUP BY 1
           ${follows ? `UNION ALL SELECT ${day('at')}, 0, 0, 0, 0, 0, 0, count(*) FROM e WHERE ${follows} GROUP BY 1` : ''}
           UNION ALL SELECT to_char(day, 'YYYY-MM-DD'), visitors, 0, pageviews, visits, 0, 0, 0 FROM a
         ) t(date, visitors, engaged, pageviews, visits, bounces, agents, follows) GROUP BY 1`,

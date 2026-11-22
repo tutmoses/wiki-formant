@@ -126,7 +126,7 @@ function StatsList({
 
 /**
  * A site's own analytics on one page: the headline figures against the window
- * before, for people, engaged people or agents as the segment switch picks,
+ * before, for people, engaged people, agents or all of them as the segment switch picks,
  * whichever of them is chosen per day, and every ranked list the
  * digest carries, each row a link that narrows the page to it, and what agents
  * reported through `send_feedback`. Lists with nothing in them are left out,
@@ -136,8 +136,9 @@ function StatsList({
  */
 export function Stats({ digest: d, days, filter = {}, ranges = STATS_RANGES, link: Link = Anchor }: StatsProps) {
   const today = Math.floor(Date.now() / DAY_MS);
-  // A narrowed page starts where its figures do: a segment's on the first day it was counted, any other's on the site's.
-  const since = filter.segment ? d.engaged_from : d.counted_from;
+  // A narrowed page starts where its figures do: a segment's on the first day it was counted, any other's, and all, on the site's.
+  const segmented = !!filter.segment && filter.segment !== 'all';
+  const since = segmented ? d.engaged_from : d.counted_from;
   const counted = since ? Date.parse(since) / DAY_MS : today;
   const narrowed = STATS_FILTERS.filter(k => filter[k]);
   // The segment shows as the switch beside the windows, so only the other narrowings are chips.
@@ -193,7 +194,7 @@ export function Stats({ digest: d, days, filter = {}, ranges = STATS_RANGES, lin
           )}
           {late && (
             <p>
-              Narrowed figures start on {since}, the first day this {filter.segment ? 'segment was counted' : 'site counted its own visits'}.
+              Narrowed figures start on {since}, the first day this {segmented ? 'segment was counted' : 'site counted its own visits'}.
             </p>
           )}
         </div>

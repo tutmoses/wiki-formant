@@ -49,7 +49,7 @@ interface Figure {
 }
 
 /**
- * The segment's visitors, people unless the segment is agents, and what they
+ * The segment's visitors, people unless the segment is agents or all, and what they
  * did; who they are is the segment's to choose, not a figure's. Bounce rate is
  * drawn from the day engagement was first counted: before it is nothing, not
  * days of no one engaging.
