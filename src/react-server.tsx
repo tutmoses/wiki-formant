@@ -319,6 +319,43 @@ export function JsonLd({ data }: { data: unknown }) {
   return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(data) }} />;
 }
 
+// ---- the agent surface's links ----------------------------------------------
+
+export interface SiteLinksProps {
+  /** The site's RSS feeds. */
+  feeds?: readonly { href: string; title: string }[];
+  /** Whether the origin serves `/.well-known/openapi.json` and `agent-card.json`. */
+  described?: boolean;
+  /** Whether it serves `/AGENTS.md`. */
+  agentsMd?: boolean;
+}
+
+/**
+ * The `<link>`s that make `/llms.txt`, the feeds, the OpenAPI document, the
+ * agent card and AGENTS.md reachable from whatever page an agent lands on first.
+ * React hoists them into `<head>` from anywhere in the tree.
+ *
+ * They live in the root layout, not in `alternates`, because a page that sets
+ * `alternates.canonical` replaces that whole object. `service-desc` is the
+ * OpenAPI document, never the MCP endpoint: that is POST-only, so a client that
+ * followed the link would get a 405, and the document and the card both carry
+ * its URL. `/llms.txt` is `help`, not `alternate`, which would claim a site-wide
+ * index is this page's plain-text twin.
+ */
+export function SiteLinks({ feeds = [], described = true, agentsMd = false }: SiteLinksProps) {
+  return (
+    <>
+      <link rel="help" type="text/plain" href="/llms.txt" title="LLM guide" />
+      {feeds.map(f => (
+        <link key={f.href} rel="alternate" type="application/rss+xml" href={f.href} title={f.title} />
+      ))}
+      {described && <link rel="service-desc" type="application/json" href="/.well-known/openapi.json" title="OpenAPI description" />}
+      {described && <link rel="service-meta" type="application/json" href="/.well-known/agent-card.json" title="A2A agent card" />}
+      {agentsMd && <link rel="service-doc" type="text/markdown" href="/AGENTS.md" title="Agent API reference" />}
+    </>
+  );
+}
+
 // ---- breadcrumbs ------------------------------------------------------------
 
 export interface BreadcrumbItem {

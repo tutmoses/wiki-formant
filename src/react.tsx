@@ -1424,6 +1424,45 @@ export class ErrorBoundary extends Component<
   }
 }
 
+// ---- route error ------------------------------------------------------------
+
+export interface RouteErrorProps {
+  /** Next's `retry`, which fetches the segment again and re-renders it. */
+  retry: () => void;
+  title?: string;
+  /** The Try again button's classes, the site's button. */
+  buttonClassName?: string;
+  /** The Home link's classes. */
+  linkClassName?: string;
+}
+
+/**
+ * What `error.tsx` and `global-error.tsx` draw: the page's one heading, Try
+ * again, and the way home, in the `.empty-state` every site already styles.
+ *
+ *   export default function Error({ retry }: { retry: () => void }) {
+ *     return <RouteError retry={retry} buttonClassName="btn-primary" />;
+ *   }
+ *
+ * `retry`, not `reset`: `reset` clears the boundary and renders the same
+ * failed payload again, where `retry` fetches it anew.
+ */
+export function RouteError({ retry, title = 'This page did not load', buttonClassName, linkClassName }: RouteErrorProps) {
+  return (
+    <div className="empty-state">
+      <h1>{title}</h1>
+      <div className="row-md route-error__actions">
+        <button type="button" onClick={() => retry()} className={buttonClassName}>
+          Try again
+        </button>
+        <a href="/" className={linkClassName}>
+          Home
+        </a>
+      </div>
+    </div>
+  );
+}
+
 // ---- rail shell -------------------------------------------------------------
 
 export interface RailShellProps {

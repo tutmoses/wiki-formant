@@ -288,6 +288,7 @@ function LinkPreview() {
 - `useBlockOperations(blocks, setBlocks, { duplicate })` and `BlockActions` are a block list's five edits and their buttons; `useRevisionRestore(restore, { onRestored })` confirms and restores, `restoreViaPost(endpoint)` being the usual `restore`.
 - `useArticlePasses(ref, [blocks])` runs `wiki-formant/dom`'s passes and renders math with KaTeX (an optional peer, loaded only when a page has `$$…$$`, `\[…\]` or `\(…\)`).
 - `<Beacon />` sends page views and outbound clicks to `wiki-formant/analytics`.
+- `RouteError` is what `error.tsx` and `global-error.tsx` draw: the heading, Try again (Next's `retry`, never `reset`) and Home, in `.empty-state`; the site passes its button's classes.
 
 `useClickOutside`, `useSnapRow` and the editor hooks ship no class names.
 
@@ -307,6 +308,7 @@ import { Breadcrumbs, FacetBar, FacetSummary, InfoboxFacts, JsonLd, Pager } from
 - `FacetBar` renders `facetControls` and `alphaControls`; `letterRow`, `letterControl`, `text` and `letterCounts="title"` separate the A–Z row and let a label truncate while its count stays.
 - `Breadcrumbs` renders the trail and its `BreadcrumbList` JSON-LD together; `base` makes the URLs absolute.
 - `JsonLd` escapes every `<`, so an authored `</script>` cannot close the tag.
+- `SiteLinks` is the root layout's agent-surface `<link>`s: `/llms.txt` as `help`, the RSS `feeds`, the OpenAPI document as `service-desc` and the agent card as `service-meta` (`described`, on by default), `/AGENTS.md` as `service-doc` (`agentsMd`). React hoists them into `<head>` from anywhere. `service-desc` is never the MCP endpoint, which is POST-only.
 - `Pager` steps by links (`href`) or buttons (`onPage`, `wrap`); a step with nowhere to go stays in place, inert. `SnapDots` are a snap row's dots.
 - `FacetSummary` is the count and Clear line under the facets; `RelatedPages` the see-also aside; `InfoboxAside` the facts landmark with its series line; `InfoboxFacts` renders `metadataRows` with `formatFactValue` as its default cell.
 - `RevisionChanges` renders `withChanges` rows; `MaintenanceQueues` renders `maintenanceQueues`; `Cite` is an article's citation in a `<details>`.
@@ -405,6 +407,7 @@ export const generateMetadata = () => ({
 <JsonLd data={articleLd({ headline: title, url, image, published, modified, publisher: SITE.publisher, citation: citationsFromReferences(refs) })} />
 ```
 
+- `rootMetadata({ name, url, description, title, image, handle, keywords, icons })` is the root layout's `metadata`: title template, robots, and an inherited card with no title, description or URL, which Next fills from each page's own.
 - Next replaces `openGraph` and `twitter` per segment rather than merging, so `pageMetadata` sets both; `sitePageMetadata({ siteName, handle })` binds the fields every page's card needs.
 - `sitePageMetadata({ ..., card: `${SITE_URL}/og` })` binds the site's card route, and a page then passes `card: { title, eyebrow, description, banner }` in place of `image`. `cardUrl(base, fields)` is the same address for JSON-LD: empty fields left out, the order fixed, so one card has one URL.
 - `articleLd` requires `image`. `collectionLd` is an index over an `ItemList`. `siteGraphLd` is the Organization, WebSite and `WebAPI` `@graph` for the root layout, and `siteRefs(url)` hands out the same `@id`s for a page's `publisher` and `isPartOf`.
@@ -790,7 +793,7 @@ const tools = rolaLoginTools({
 @import "wiki-formant/base.css" layer(components);
 ```
 
-It declares the page frame (`--content-width` 120rem for every page, `--sidebar-width` 18rem, `--infobox-width`, `--page-pad` 16/24/64px) in the components layer, so a site never restates them in `@theme`; the primitives `.spinner`, `.skeleton`, `.empty-state`; and the reduced-motion guard. It also splits a page beside its infobox at 768px of its column; whether the infobox sticks, and the rail's surface, stay the site's.
+It declares the page frame (`--content-width` 120rem for every page, `--sidebar-width` 18rem, `--infobox-width`, `--page-pad` 16/24/64px) in the components layer, so a site never restates them in `@theme`; the shell every root layout draws (`.app-shell`, `.app-main`, `.page-frame`, `.skip-link`); the primitives `.spinner`, `.skeleton`, `.empty-state`; and the reduced-motion guard. It also splits a page beside its infobox at 768px of its column; whether the infobox sticks, and the rail's surface, stay the site's.
 
 ## Database and scripts
 

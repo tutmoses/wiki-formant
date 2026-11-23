@@ -365,6 +365,60 @@ export function sitePageMetadata(site: { siteName: string; locale?: string; hand
   };
 }
 
+export interface RootMetadataOptions {
+  /** The site's name: the title template's suffix, `og:site_name`, and the default title. */
+  name: string;
+  /** The canonical origin, `metadataBase`. */
+  url: string;
+  description: string;
+  /** The homepage's title, when it is longer than the name. */
+  title?: string;
+  /** Absolute URL of the default card, 1200×630. */
+  image?: string;
+  /** `@handle`, as both site and creator. */
+  handle?: string;
+  locale?: string;
+  keywords?: string[];
+  icons?: { icon: string; apple?: string };
+}
+
+/**
+ * The root layout's `metadata`: the title template, the robots directives and
+ * the card every page inherits until it sets its own.
+ *
+ * The inherited card carries no title, description or URL. Next fills a missing
+ * `og:title` and `og:description` from the page's own, and the Twitter card from
+ * the Open Graph one, so a page that sets no card still describes itself; a URL
+ * here would tell every such page's unfurler it was the homepage. Three sites
+ * wrote this object three ways, and two of them set that URL.
+ */
+export function rootMetadata(o: RootMetadataOptions) {
+  return {
+    metadataBase: new URL(o.url),
+    title: { default: o.title ?? o.name, template: `%s | ${o.name}` },
+    description: o.description,
+    ...(o.keywords?.length ? { keywords: o.keywords } : {}),
+    ...(o.icons ? { icons: o.icons } : {}),
+    robots: {
+      index: true,
+      follow: true,
+      'max-snippet': -1,
+      'max-image-preview': 'large' as const,
+      'max-video-preview': -1,
+    },
+    openGraph: {
+      type: 'website' as const,
+      siteName: o.name,
+      locale: o.locale ?? 'en_US',
+      ...(o.image ? { images: [{ url: o.image, width: 1200, height: 630, alt: o.name }] } : {}),
+    },
+    twitter: {
+      card: 'summary_large_image' as const,
+      ...(o.handle ? { site: o.handle, creator: o.handle } : {}),
+    },
+  };
+}
+
 /**
  * What a generated card draws: the text, and a banner that replaces its art.
  * Any other key is a parameter only one site's route reads, such as the palette

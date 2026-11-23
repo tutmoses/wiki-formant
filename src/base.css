@@ -37,6 +37,22 @@
 @media (min-width: 40rem) { :root { --page-pad: 1.5rem; } }
 @media (min-width: 64rem) { :root { --page-pad: 4rem; } }
 
+/* ---- the shell ----------------------------------------------------------------
+   The same four boxes in every root layout, under one set of names:
+
+     .app-shell > a.skip-link, header, main#main.app-main, footer
+                  .app-main > .page-frame   (or .wiki-layout beside a rail)
+
+   A column the height of the window, whose main takes what the header and the
+   footer leave, so a short page's footer sits at the foot. `.page-frame` is the
+   shared column, --content-width with its gutters, centred. The skip link is
+   off-screen until focused; its colour and shape are the site's. */
+.app-shell { display: flex; flex-direction: column; min-height: 100dvh; }
+.app-main { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+.page-frame { width: 100%; max-width: var(--content-width); margin-inline: auto; padding-inline: var(--page-pad); }
+.skip-link { position: absolute; inset-inline-start: 1rem; top: -100%; z-index: 60; }
+.skip-link:focus { top: 0; }
+
 /* ---- ColumnsView ----------------------------------------------------------
    Stacked until there is room for a row. `data-gap` and `data-align` replace
    the Tailwind utilities the view used to emit, which only reached a site whose
@@ -587,6 +603,7 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
 }
 .skeleton { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
 .empty-state { padding-block: 3rem; text-align: center; }
+.route-error__actions { justify-content: center; }
 
 /* ---- long tokens ----------------------------------------------------------
    An address or hash is one word, so its min-content width is the whole
