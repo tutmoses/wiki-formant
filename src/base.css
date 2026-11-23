@@ -413,9 +413,10 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
 .link { color: var(--ui-accent); text-decoration: none; cursor: pointer; }
 .link:hover { text-decoration: underline; }
 
-/* The rail's contents: a label over a group of entries, and the article's contents with the section being read lit. */
+/* The rail's contents: a label over a group of entries, and the article's contents with the section being read lit.
+   Its inset follows the gutter up to 2rem: the page's 4rem would take 128px of an 18rem rail. */
 .wiki-sidebar { --rail-border: 1px solid var(--ui-border); }
-.wiki-sidebar__scroll { gap: 1.5rem; padding: 1rem var(--page-pad) 3rem; }
+.wiki-sidebar__scroll { gap: 1.5rem; padding: 1rem min(var(--page-pad), 2rem) 3rem; }
 .wiki-rail__group, .wiki-rail__toc-list { display: flex; flex-direction: column; gap: 1px; }
 .wiki-rail__label { padding: 0 0.5rem 0.25rem; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ui-muted); }
 .wiki-rail__toc-btn, .wiki-rail__toc-item { display: flex; align-items: center; gap: 0.25rem; width: 100%; padding: 0.25rem 0.5rem; border: 0; background: none; font: inherit; color: var(--ui-muted); text-align: left; cursor: pointer; }
