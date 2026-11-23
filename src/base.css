@@ -12,19 +12,25 @@
    used to emit, so two of its four alignments did nothing. */
 
 /* ---- the page frame ---------------------------------------------------------
-   The three numbers every site's page is laid out by, and the one exception to
+   The numbers every site's page is laid out by, and the one exception to
    "no design token": they are the frame, not a look, and four sites restating
    them is how one of them came to draw an 80rem page while the rest drew 72.
-   The column is 72rem with its gutters inside it, the rail 18rem, and the
+   One column for every page, article or dashboard: 120rem with its gutters
+   inside it, so a page reaches the gutter on any screen short of 1920px and
+   prose holds at the site's --measure within it. The rail is 18rem, and the
    gutter 16 / 24 / 32px at base / 640 / 1024, the header, column and footer
-   reading the same one so they line up. STRUCTURE.md D8 is the spec.
+   reading the same one so they line up. Beside prose, an infobox takes
+   --infobox-width. STRUCTURE.md D8 is the spec.
 
    This file loads into the components layer, which outranks Tailwind's theme
    layer: a site does not restate these in `@theme`, and one that must differ
    sets the property on the element that differs. */
 :root {
-  --content-width: 72rem;
+  --content-width: 120rem;
   --sidebar-width: 18rem;
+  /* A share of the column between a floor a fact still fits and a ceiling
+     past which a facts panel is a page of its own. */
+  --infobox-width: clamp(15rem, 33%, 22rem);
   --page-pad: 1rem;
 }
 @media (min-width: 40rem) { :root { --page-pad: 1.5rem; } }
@@ -75,14 +81,20 @@
 .spread { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
 .badge { display: inline-flex; align-items: center; border-radius: 9999px; }
 
-/* A page whose first block is an infobox, one column with the infobox on top.
-   Where it splits into prose and a rail is the site's: a viewport width on one,
-   its column's width on another. Both items need `min-width: 0`, or the one
-   shared track sizes to the widest item's min-content and the other inherits
-   the overflow. */
+/* A page whose first block is an infobox: one column with the infobox on top,
+   and from 768px of the column it is in, prose left and the infobox right at
+   --infobox-width. Keyed to that column, never the viewport: beside an open
+   rail a 1100px window leaves a 750px column. Both items need `min-width: 0`,
+   or the one shared track sizes to the widest item's min-content and the
+   other inherits the overflow. Whether the infobox sticks, and where, is the
+   site's: it knows its header. */
 .page-with-infobox { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "infobox" "content"; }
 .page-with-infobox > .page-main-content { grid-area: content; min-width: 0; }
 .page-with-infobox > .infobox { grid-area: infobox; min-width: 0; }
+:has(> .page-with-infobox) { container-type: inline-size; }
+@container (min-width: 768px) {
+  .page-with-infobox { grid-template-columns: minmax(0, 1fr) var(--infobox-width); grid-template-areas: "content infobox"; align-items: start; }
+}
 
 /* ---- the wiki rail (RailShell prefix="wiki-sidebar") ------------------------
    A column beside the article from 1024px; below that, a drawer stacked above
