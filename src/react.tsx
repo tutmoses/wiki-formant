@@ -425,12 +425,22 @@ export function TableOfContents({
       {expanded && (
         <nav className={classNames.list} aria-label={label}>
           {headings.map(h => (
-            <button
-              type="button"
+            // A link, so the section is in the URL to share, Back returns to it,
+            // and a modified click opens it elsewhere; a plain click scrolls
+            // smoothly instead of jumping. Each site's `scroll-padding-top`
+            // clears its header on both paths.
+            <a
               key={h.id}
-              onClick={() => {
+              href={`#${h.id}`}
+              onClick={e => {
+                if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                const el = document.getElementById(h.id);
+                if (!el) return;
+                e.preventDefault();
                 setActiveId(h.id);
-                document.getElementById(h.id)?.scrollIntoView({ behavior: 'smooth' });
+                el.scrollIntoView({ behavior: 'smooth' });
+                // The router's own state is kept, or Next treats Back as a new page.
+                if (location.hash !== `#${h.id}`) history.pushState(history.state, '', `#${h.id}`);
               }}
               className={
                 currentId === h.id
@@ -441,7 +451,7 @@ export function TableOfContents({
               style={(h.level - 1) * indentRem ? ({ paddingLeft: `${(h.level - 1) * indentRem}rem` } as CSSProperties) : undefined}
             >
               {h.text}
-            </button>
+            </a>
           ))}
         </nav>
       )}
