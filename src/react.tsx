@@ -1606,7 +1606,8 @@ export function RailShell({ children, prefix, label, className }: RailShellProps
  * It goes at the leading edge of the site's header, outside the rail: a closed
  * rail is gone, and on a phone an open one is a drawer above the article, so a
  * button anywhere below the header ends up under the menu it closes. Render it
- * only where there is a rail, inside the same `SidebarProvider`.
+ * on every route, inside the same `SidebarProvider`: `base.css` hides it on a
+ * page with no rail.
  *
  * `wiki-formant/base.css` draws it as `.wiki-rail__toggle`, on the `--ui-*`
  * tokens.

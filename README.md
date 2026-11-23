@@ -313,7 +313,8 @@ import { Breadcrumbs, FacetBar, FacetSummary, InfoboxFacts, JsonLd, Pager } from
 - `Breadcrumbs` renders the trail and its `BreadcrumbList` JSON-LD together; `base` makes the URLs absolute.
 - `JsonLd` escapes every `<`, so an authored `</script>` cannot close the tag.
 - `SiteDocument` is the root layout's `<html>`: the rail's boot script and `SiteLinks` (`links`) in the head, `JsonLd` (`graph`) and `Beacon` (`beacon`, on by default) in the body, `suppressHydrationWarning` for the attribute the script stamps. Other props go on `<html>`; `bodyClassName` on the body.
-- `SiteShell` is `base.css`'s shell under `SidebarProvider`: `.app-shell` > skip link, `header`, `main#main.app-main`, `footer`. `RailFrame` is a section layout's rail beside its column, `.wiki-layout` > `rail` + `.wiki-layout__main`, inside `main`.
+- `SiteShell` is `base.css`'s shell under `SidebarProvider`: `.app-shell` > skip link, `header.app-header` (around `header`, which is its contents), `main#main.app-main`, `footer`. `RailFrame` is a section layout's rail beside its column, `.wiki-layout` > `rail` + `.wiki-layout__main` > `.page-frame`, inside `main`; `preview` mounts `WikiLinkPreview` over the column. `RailToggle` goes in every header: `base.css` hides it on a page with no rail.
+- `SiteFooter` is `footer.app-footer`: the site's own matter (`children`), a row of `links` ending on the `x` follow link, and `© <year> <owner>` with a `note` (the licence, a disclaimer).
 
 ```tsx
 <SiteDocument className={font.variable} links={{ feeds, agentsMd: true }} graph={siteGraphLd(site)}>
@@ -423,7 +424,7 @@ export const generateMetadata = () => ({
 - `rootMetadata({ name, url, description, title, image, handle, keywords, icons })` is the root layout's `metadata`: title template, robots, and an inherited card with no title, description or URL, which Next fills from each page's own.
 - Next replaces `openGraph` and `twitter` per segment rather than merging, so `pageMetadata` sets both; `sitePageMetadata({ siteName, handle })` binds the fields every page's card needs.
 - `sitePageMetadata({ ..., card: `${SITE_URL}/og` })` binds the site's card route, and a page then passes `card: { title, eyebrow, description, banner }` in place of `image`. `cardUrl(base, fields)` is the same address for JSON-LD: empty fields left out, the order fixed, so one card has one URL.
-- `articleLd` requires `image`. `collectionLd` is an index over an `ItemList`. `siteGraphLd` is the Organization, WebSite and `WebAPI` `@graph` for the root layout, and `siteRefs(url)` hands out the same `@id`s for a page's `publisher` and `isPartOf`.
+- `articleLd` requires `image`. `collectionLd` is an index over an `ItemList`. `siteGraphLd` is the Organization, WebSite and `WebAPI` `@graph` for the root layout (search defaults to `/search?q=` on the origin, the API's documentation to its `llms.txt`), and `siteRefs(url)` hands out the same `@id`s for a page's `publisher` and `isPartOf`.
 - `questionPairs(html)` reads a FAQ from headings ending in `?`; `faqPageLd(pairs, url)` is null under two pairs.
 - `describe(text)` is a meta description from any prose within 160 characters: whole sentences where they fill half, else cut at a word with an ellipsis.
 

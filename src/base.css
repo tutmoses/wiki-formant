@@ -40,14 +40,33 @@
 /* ---- the shell ----------------------------------------------------------------
    The same four boxes in every root layout, under one set of names:
 
-     .app-shell > a.skip-link, header, main#main.app-main, footer
-                  .app-main > .page-frame   (or .wiki-layout beside a rail)
+     .app-shell > a.skip-link, header.app-header, main#main.app-main, footer.app-footer
+                  .app-main > .page-frame   (or .wiki-layout beside a rail,
+                                             whose .wiki-layout__main > .page-frame)
 
    A column the height of the window, whose main takes what the header and the
    footer leave, so a short page's footer sits at the foot. `.page-frame` is the
-   shared column, --content-width with its gutters, centred. The skip link is
-   off-screen until focused; its colour and shape are the site's. */
+   shared column, --content-width with its gutters, centred, drawn once by
+   whatever owns the column: `RailFrame` beside a rail, otherwise the shell's
+   main or the page. A frame around a rail gives way to it, so the rail sits
+   flush left and the column centres in what it leaves; a frame inside a frame
+   adds nothing. The header and footer span the window on the gutter; their
+   height, contents and surface are the site's, and a sticky header's height is
+   `--rail-top`. The skip link is off-screen until focused; its colour and
+   shape are the site's. */
 .app-shell { display: flex; flex-direction: column; min-height: 100dvh; }
+.app-header { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 1rem; min-height: var(--rail-top, auto); padding-inline: var(--page-pad); }
+.app-footer { padding-block: 2rem; font-size: var(--ui-small); color: var(--ui-muted); }
+/* `SiteFooter`: the site's matter, a row of links, the owner and licence line. */
+.app-footer__frame { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; text-align: center; }
+.app-footer__links { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.25rem 1.25rem; }
+.app-footer__links a { color: inherit; text-decoration: none; }
+.app-footer__links a:hover { color: var(--ui-accent); }
+.app-footer__note { display: flex; flex-direction: column; gap: 0.25rem; }
+.app-footer__note > * { margin: 0; }
+.app-footer__note a { color: inherit; text-decoration: underline; }
+.page-frame:has(> .wiki-layout),
+.page-frame:not(:has(> .wiki-layout)) .page-frame { max-width: none; padding-inline: 0; }
 /* `clip`, not `hidden`, which the spec promotes to a scroll box of its own: a
    page wider than the window is cut at its edge and the window stays the one
    scroller, so the sticky rail still sticks. */
@@ -250,9 +269,11 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
        --ui-small: var(--text-small);           the small type size
        --ui-muted: var(--color-text-muted);
        --ui-accent: var(--color-accent);
+       --ui-accent-soft: var(--color-accent-muted);  behind what is lit: the rail's page, its section being read
        --ui-on-accent: var(--color-bg);         text on the accent
        --ui-up: var(--color-success);           a gain, an addition
        --ui-down: var(--color-error);           a loss, a removal, a warning
+       --ui-shadow: 0 8px 24px -4px rgb(0 0 0 / 0.25);  a floating card's; unset, that one
      } */
 :root {
   --ui-surface: color-mix(in srgb, currentColor 6%, transparent);
@@ -264,6 +285,7 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
   --ui-small: 0.875rem;
   --ui-muted: color-mix(in srgb, currentColor 70%, transparent);
   --ui-accent: currentColor;
+  --ui-accent-soft: var(--ui-surface-2);
   --ui-on-accent: Canvas;
   --ui-up: currentColor;
   --ui-down: currentColor;
@@ -443,14 +465,19 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
 .wiki-rail__subtree { padding-inline-start: 0.75rem; }
 .wiki-rail__item { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem; border-radius: var(--ui-radius); color: var(--ui-muted); text-decoration: none; transition: background-color 150ms, color 150ms; }
 .wiki-rail__item:hover { background: var(--ui-surface-2); color: inherit; }
-.wiki-rail__item--active { background: var(--ui-surface-2); color: var(--ui-accent); font-weight: 600; }
+.wiki-rail__item--active,
+.wiki-rail__item--active:hover { background: var(--ui-accent-soft); color: var(--ui-accent); font-weight: 600; }
 .wiki-rail__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wiki-rail__label { padding: 0 0.5rem 0.25rem; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ui-muted); }
 .wiki-rail__toc-btn, .wiki-rail__toc-item { display: flex; align-items: center; gap: 0.25rem; width: 100%; padding: 0.25rem 0.5rem; border: 0; background: none; font: inherit; color: var(--ui-muted); text-align: left; cursor: pointer; }
 .wiki-rail__toc-item { border-inline-start: 2px solid var(--ui-border); font-size: var(--ui-small); text-decoration: none; transition: color 150ms, border-color 150ms; }
 .wiki-rail__toc-item:hover, .wiki-rail__toc-item--active { border-inline-start-color: var(--ui-accent); color: var(--ui-accent); }
-.wiki-rail__toc-item--active { font-weight: 600; }
-/* `RailToggle`, in the header: a 20px glyph in a 36px button. */
+.wiki-rail__toc-item--active { background: var(--ui-accent-soft); font-weight: 600; }
+/* `RailToggle`, in the header: a 20px glyph in a 36px button, on every route,
+   and gone from a page with no rail. A stylesheet rule rather than a check of
+   the path or a flag the rail sets: it is right on the first paint, and no list
+   of which routes carry a rail has to be kept beside the layouts that mount one. */
+body:not(:has(.wiki-layout)) .wiki-rail__toggle { display: none; }
 .wiki-rail__toggle { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 0.5rem; border: 0; border-radius: var(--ui-radius); background: none; color: inherit; cursor: pointer; transition: background-color 150ms; }
 .wiki-rail__toggle:hover { background: var(--ui-surface-2); }
 

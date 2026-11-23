@@ -20,7 +20,8 @@
 
 import { Fragment } from 'react';
 import type { ComponentProps, ComponentType, ReactNode } from 'react';
-import { Beacon, SidebarProvider } from './react.js';
+import { Beacon, SidebarProvider, WikiLinkPreview, type WikiLinkPreviewProps } from './react.js';
+import { followLinkProps, type XAccount } from './social.js';
 import { sidebarBootScript } from './sidebar.js';
 import type { Control, FacetControlGroup, MetadataRow } from './taxonomy.js';
 import { safeLinkHref } from './validation.js';
@@ -882,7 +883,9 @@ export function SiteDocument({ children, bodyClassName, links, graph, beacon = t
 }
 
 export interface SiteShellProps {
+  /** The header's contents: the shell draws the `header.app-header` around them. */
   header: ReactNode;
+  /** The footer, a `SiteFooter` or a site's own `footer.app-footer`. */
   footer?: ReactNode;
   children: ReactNode;
   className?: string;
@@ -891,10 +894,10 @@ export interface SiteShellProps {
 
 /**
  * The four boxes `base.css` lays out, under the rail's shared state:
- * `.app-shell` > skip link, header, `main#main.app-main`, footer. The rail's
- * toggle is in the header and the rail in a section's layout, below `main`, so
- * the state that spans them sits around both, on every route, the ones with no
- * rail included, so the toggle can ask.
+ * `.app-shell` > skip link, `header.app-header`, `main#main.app-main`, footer.
+ * The rail's toggle is in the header on every route and the rail in a
+ * section's layout, below `main`; `base.css` hides the toggle on a page with
+ * no rail, and the state that spans the two sits around both.
  */
 export function SiteShell({ header, footer, children, className, mainClassName }: SiteShellProps) {
   return (
@@ -903,7 +906,7 @@ export function SiteShell({ header, footer, children, className, mainClassName }
         <a href="#main" className="skip-link">
           Skip to content
         </a>
-        {header}
+        <header className="app-header">{header}</header>
         <main id="main" className={mainClassName ? `app-main ${mainClassName}` : 'app-main'}>
           {children}
         </main>
@@ -913,16 +916,90 @@ export function SiteShell({ header, footer, children, className, mainClassName }
   );
 }
 
+export interface SiteFooterLink {
+  href: string;
+  label: string;
+}
+
+export interface SiteFooterProps {
+  /** What nothing else on the page links to: about, policies, `llms.txt`. */
+  links: readonly SiteFooterLink[];
+  /** The site's X account, last in the row as a follow link. */
+  x?: XAccount;
+  /** Who holds the copyright, set as `© <this year> <owner>` ahead of `note`. */
+  owner?: string;
+  /** The closing line: a licence, a disclaimer. */
+  note?: ReactNode;
+  /** The site's own matter ahead of the links: a manifesto, a mission line. */
+  children?: ReactNode;
+  className?: string;
+  /** A site's router link for its own paths; external and file links stay `<a>`. */
+  link?: WikiLinkComponent;
+}
+
+/**
+ * The foot of every page: the site's own matter, a row of links ending on the
+ * X account, and a line naming the owner and the licence. Three sites had
+ * written this by hand, one with a year that would have gone stale, one with
+ * separators in the markup; `base.css` draws it on the `--ui-*` tokens.
+ */
+export function SiteFooter({ links, x, owner, note, children, className, link: Link = Anchor }: SiteFooterProps) {
+  return (
+    <footer className={className ? `app-footer ${className}` : 'app-footer'}>
+      <div className="page-frame app-footer__frame">
+        {children}
+        <nav className="app-footer__links" aria-label="Footer">
+          {links.map(l =>
+            l.href.startsWith('/') && !/\.\w+$/.test(l.href) ? (
+              <Link key={l.href} href={l.href}>
+                {l.label}
+              </Link>
+            ) : (
+              <a key={l.href} href={l.href}>
+                {l.label}
+              </a>
+            ),
+          )}
+          {x && <a {...followLinkProps(x)}>{x.label}</a>}
+        </nav>
+        {(owner || note) && (
+          <div className="app-footer__note">
+            {owner && <p>© {new Date().getFullYear()} {owner}.</p>}
+            {note}
+          </div>
+        )}
+      </div>
+    </footer>
+  );
+}
+
+export interface RailFrameProps {
+  rail: ReactNode;
+  children: ReactNode;
+  /**
+   * Hover cards for the wiki links in the column (`WikiLinkPreview`), mounted
+   * once beside it. `scope` defaults to the column, `.wiki-layout__main`.
+   */
+  preview?: Omit<WikiLinkPreviewProps, 'scope'> & { scope?: string };
+}
+
 /**
  * A rail beside its section's column, mounted by the section's layout so the
  * rail persists across the section's navigations: `.wiki-layout` > the rail
- * (`RailShell prefix="wiki-sidebar"`) and `.wiki-layout__main`.
+ * (`RailShell prefix="wiki-sidebar"`) and `.wiki-layout__main` > `.page-frame`.
+ * The column is framed here, so no page under a rail frames itself.
  */
-export function RailFrame({ rail, children }: { rail: ReactNode; children: ReactNode }) {
+export function RailFrame({ rail, children, preview }: RailFrameProps) {
   return (
-    <div className="wiki-layout">
-      {rail}
-      <div className="wiki-layout__main">{children}</div>
-    </div>
+    <>
+      <div className="wiki-layout">
+        {rail}
+        <div className="wiki-layout__main">
+          <div className="page-frame">{children}</div>
+        </div>
+      </div>
+      {/* Outside the column it previews from: the card is fixed at viewport coordinates. */}
+      {preview && <WikiLinkPreview {...preview} scope={preview.scope ?? '.wiki-layout__main'} />}
+    </>
   );
 }

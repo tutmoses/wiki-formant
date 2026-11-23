@@ -464,9 +464,13 @@ export interface SiteGraphOptions {
   logo?: string;
   /** Public profiles. */
   sameAs?: readonly string[];
-  /** Site search, with `{search_term_string}` where the query goes. */
-  searchUrl?: string;
-  /** The machine surface, as a `WebAPI` the Organization provides. */
+  /**
+   * Site search, with `{search_term_string}` where the query goes. Defaults to
+   * `/search?q=` on the origin, every site's results page (STRUCTURE.md S10);
+   * `false` states none.
+   */
+  searchUrl?: string | false;
+  /** The machine surface, as a `WebAPI` the Organization provides; its documentation defaults to the origin's `llms.txt`. */
   api?: { name?: string; description: string; url: string; documentation?: string };
   /** What only this site states about itself — `knowsAbout`, `publishingPrinciples`. */
   organizationExtra?: LdNode;
@@ -486,6 +490,7 @@ export interface SiteGraphOptions {
 export function siteGraphLd(o: SiteGraphOptions): LdNode {
   const url = o.url.replace(/\/$/, '');
   const { organization, website } = siteRefs(url);
+  const searchUrl = o.searchUrl ?? `${url}/search?q={search_term_string}`;
   return {
     '@context': 'https://schema.org',
     '@graph': [
@@ -506,11 +511,11 @@ export function siteGraphLd(o: SiteGraphOptions): LdNode {
         url,
         ...(o.description ? { description: o.description } : {}),
         publisher: organization,
-        ...(o.searchUrl
+        ...(searchUrl
           ? {
               potentialAction: {
                 '@type': 'SearchAction',
-                target: { '@type': 'EntryPoint', urlTemplate: o.searchUrl },
+                target: { '@type': 'EntryPoint', urlTemplate: searchUrl },
                 'query-input': 'required name=search_term_string',
               },
             }
@@ -524,7 +529,7 @@ export function siteGraphLd(o: SiteGraphOptions): LdNode {
             name: o.api.name ?? `${o.name} API`,
             description: o.api.description,
             url: o.api.url,
-            ...(o.api.documentation ? { documentation: o.api.documentation } : {}),
+            documentation: o.api.documentation ?? `${url}/llms.txt`,
             provider: organization,
           }]
         : []),
