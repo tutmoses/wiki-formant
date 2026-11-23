@@ -41,7 +41,7 @@ export function pgPoolConfig(url: string | undefined): PgPoolConfig {
  * carried the file, three of them byte for byte.
  *
  * Read only by the Prisma CLI, never by the app, so the URL prefers DIRECT_URL:
- * every CLI operation that connects (db push, migrate diff, studio) needs a
+ * every CLI operation that connects (migrate deploy, migrate diff, studio) needs a
  * session connection, and Supabase's transaction pooler on 6543, which
  * DATABASE_URL names, hangs on them rather than failing. A placeholder stands
  * in where neither is set, as on a Vercel build: `prisma generate` reads the

@@ -16,7 +16,7 @@
 // that runs a parameterised statement, which Prisma, `pg` and postgres.js can
 // all supply in a line. The five tables it needs are Prisma models shipped in
 // `prisma/analytics.prisma`, which the `prisma-models` bin copies into the
-// app's schema folder, so `prisma db push` keeps them.
+// app's schema folder, so the app's migrations carry them.
 //
 // An agent's reads are kept by the day, not one by one: `AgentDay` holds one
 // row for each agent on each UTC day, with what it is, where it began, how

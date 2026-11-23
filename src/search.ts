@@ -81,8 +81,8 @@ function searchTsvSql(content = 'content', title = 'title'): string {
  * expression re-runs clean and changes nothing, and Postgres normalises the
  * stored expression, so comparing it to this string would only produce false
  * rebuilds. The column is derived from `content`, so dropping it loses nothing.
- * Run it BEFORE declaring the column in a Prisma schema: `prisma db push` reads
- * a generated column it does not know about as drift and drops it.
+ * Run it BEFORE declaring the column in a Prisma schema: `prisma migrate diff`
+ * reads a generated column it does not know about as drift and drops it.
  *
  * @param table the table as SQL names it: `pages`, or `"WikiPage"` for a
  *              PascalCase Prisma model, whose index is `"WikiPage_search_tsv_idx"`.
