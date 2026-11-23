@@ -17,9 +17,10 @@
    them is how one of them came to draw an 80rem page while the rest drew 72.
    One column for every page, article or dashboard: 120rem with its gutters
    inside it, so a page reaches the gutter on any screen short of 1920px and
-   prose holds at the site's --measure within it. The rail is 18rem, and the
-   gutter 16 / 24 / 32px at base / 640 / 1024, the header, column and footer
-   reading the same one so they line up. Beside prose, an infobox takes
+   an article's prose fills it up to the infobox. The rail is 18rem, and the
+   gutter 16 / 24 / 64px at base / 640 / 1024, the header, column and footer
+   reading the same one so they line up: prose that spans the column takes
+   its margin from the gutter, not from a measure. Beside prose, an infobox takes
    --infobox-width. STRUCTURE.md D8 is the spec.
 
    This file loads into the components layer, which outranks Tailwind's theme
@@ -34,7 +35,7 @@
   --page-pad: 1rem;
 }
 @media (min-width: 40rem) { :root { --page-pad: 1.5rem; } }
-@media (min-width: 64rem) { :root { --page-pad: 2rem; } }
+@media (min-width: 64rem) { :root { --page-pad: 4rem; } }
 
 /* ---- ColumnsView ----------------------------------------------------------
    Stacked until there is room for a row. `data-gap` and `data-align` replace
@@ -103,10 +104,9 @@
    rail moved under the article at 1024px), and an 18rem overlay on a phone hid
    the page it was the rail of.
 
-   1024 is where the rail stops fitting, rounded up to the gutter tier: 18rem of
-   rail plus a full `--measure` of prose plus the page gutters needs 972px on
-   the widest of the three (63ch of Inter is 636px), and 1024 is the next edge
-   the gutters already step at. It is also the default `breakpoint` of
+   1024 is where the rail stops fitting, and the edge the gutters already step
+   at: there, 18rem of rail and two 64px gutters leave 608px of prose, about
+   the 63ch of Inter a measure once held it to. It is also the default `breakpoint` of
    `SidebarProvider` and `sidebarBootScript`; pass none. `--rail-floating` below
    is how the hook checks the two still agree.
 

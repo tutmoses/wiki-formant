@@ -790,7 +790,7 @@ const tools = rolaLoginTools({
 @import "wiki-formant/base.css" layer(components);
 ```
 
-It declares the page frame (`--content-width` 120rem for every page, `--sidebar-width` 18rem, `--infobox-width`, `--page-pad` 16/24/32px) in the components layer, so a site never restates them in `@theme`; the primitives `.spinner`, `.skeleton`, `.empty-state`; and the reduced-motion guard. It also splits a page beside its infobox at 768px of its column; whether the infobox sticks, and the rail's surface, stay the site's.
+It declares the page frame (`--content-width` 120rem for every page, `--sidebar-width` 18rem, `--infobox-width`, `--page-pad` 16/24/64px) in the components layer, so a site never restates them in `@theme`; the primitives `.spinner`, `.skeleton`, `.empty-state`; and the reduced-motion guard. It also splits a page beside its infobox at 768px of its column; whether the infobox sticks, and the rail's surface, stay the site's.
 
 ## Database and scripts
 
