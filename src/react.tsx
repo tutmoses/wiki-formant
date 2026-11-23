@@ -34,6 +34,7 @@ import {
 } from './sidebar.js';
 import { activateTabGroups, addCopyButtons, hydrateTweetEmbeds, onTweetResize, sizeTweetEmbed, sortTables, startBeacon } from './dom.js';
 import { comboboxAria, type ComboboxAria } from './combobox.js';
+import type { WikiLinkComponent } from './react-server.js';
 import {
   Component,
   createContext,
@@ -238,8 +239,9 @@ export interface TableOfContentsProps {
   headings?: TocHeading[];
   /** Re-query and re-observe when this changes. Pass the pathname. */
   resetKey?: string;
+  /** The rail's `wiki-rail__*` classes, which `base.css` draws, unless given. */
   classNames?: TocClassNames;
-  /** Rendered before the label. Receives the current expanded state. */
+  /** Rendered before the label. Receives the current expanded state. A chevron unless given. */
   icon?: (expanded: boolean) => ReactNode;
   label?: string;
   /**
@@ -250,7 +252,7 @@ export interface TableOfContentsProps {
   slug?: (text: string) => string;
   /**
    * CSS custom property holding the sticky header's height, used to place the
-   * scroll-spy line. e.g. `'--header-height'`.
+   * scroll-spy line. `--rail-top`, the one the rail clears, unless given.
    */
   offsetVar?: string;
   /** Fallback offset in px when `offsetVar` is unset or unparseable. */
@@ -261,6 +263,23 @@ export interface TableOfContentsProps {
   /** Rendered instead of nothing when the article has no headings. */
   empty?: ReactNode;
 }
+
+/** The rail's own classes, which `base.css` draws: what a rail's "on this page" takes unless it is styled apart. */
+const RAIL_TOC_CLASSES: TocClassNames = {
+  root: 'wiki-rail__group',
+  button: 'wiki-rail__toc-btn',
+  label: 'wiki-rail__label',
+  list: 'wiki-rail__toc-list',
+  item: 'wiki-rail__toc-item',
+  itemActive: 'wiki-rail__toc-item--active',
+};
+
+/** A chevron, down while the list is open and right while it is folded. */
+const railChevron = (expanded: boolean) => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden focusable="false">
+    <path d={expanded ? 'm6 9 6 6 6-6' : 'm9 18 6-6-6-6'} />
+  </svg>
+);
 
 const sameHeadings = (a: TocHeading[], b: TocHeading[]): boolean =>
   a.length === b.length && a.every((h, i) => h.id === b[i]!.id && h.text === b[i]!.text);
@@ -278,11 +297,11 @@ export function TableOfContents({
   containerSelector,
   headings: providedHeadings,
   resetKey,
-  classNames = {},
-  icon,
+  classNames = RAIL_TOC_CLASSES,
+  icon = railChevron,
   label = 'On this page',
   slug,
-  offsetVar,
+  offsetVar = '--rail-top',
   offsetFallback = 64,
   indentRem = 0.75,
   empty = null,
@@ -887,6 +906,55 @@ export function LinkPreviewCard({
       </div>
     </div>
   );
+}
+
+/** What a preview endpoint answers for a page: 200 with this, or 404 for an address that is no page. */
+export interface LinkPreviewData {
+  title: string;
+  excerpt?: string | null;
+  bannerImage?: string | null;
+}
+
+export interface WikiLinkPreviewProps {
+  /** Asked `GET <endpoint>?path=<the link's path, no leading slash>`. */
+  endpoint: string;
+  /** The element whose links get a card: the article's column. */
+  scope: string;
+  cardHeight?: number;
+  /**
+   * A query container the card is drawn inside. A fixed box inside one is placed
+   * against it rather than the window, so the card's place is taken back to it.
+   */
+  container?: string;
+}
+
+/** A same-site page address: not another origin, not a file. */
+const pageHref = (href: string): boolean => href.startsWith('/') && !href.startsWith('//') && !/\.\w+$/.test(href.split(/[?#]/)[0]!);
+
+/**
+ * Hover cards over the internal links in `scope`, each read from `endpoint`.
+ * Its props are data, so a server layout mounts it as it is. Which links have a
+ * page is the endpoint's answer, a 404, which the hook caches for the visit.
+ */
+export function WikiLinkPreview({ endpoint, scope, cardHeight, container }: WikiLinkPreviewProps) {
+  const options = useMemo(
+    () => ({
+      eligible: (a: HTMLAnchorElement) => !!a.closest(scope) && pageHref(a.getAttribute('href') ?? ''),
+      fetch: async (href: string): Promise<LinkPreviewData | null> => {
+        const res = await fetch(`${endpoint}?${new URLSearchParams({ path: href.split(/[?#]/)[0]!.replace(/^\/+|\/+$/g, '') })}`);
+        if (res.status === 404) return null;
+        if (!res.ok) throw new Error(`Preview answered ${res.status}`);
+        return (await res.json()) as LinkPreviewData;
+      },
+    }),
+    [endpoint, scope],
+  );
+  const { preview, cardProps } = useLinkPreview<LinkPreviewData>({ ...options, cardHeight });
+  if (!preview) return null;
+  const box = container ? document.querySelector(container)?.getBoundingClientRect() : undefined;
+  const { left = 0, top = 0 } = cardProps.style as { left?: number; top?: number };
+  const style = box ? { ...cardProps.style, left: left - box.left, top: top - box.top } : cardProps.style;
+  return <LinkPreviewCard {...preview} {...cardProps} style={style} />;
 }
 
 // ---- table sort -------------------------------------------------------------
@@ -1595,6 +1663,79 @@ const decodePath = (path: string): string => {
     return path;
   }
 };
+
+/** One entry in a rail group. `children` open beneath it while the reader is on its trail. */
+export interface RailLink {
+  href: string;
+  label: ReactNode;
+  /** Drawn before the label: an icon, or a glyph in the site's own span. */
+  icon?: ReactNode;
+  title?: string;
+  /** Lit for the pages beneath it too, not only its own. A link with `children` is one. */
+  tree?: boolean;
+  children?: RailLink[];
+}
+
+export interface RailGroupProps {
+  /** The group's heading, and the name of its landmark. */
+  label?: string;
+  links: RailLink[];
+  /** The address being read. */
+  pathname: string;
+  /** `next/link`, or whatever navigates on this site. */
+  link: WikiLinkComponent;
+}
+
+const onTrail = (pathname: string, link: RailLink): boolean =>
+  isRailLinkActive(pathname, link.href, link.tree || !!link.children?.length);
+
+function RailList({ links, pathname, link: Link, nested }: Omit<RailGroupProps, 'label'> & { nested?: boolean }) {
+  return (
+    <ul className={nested ? 'wiki-rail__list wiki-rail__subtree' : 'wiki-rail__list'}>
+      {links.map(entry => {
+        const trail = onTrail(pathname, entry);
+        const open = trail ? entry.children ?? [] : [];
+        // The deepest link on the trail is the one lit: an ancestor is the way here, not where the reader is.
+        const lit = trail && !open.some(child => onTrail(pathname, child));
+        return (
+          <li key={entry.href}>
+            <Link
+              href={entry.href}
+              title={entry.title}
+              className={lit ? 'wiki-rail__item wiki-rail__item--active' : 'wiki-rail__item'}
+              aria-current={lit ? (isRailLinkActive(pathname, entry.href) ? 'page' : 'true') : undefined}
+            >
+              {entry.icon}
+              <span className="wiki-rail__text">{entry.label}</span>
+            </Link>
+            {open.length > 0 && <RailList links={open} pathname={pathname} link={Link} nested />}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/**
+ * A labelled group of rail links, in the `wiki-rail__*` classes `base.css`
+ * draws. The link being read is lit and `aria-current="page"`; a section is lit
+ * and `aria-current="true"` while the reader is on a page beneath it. Four rails
+ * had written this list, each with its own class names, and one set no
+ * `aria-current` at all.
+ */
+export function RailGroup({ label, ...list }: RailGroupProps) {
+  const id = useId();
+  return (
+    <nav className="wiki-rail__group" aria-labelledby={label ? id : undefined}>
+      {label && (
+        <span id={id} className="wiki-rail__label">
+          {label}
+        </span>
+      )}
+      <RailList {...list} />
+    </nav>
+  );
+}
 
 export type { WikiLinkComponent, WikiLinkProps } from './react-server.js';
 

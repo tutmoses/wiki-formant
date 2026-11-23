@@ -48,7 +48,10 @@
    shared column, --content-width with its gutters, centred. The skip link is
    off-screen until focused; its colour and shape are the site's. */
 .app-shell { display: flex; flex-direction: column; min-height: 100dvh; }
-.app-main { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+/* `clip`, not `hidden`, which the spec promotes to a scroll box of its own: a
+   page wider than the window is cut at its edge and the window stays the one
+   scroller, so the sticky rail still sticks. */
+.app-main { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; overflow-x: clip; }
 .page-frame { width: 100%; max-width: var(--content-width); margin-inline: auto; padding-inline: var(--page-pad); }
 .skip-link { position: absolute; inset-inline-start: 1rem; top: -100%; z-index: 60; }
 .skip-link:focus { top: 0; }
@@ -434,6 +437,13 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
 .wiki-sidebar { --rail-border: 1px solid var(--ui-border); }
 .wiki-sidebar__scroll { gap: 1.5rem; padding: 1rem min(var(--page-pad), 2rem) 3rem; }
 .wiki-rail__group, .wiki-rail__toc-list { display: flex; flex-direction: column; gap: 1px; }
+/* `RailGroup`: its links, lit where the reader is, a trail's children indented under their section. */
+.wiki-rail__list { display: flex; flex-direction: column; gap: 1px; margin: 0; padding: 0; list-style: none; }
+.wiki-rail__subtree { padding-inline-start: 0.75rem; }
+.wiki-rail__item { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem; border-radius: var(--ui-radius); color: var(--ui-muted); text-decoration: none; transition: background-color 150ms, color 150ms; }
+.wiki-rail__item:hover { background: var(--ui-surface-2); color: inherit; }
+.wiki-rail__item--active { background: var(--ui-surface-2); color: var(--ui-accent); font-weight: 600; }
+.wiki-rail__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wiki-rail__label { padding: 0 0.5rem 0.25rem; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ui-muted); }
 .wiki-rail__toc-btn, .wiki-rail__toc-item { display: flex; align-items: center; gap: 0.25rem; width: 100%; padding: 0.25rem 0.5rem; border: 0; background: none; font: inherit; color: var(--ui-muted); text-align: left; cursor: pointer; }
 .wiki-rail__toc-item { border-inline-start: 2px solid var(--ui-border); font-size: var(--ui-small); text-decoration: none; transition: color 150ms, border-color 150ms; }

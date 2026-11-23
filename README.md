@@ -266,19 +266,23 @@ if (!limit.ok) return rateLimitedResponse(limit.retryAfterSec);
 `wiki-formant/react` carries `'use client'`. What is shared is behaviour; class names and icons are passed in.
 
 ```tsx
-import { LinkPreviewCard, SidebarProvider, RailShell, TableOfContents, useLinkPreview } from 'wiki-formant/react';
+import Link from 'next/link';
+import { RailGroup, RailShell, TableOfContents } from 'wiki-formant/react';
 
-function LinkPreview() {
-  const { preview, cardProps } = useLinkPreview<Preview>({ eligible, fetch: fetchPreview, cardHeight: 200 });
-  return preview && <LinkPreviewCard {...cardProps} title={preview.title} excerpt={preview.excerpt} bannerImage={preview.bannerImage} />;
-}
+<RailShell prefix="wiki-sidebar" label="Wiki">
+  <RailGroup links={[{ href: '/', label: 'Home' }]} pathname={pathname} link={Link} />
+  <TableOfContents containerSelector="main" />
+  <RailGroup label="Sections" links={sections} pathname={pathname} link={Link} />
+</RailShell>
 ```
 
 - `SidebarProvider` / `useSidebar` hold the rail's collapse state, remembered across loads and defaulted from the viewport only when the reader never chose. Pair it with `sidebarBootScript` (`wiki-formant/sidebar`) in `<head>`, or a remembered-closed rail paints open first.
 - `RailShell` renders the rail's landmark, scroll wrapper and collapse states, and closes a mobile drawer on a followed link; mark the active link with `isRailLinkActive`. With `RailShell prefix="wiki-sidebar"` in a `.wiki-layout` beside `.wiki-layout__main`, `base.css` lays it out: a sticky column from 1024px, a drawer above the article below it. The site supplies `--rail-top`, `--rail-border` and the surface.
 - `RailToggle` is the button that opens and closes the rail, a menu glyph and a cross while open, drawn by `base.css` as `.wiki-rail__toggle`. It goes at the leading edge of the header, inside the `SidebarProvider`, on the pages that have a rail.
 - The breakpoint is known twice, in `matchMedia` and in CSS. `base.css` sets `--rail-floating: 1` inside its media query and the hook warns in development when the two disagree; a rail laid out by its own CSS sets the property the same way. `railBreakpointMismatch` and `readRailFloating` (`wiki-formant/sidebar`) are the mechanism.
-- `TableOfContents` is the "on this page" list with scroll-spy; each entry is a `#section` link, so a section is in the URL to share.
+- `RailGroup` is a labelled group of rail links (`RailLink`: `href`, `label`, `icon`, `title`, `tree`, `children`) in the `wiki-rail__*` classes `base.css` draws. The link being read is lit with `aria-current="page"`, a section with `aria-current="true"` while the reader is beneath it, and a link's `children` open while the reader is on its trail, the deepest link on it the one lit.
+- `TableOfContents` is the "on this page" list with scroll-spy; each entry is a `#section` link, so a section is in the URL to share. Unless given, its classes are the rail's (`wiki-rail__toc-*`), its icon a chevron and its offset `--rail-top`.
+- `WikiLinkPreview` is the hover card over the internal links in `scope`, each asked of `GET <endpoint>?path=`, which answers `LinkPreviewData` (`title`, `excerpt`, `bannerImage`) or 404. Its props are data, so a server layout mounts it; `container` names a query container the card is drawn inside.
 - `useLinkPreview` is the hover card: one delegated listener, an intent delay, a grace period into the card, viewport clamping and a per-href cache of answers; a `fetch` that throws is asked again on the next hover, a null is cached as no card. `LinkPreviewCard` is its markup (`link-preview-card`, `-banner`, `-body`, `-title`, `-excerpt`); a caller that must move the card passes its own `style`.
 - `useTypeahead` is the search field's state machine: a request-id guard, keyboard navigation, abort and a per-mount cache. `results` is `idle`, `searching`, `found` or `failed`, so "no results" is `found` with none and a failed search is never cached; `items` is the rows on screen. `clearItems` dismisses the list and keeps the query; `reopen` asks for that query again (from the cache where it can), so a refocused field shows its list without a keystroke. `fetch` must be referentially stable. Its `combobox(listKey)` hands out `inputProps`, `listProps` and `optionProps(i)`, with `aria-activedescendant` omitted rather than emptied; `listKey` keeps two rendered lists' ids apart. The arithmetic is `wiki-formant/combobox`, which imports nothing.
 - `useSnapRow` is a carousel as a scroll-snapped row: `step`, `go(i)` and `at`, no markup.
@@ -308,6 +312,15 @@ import { Breadcrumbs, FacetBar, FacetSummary, InfoboxFacts, JsonLd, Pager } from
 - `FacetBar` renders `facetControls` and `alphaControls`; `letterRow`, `letterControl`, `text` and `letterCounts="title"` separate the A–Z row and let a label truncate while its count stays.
 - `Breadcrumbs` renders the trail and its `BreadcrumbList` JSON-LD together; `base` makes the URLs absolute.
 - `JsonLd` escapes every `<`, so an authored `</script>` cannot close the tag.
+- `SiteDocument` is the root layout's `<html>`: the rail's boot script and `SiteLinks` (`links`) in the head, `JsonLd` (`graph`) and `Beacon` (`beacon`, on by default) in the body, `suppressHydrationWarning` for the attribute the script stamps. Other props go on `<html>`; `bodyClassName` on the body.
+- `SiteShell` is `base.css`'s shell under `SidebarProvider`: `.app-shell` > skip link, `header`, `main#main.app-main`, `footer`. `RailFrame` is a section layout's rail beside its column, `.wiki-layout` > `rail` + `.wiki-layout__main`, inside `main`.
+
+```tsx
+<SiteDocument className={font.variable} links={{ feeds, agentsMd: true }} graph={siteGraphLd(site)}>
+  <SiteShell header={<Header />} footer={<Footer />}>{children}</SiteShell>
+</SiteDocument>
+```
+
 - `SiteLinks` is the root layout's agent-surface `<link>`s: `/llms.txt` as `help`, the RSS `feeds`, the OpenAPI document as `service-desc` and the agent card as `service-meta` (`described`, on by default), `/AGENTS.md` as `service-doc` (`agentsMd`). React hoists them into `<head>` from anywhere. `service-desc` is never the MCP endpoint, which is POST-only.
 - `Pager` steps by links (`href`) or buttons (`onPage`, `wrap`); a step with nowhere to go stays in place, inert. `SnapDots` are a snap row's dots.
 - `FacetSummary` is the count and Clear line under the facets; `RelatedPages` the see-also aside; `InfoboxAside` the facts landmark with its series line; `InfoboxFacts` renders `metadataRows` with `formatFactValue` as its default cell.

@@ -19,7 +19,9 @@
 // for `wiki-formant/react`.
 
 import { Fragment } from 'react';
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentProps, ComponentType, ReactNode } from 'react';
+import { Beacon, SidebarProvider } from './react.js';
+import { sidebarBootScript } from './sidebar.js';
 import type { Control, FacetControlGroup, MetadataRow } from './taxonomy.js';
 import { safeLinkHref } from './validation.js';
 import { isoDate } from './html.js';
@@ -837,5 +839,90 @@ export function Cite({ className = 'article-cite', ...page }: CiteProps) {
       <summary>Cite</summary>
       <code>{citation(page)}</code>
     </details>
+  );
+}
+
+// ---- the document and the shell ---------------------------------------------
+
+export interface SiteDocumentProps extends Omit<ComponentProps<'html'>, 'children'> {
+  children: ReactNode;
+  bodyClassName?: string;
+  /** The agent-surface `<link>`s. Omitted on a host whose tenants state their own. */
+  links?: SiteLinksProps;
+  /** The site's JSON-LD graph, from `siteGraphLd`. */
+  graph?: unknown;
+  /** Count the page views (`Beacon`). Off where each tenant counts its own. */
+  beacon?: boolean;
+}
+
+/**
+ * The root layout's `<html>`: the rail's boot script first in the head, so a
+ * rail the reader collapsed does not paint open and slide shut, then the
+ * agent-surface links; the site graph and the page-view beacon first in the
+ * body. `suppressHydrationWarning` because the boot script stamps
+ * `data-sidebar` on `<html>` before React hydrates, so the server's HTML and the
+ * browser's DOM differ by exactly that attribute. A CSP that hashes inline
+ * scripts hashes `sidebarBootScript()`. Attributes other than the body's go on
+ * `<html>`: the font variables, `data-scroll-behavior`.
+ */
+export function SiteDocument({ children, bodyClassName, links, graph, beacon = true, lang = 'en', ...html }: SiteDocumentProps) {
+  return (
+    <html lang={lang} suppressHydrationWarning {...html}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: sidebarBootScript() }} />
+        {links && <SiteLinks {...links} />}
+      </head>
+      <body className={bodyClassName}>
+        {graph !== undefined && <JsonLd data={graph} />}
+        {beacon && <Beacon />}
+        {children}
+      </body>
+    </html>
+  );
+}
+
+export interface SiteShellProps {
+  header: ReactNode;
+  footer?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  mainClassName?: string;
+}
+
+/**
+ * The four boxes `base.css` lays out, under the rail's shared state:
+ * `.app-shell` > skip link, header, `main#main.app-main`, footer. The rail's
+ * toggle is in the header and the rail in a section's layout, below `main`, so
+ * the state that spans them sits around both, on every route, the ones with no
+ * rail included, so the toggle can ask.
+ */
+export function SiteShell({ header, footer, children, className, mainClassName }: SiteShellProps) {
+  return (
+    <SidebarProvider>
+      <div className={className ? `app-shell ${className}` : 'app-shell'}>
+        <a href="#main" className="skip-link">
+          Skip to content
+        </a>
+        {header}
+        <main id="main" className={mainClassName ? `app-main ${mainClassName}` : 'app-main'}>
+          {children}
+        </main>
+        {footer}
+      </div>
+    </SidebarProvider>
+  );
+}
+
+/**
+ * A rail beside its section's column, mounted by the section's layout so the
+ * rail persists across the section's navigations: `.wiki-layout` > the rail
+ * (`RailShell prefix="wiki-sidebar"`) and `.wiki-layout__main`.
+ */
+export function RailFrame({ rail, children }: { rail: ReactNode; children: ReactNode }) {
+  return (
+    <div className="wiki-layout">
+      {rail}
+      <div className="wiki-layout__main">{children}</div>
+    </div>
   );
 }
