@@ -16,6 +16,11 @@ const places = (step?: number) => (step ? stepDecimals(step) : 0);
 const percent = (n: number, step?: number) => `${n.toFixed(places(step))}%`;
 // Views per visit sit between one and a few, so a tenth tells them apart.
 const perVisit = (n: number, step?: number) => n.toFixed(step ? stepDecimals(step) : 1);
+/** Seconds as `42s` or `3m 05s`. */
+const duration = (n: number) => {
+  const s = Math.round(n);
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
+};
 interface Delta {
   text: string;
   /** Whether the change is the good way; absent when there is none. */
@@ -52,7 +57,7 @@ interface Figure {
  * The segment's visitors, people unless the segment is agents or all, and what they
  * did; who they are is the segment's to choose, not a figure's. Bounce rate is
  * drawn from the day engagement was first counted: before it is nothing, not
- * days of no one engaging.
+ * days of no one engaging, and time on page from the day it was first reported.
  */
 const figuresOf = ({ previous: p, ...d }: Digest): Figure[] => [
   { label: 'Visitors', value: count(d.visitors), delta: change(d.visitors, p.visitors), day: r => r.visitors },
@@ -74,20 +79,19 @@ const figuresOf = ({ previous: p, ...d }: Digest): Figure[] => [
     aggregate: 'mean',
     from: d.engaged_from ?? '9999',
   },
-  ...(d.follow_clicks
-    ? [
-        {
-          label: 'Clicks to X',
-          value: count(d.follow_clicks.events),
-          delta: change(d.follow_clicks.events, p.follow_clicks),
-          day: (r: DigestDay) => r.follow_clicks,
-        },
-      ]
-    : []),
+  {
+    label: 'Time on page',
+    value: d.seconds == null ? '–' : duration(d.seconds),
+    delta: change(d.seconds, p.seconds),
+    day: r => r.seconds,
+    format: duration,
+    aggregate: 'mean',
+    from: d.timed_from ?? '9999',
+  },
 ];
 
 const DAY = 86_400;
-const EMPTY: DigestDay = { date: '', visitors: 0, engaged: 0, pageviews: 0, visits: 0, bounces: 0, agents: 0, follow_clicks: 0 };
+const EMPTY: DigestDay = { date: '', visitors: 0, engaged: 0, pageviews: 0, visits: 0, bounces: 0, agents: 0, follow_clicks: 0, seconds: null };
 
 /**
  * The figures as `.stats-figures button[aria-pressed]`, each with its change
@@ -97,7 +101,7 @@ const EMPTY: DigestDay = { date: '', visitors: 0, engaged: 0, pageviews: 0, visi
  */
 export function StatsFigures({ digest, first, controls }: { digest: Digest; first: number; controls: ReactNode }) {
   const figures = useMemo(() => figuresOf(digest), [digest]);
-  // By name, since a window can arrive without a reload and the figures shift (Clicks to X comes and goes).
+  // By name, so the chosen figure holds when a new window arrives without a reload.
   const [chosen, choose] = useState(figures[0]!.label);
   const figure = figures.find(f => f.label === chosen) ?? figures[0]!;
   const byDay = useMemo(() => new Map(digest.by_day.map(r => [r.date, r])), [digest.by_day]);

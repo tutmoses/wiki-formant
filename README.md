@@ -715,7 +715,7 @@ const SCHEMA: BlockSchema<Block> = {
 
 ## Analytics
 
-`wiki-formant/analytics`: page views and events in the site's own Postgres. No cookie and no stored address: a visitor is a hash of address and browser under a salt replaced every UTC day. Rows are kept 400 days. A view is marked engaged once its reader has had the page visible fifteen seconds or given it input, so `engaged` counts people where `agents` counts crawlers. The tables ship in `prisma/analytics.prisma`; `ViewDay` holds days a site counted elsewhere first, and `AgentDay` one row for each agent on each day, so an agent's requests are counted and not kept.
+`wiki-formant/analytics`: page views and events in the site's own Postgres. No cookie and no stored address: a visitor is a hash of address and browser under a salt replaced every UTC day. Rows are kept 400 days. A view is marked engaged once its reader has had the page visible fifteen seconds or given it input, so `engaged` counts people where `agents` counts crawlers. Its time on page is the seconds its page was in a visible tab, capped at an hour, sent as the reader hides the tab or moves on. The tables ship in `prisma/analytics.prisma`; `ViewDay` holds days a site counted elsewhere first, and `AgentDay` one row for each agent on each day, so an agent's requests are counted and not kept.
 
 ```ts
 // src/lib/track.ts
@@ -728,7 +728,7 @@ export const POST = viewRoute();
 
 - `createTracker` records only on a Vercel production deployment unless `enabled` says otherwise. A beacon naming an event the server records is dropped: the tracker's own, and those an app records with `trackEvent`, which it lists as `events` and which `trackEvent` is then typed to. `trackMcpCall` fits `McpServerConfig.onCall`; `trackSearch` normalises a query and drops an empty one; `recordEvent` is the undeferred write.
 - A proxy reaches the tracker through a dynamic `import()` inside `event.waitUntil`, since it imports the database client.
-- `digest(sql, { days })` is the site as one JSON object: people, engaged people, agents, views, visits, bounce rate, sources, pages, countries, devices, by day, agents by name, MCP calls, every search people made, every `search_wiki` query agents made, the searches of either that found nothing, and agents' `send_feedback` reports. A search its visitor went on typing within five minutes is left out, as is any of one character. A visit is a run of views with no gap over 30 minutes; a bounce is a one-view visit its reader never engaged with. Agents are counted beside people, never among them: the ranked lists are people's. `ownAgents` leaves the site's own out. A multi-tenant app passes `site`.
+- `digest(sql, { days })` is the site as one JSON object: people, engaged people, agents, views, visits, bounce rate, median time on page, sources, pages, countries, devices, by day, agents by name, MCP calls, every search people made, every `search_wiki` query agents made, the searches of either that found nothing, and agents' `send_feedback` reports. A search its visitor went on typing within five minutes is left out, as is any of one character. A visit is a run of views with no gap over 30 minutes; a bounce is a one-view visit its reader never engaged with. Agents are counted beside people, never among them: the ranked lists are people's. `ownAgents` leaves the site's own out. A multi-tenant app passes `site`.
 - A browser under automation (`navigator.webdriver`) sends no beacon.
 
 ## Passkeys and the stats page

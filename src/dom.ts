@@ -415,6 +415,10 @@ const sendBeacon = (body: object) => navigator.webdriver || navigator.sendBeacon
  * has had the page in a visible tab for `ENGAGED_MS`, or touches, clicks, types
  * or wheels on it first. A crawler that runs scripts renders a page and leaves
  * within seconds and gives it no input, so engaged views are the people's.
+ *
+ * Its time on page, `{ path, seconds }`, is the whole seconds the page has been
+ * in a visible tab, sent each time the tab is hidden (closing it hides it) and
+ * when the reader moves to another page, and only when it has grown.
  */
 export function startBeacon(endpoint = '/api/view'): void {
   if (beaconStarted || typeof window === 'undefined') return;
@@ -423,11 +427,18 @@ export function startBeacon(endpoint = '/api/view'): void {
 
   let last = '';
   let first = true;
-  /** The path whose view is not yet engaged, the visible time it has had, and since when it has been visible. */
+  /** The path whose view is not yet engaged. */
   let pending: string | null = null;
-  let seen = 0;
+  /** The current view's visible time before `since`, since when it has been visible (0 while hidden), and the seconds last sent. */
+  let shown = 0;
   let since = 0;
+  let sent = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const visible = () => shown + (since && Date.now() - since);
+  const report = () => {
+    const seconds = Math.round(visible() / 1000);
+    if (last && seconds > sent) sendBeacon({ path: last, seconds: (sent = seconds) });
+  };
   const engage = () => {
     clearTimeout(timer);
     if (pending !== null) sendBeacon({ path: pending, engaged: true });
@@ -435,17 +446,19 @@ export function startBeacon(endpoint = '/api/view'): void {
   };
   const watch = () => {
     clearTimeout(timer);
-    if (pending === null) return;
     if (document.visibilityState === 'visible') {
-      since = Date.now();
-      timer = setTimeout(engage, ENGAGED_MS - seen);
-    } else if (since) {
-      seen += Date.now() - since;
+      since ||= Date.now();
+      if (pending !== null) timer = setTimeout(engage, Math.max(0, ENGAGED_MS - visible()));
+    } else {
+      if (since) shown += Date.now() - since;
       since = 0;
+      report();
     }
   };
   const view = () => {
     if (location.pathname === last) return;
+    report();
+    shown = since = sent = 0;
     last = location.pathname;
     // document.referrer belongs to the page load, so only its first view carries it.
     sendBeacon({
@@ -455,7 +468,6 @@ export function startBeacon(endpoint = '/api/view'): void {
     });
     first = false;
     pending = last;
-    seen = since = 0;
     watch();
   };
   document.addEventListener('visibilitychange', watch);

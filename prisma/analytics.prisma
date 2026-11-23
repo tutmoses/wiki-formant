@@ -16,6 +16,8 @@ model View {
   visitor   String
   // Set once its reader has had the page visible fifteen seconds or given it input.
   engaged   Boolean  @default(false)
+  // Seconds its page was in a visible tab, capped at an hour; null until its reader hides it or moves on.
+  seconds   Int?
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   @@index([siteId, createdAt])
