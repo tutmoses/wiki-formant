@@ -433,9 +433,10 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
 .link:hover { text-decoration: underline; }
 
 /* The rail's contents: a label over a group of entries, and the article's contents with the section being read lit.
-   Its inset follows the gutter up to 2rem: the page's 4rem would take 128px of an 18rem rail. */
+   Its inset is every site's: the gutter up to 1.5rem, so a drawer's entries line up with the page below it
+   and an 18rem rail keeps its width for them. A site sets the rail's block padding, never this. */
 .wiki-sidebar { --rail-border: 1px solid var(--ui-border); }
-.wiki-sidebar__scroll { gap: 1.5rem; padding: 1rem min(var(--page-pad), 2rem) 3rem; }
+.wiki-sidebar__scroll { gap: 1.5rem; padding: 1rem min(var(--page-pad), 1.5rem) 3rem; }
 .wiki-rail__group, .wiki-rail__toc-list { display: flex; flex-direction: column; gap: 1px; }
 /* `RailGroup`: its links, lit where the reader is, a trail's children indented under their section. */
 .wiki-rail__list { display: flex; flex-direction: column; gap: 1px; margin: 0; padding: 0; list-style: none; }
