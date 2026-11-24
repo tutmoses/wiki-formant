@@ -357,9 +357,10 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
 .see-also-detail { font-size: var(--ui-small); color: var(--ui-muted); }
 
 .link-preview-card { position: fixed; z-index: 50; width: 20rem; max-width: calc(100vw - 1rem); overflow: hidden; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); box-shadow: var(--ui-shadow, 0 8px 24px -4px rgb(0 0 0 / 0.25)); }
-/* `Toaster`: a stack at the foot of the window, above the dock, newest last.
+/* `Toaster`: a stack at the foot of the window, above the dock and over every
+   overlay a site draws, newest last.
    An error is edged in `--ui-down`, a success in `--ui-up`. */
-.toast-stack { position: fixed; inset-inline: 1rem; bottom: calc(var(--dock-inset, 1rem) + var(--dock-button, 3rem) + 0.75rem); z-index: 60; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; pointer-events: none; }
+.toast-stack { position: fixed; inset-inline: 1rem; bottom: calc(var(--dock-inset, 1rem) + var(--dock-button, 3rem) + 0.75rem); z-index: 70; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; pointer-events: none; }
 .toast { pointer-events: auto; display: flex; align-items: center; gap: 0.75rem; width: min(100%, 24rem); padding: 0.75rem 0.75rem 0.75rem 1rem; background: var(--ui-surface); border: 1px solid var(--ui-border); border-inline-start-width: 3px; border-radius: var(--ui-radius); box-shadow: var(--ui-shadow, 0 8px 24px -4px rgb(0 0 0 / 0.25)); }
 .toast--success { border-inline-start-color: var(--ui-up); }
 .toast--error { border-inline-start-color: var(--ui-down); }

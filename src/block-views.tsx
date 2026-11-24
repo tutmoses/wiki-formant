@@ -25,6 +25,7 @@ import { clock, DEFAULT_ZONE, hoursRows, mapEmbed, mapHref, openState, type Hour
 import { slugifyHeading } from './headings.js';
 import { Anchor } from './react-server.js';
 import type { WikiLinkComponent } from './react-server.js';
+import type { TocHeading } from './react.js';
 import { safeLinkHref } from './validation.js';
 import { cx } from './html.js';
 import { BANNER_LABELS, BANNER_MESSAGES, bannerVariant, plainText } from './text.js';
@@ -237,6 +238,15 @@ export function PageRefsView({
  * through its HTML pipeline, and running it in the other would rewrite anchors
  * that were minted under different rules.
  */
+/**
+ * The heading `ReferencesView` draws, as "On this page" lists it: a page adds
+ * it to the headings it hands up (`RailHeadings`), which are read from its
+ * stored HTML and so cannot see a heading a view draws.
+ */
+export function referencesHeading(id?: string, title = 'References'): TocHeading {
+  return { id: id ? `references-${id}` : 'references-heading', text: title, level: 2 };
+}
+
 export function ReferencesView({
   id,
   items,
@@ -255,7 +265,7 @@ export function ReferencesView({
 }) {
   const rows = items ?? [];
   if (!rows.length) return null;
-  const headingId = id ? `references-${id}` : 'references-heading';
+  const headingId = referencesHeading(id).id;
 
   return (
     <section className="references-block" aria-labelledby={headingId}>

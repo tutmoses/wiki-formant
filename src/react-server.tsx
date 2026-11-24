@@ -20,7 +20,7 @@
 
 import { Fragment } from 'react';
 import type { ComponentProps, ComponentType, ReactNode } from 'react';
-import { Beacon, SidebarProvider, Toaster, WikiLinkPreview, type WikiLinkPreviewProps } from './react.js';
+import { Beacon, SidebarProvider, Toaster, WikiLinkPreview, type TocHeading, type WikiLinkPreviewProps } from './react.js';
 import type { SiteDefinition } from './metadata.js';
 import { followLinkProps, type XAccount } from './social.js';
 import { sidebarBootScript } from './sidebar.js';
@@ -279,7 +279,14 @@ export interface RelatedPagesProps {
  * list, because the two copies this replaced split those between them: one had
  * the landmark and the list, the other neither.
  */
-export function RelatedPages({ pages, heading, href, link: Link = Anchor, id = 'see-also-heading' }: RelatedPagesProps) {
+const SEE_ALSO_ID = 'see-also-heading';
+
+/** The heading `RelatedPages` draws, as "On this page" lists it (see `referencesHeading`). */
+export function seeAlsoHeading(text: string, id = SEE_ALSO_ID): TocHeading {
+  return { id, text, level: 2 };
+}
+
+export function RelatedPages({ pages, heading, href, link: Link = Anchor, id = SEE_ALSO_ID }: RelatedPagesProps) {
   if (!pages.length) return null;
   return (
     <aside className="see-also" aria-labelledby={id}>
