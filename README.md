@@ -266,22 +266,26 @@ if (!limit.ok) return rateLimitedResponse(limit.retryAfterSec);
 `wiki-formant/react` carries `'use client'`. What is shared is behaviour; class names and icons are passed in.
 
 ```tsx
+// The site's one client wrapper: its router link and pathname.
+'use client';
 import Link from 'next/link';
-import { RailGroup, RailShell, TableOfContents } from 'wiki-formant/react';
+import { usePathname } from 'next/navigation';
+import { Rail, type RailProps } from 'wiki-formant/react';
 
-<RailShell prefix="wiki-sidebar" label="Wiki">
-  <RailGroup links={[{ href: '/', label: 'Home' }]} pathname={pathname} link={Link} />
-  <TableOfContents containerSelector="main" />
-  <RailGroup label="Sections" links={sections} pathname={pathname} link={Link} />
-</RailShell>
+export const SiteRail = (props: Omit<RailProps, 'pathname' | 'link'>) => <Rail {...props} pathname={usePathname()} link={Link} />;
+
+// The layout passes the data; the page hands up its headings.
+<RailFrame rail={<SiteRail label="Wiki" nav={[{ href: '/', label: 'Home' }]} groups={[{ label: 'Sections', links: sections }]} />}>
+<RailHeadings headings={article.headings} />
 ```
 
 - `SidebarProvider` / `useSidebar` hold the rail's collapse state, remembered across loads and defaulted from the viewport only when the reader never chose. Pair it with `sidebarBootScript` (`wiki-formant/sidebar`) in `<head>`, or a remembered-closed rail paints open first.
-- `RailShell` renders the rail's landmark, scroll wrapper and collapse states, and closes a mobile drawer on a followed link; mark the active link with `isRailLinkActive`. With `RailShell prefix="wiki-sidebar"` in a `.wiki-layout` beside `.wiki-layout__main`, `base.css` lays it out: a sticky column from 1024px, a drawer above the article below it. The site supplies `--rail-top`, `--rail-border` and the surface.
+- `Rail` is every rail, in one order: a `title` (`.wiki-rail__title`), a `search` box, the unlabelled `nav` links, "On this page", then the labelled `groups`, an empty one left out. "On this page" lists the `headings` passed, or else those a page handed up with `RailHeadings`, which `SidebarProvider` holds; `toc` sets its label, indent and offset.
+- `RailShell` renders the rail's landmark, scroll wrapper and collapse states, and closes a mobile drawer on a followed link; mark the active link with `isRailLinkActive`. With its default `prefix`, `"wiki-sidebar"`, in a `.wiki-layout` beside `.wiki-layout__main`, `base.css` lays it out: a sticky column from 1024px, a drawer above the article below it. The site supplies `--rail-top`, `--rail-border` and the surface.
 - `RailToggle` is the button that opens and closes the rail, a menu glyph and a cross while open, drawn by `base.css` as `.wiki-rail__toggle`. It goes at the leading edge of the header, inside the `SidebarProvider`, on the pages that have a rail.
 - The breakpoint is known twice, in `matchMedia` and in CSS. `base.css` sets `--rail-floating: 1` inside its media query and the hook warns in development when the two disagree; a rail laid out by its own CSS sets the property the same way. `railBreakpointMismatch` and `readRailFloating` (`wiki-formant/sidebar`) are the mechanism.
 - `RailGroup` is a labelled group of rail links (`RailLink`: `href`, `label`, `icon`, `glyph`, `title`, `tree`, `children`; a `glyph` is drawn in `.wiki-rail__glyph`, hidden from a screen reader) in the `wiki-rail__*` classes `base.css` draws. The link being read is lit with `aria-current="page"`, a section with `aria-current="true"` while the reader is beneath it, and a link's `children` open while the reader is on its trail, the deepest link on it the one lit.
-- `TableOfContents` is the "on this page" list with scroll-spy; each entry is a `#section` link, so a section is in the URL to share. Unless given, its classes are the rail's (`wiki-rail__toc-*`), its icon a chevron and its offset `--rail-top`.
+- `TableOfContents` is the "on this page" list with scroll-spy over the `headings` it is given, read from the article's source with the ids the server gave them, never scanned from the DOM; each entry is a `#section` link, so a section is in the URL to share. Unless given, its classes are the rail's (`wiki-rail__toc-*`), its icon a chevron and its offset `--rail-top`.
 - `WikiLinkPreview` is the hover card over the internal links in `scope`, each asked of `GET <endpoint>?path=`, which answers `LinkPreviewData` (`title`, `excerpt`, `bannerImage`) or 404. Its props are data, so a server layout mounts it; `container` names a query container the card is drawn inside.
 - `useLinkPreview` is the hover card: one delegated listener, an intent delay, a grace period into the card, viewport clamping and a per-href cache of answers; a `fetch` that throws is asked again on the next hover, a null is cached as no card. `LinkPreviewCard` is its markup (`link-preview-card`, `-banner`, `-body`, `-title`, `-excerpt`); a caller that must move the card passes its own `style`.
 - `useTypeahead` is the search field's state machine: a request-id guard, keyboard navigation, abort and a per-mount cache. `results` is `idle`, `searching`, `found` or `failed`, so "no results" is `found` with none and a failed search is never cached; `items` is the rows on screen. `clearItems` dismisses the list and keeps the query; `reopen` asks for that query again (from the cache where it can), so a refocused field shows its list without a keystroke. `fetch` must be referentially stable. Its `combobox(listKey)` hands out `inputProps`, `listProps` and `optionProps(i)`, with `aria-activedescendant` omitted rather than emptied; `listKey` keeps two rendered lists' ids apart. The arithmetic is `wiki-formant/combobox`, which imports nothing.
@@ -293,6 +297,7 @@ import { RailGroup, RailShell, TableOfContents } from 'wiki-formant/react';
 - `useBlockOperations(blocks, setBlocks, { duplicate })` and `BlockActions` are a block list's five edits and their buttons; `useRevisionRestore(restore, { onRestored })` confirms and restores, `restoreViaPost(endpoint)` being the usual `restore`.
 - `useArticlePasses(ref, [blocks])` runs `wiki-formant/dom`'s passes and renders math with KaTeX (an optional peer, loaded only when a page has `$$…$$`, `\[…\]` or `\(…\)`).
 - `<Beacon />` sends page views and outbound clicks to `wiki-formant/analytics`.
+- `toast.success(message)` and `toast.error(message)`, with an optional `action` link and `duration`, raise a toast from any code; `toast.carry(message)` shows one on the page a full load reaches. `Toaster`, which `SiteShell` mounts, stacks them above the dock, `.toast-stack` > `.toast.toast--success|error` > `.toast__message`, `.toast__action`, `.toast__close`, drawn by `base.css` on the `--ui-*` tokens.
 - `RouteError` is what `error.tsx` draws: an `EmptyState` with the heading, an optional `description`, Try again (Next's `retry`, never `reset`) and Home (or `home`); the site passes its button's classes. `GlobalRouteError` is `global-error.tsx`: the document, `.app-shell` and `main#main.app-main.page-frame` around a `RouteError`, with `htmlClassName` for the font variables the root layout sets on `<html>`; the file imports the site's stylesheet and fonts itself.
 
 `useClickOutside`, `useSnapRow` and the editor hooks ship no class names.
@@ -316,13 +321,19 @@ import { Breadcrumbs, FacetBar, FacetSummary, InfoboxFacts, JsonLd, Pager } from
 - `FacetBar` renders `facetControls` and `alphaControls`; `letterRow`, `letterControl`, `text` and `letterCounts="title"` separate the A–Z row and let a label truncate while its count stays.
 - `Breadcrumbs` renders the trail and its `BreadcrumbList` JSON-LD together; `base` makes the URLs absolute.
 - `JsonLd` escapes every `<`, so an authored `</script>` cannot close the tag.
-- `SiteDocument` is the root layout's `<html>`: the rail's boot script and `SiteLinks` (`links`) in the head, `JsonLd` (`graph`) and `Beacon` (`beacon`, on by default) in the body, `suppressHydrationWarning` for the attribute the script stamps. Other props go on `<html>`; `bodyClassName` on the body.
-- `SiteShell` is `base.css`'s shell under `SidebarProvider`: `.app-shell` > skip link, `header.app-header` (around `header`, which is its contents), `main#main.app-main.page-frame`, `footer`: the main is the column, so no page frames itself, bar a full-width `.page-bleed` band that draws its own `.page-frame` (`frame={false}` for a site that draws its own column). `RailFrame` is a section layout's rail beside its column, `.wiki-layout` > `rail` + `.wiki-layout__main` > `.page-frame`, inside `main`, where the main's frame gives way to it; it mounts `WikiLinkPreview` over the column from `/api/wiki/preview` unless `preview` names another `endpoint` or is `false`. `RailToggle` goes in every header: `base.css` hides it on a page with no rail.
+- `SiteDocument` is the root layout's `<html>`: the rail's boot script and the `site`'s `SiteLinks` in the head, its `JsonLd` graph and `Beacon` (`beacon`, on by default) in the body, `suppressHydrationWarning` for the attribute the script stamps. Other props go on `<html>`; `bodyClassName` on the body.
+- `SiteShell` is `base.css`'s shell under `SidebarProvider`: `.app-shell` > skip link, `header.app-header` (around `header`, which is its contents), `main#main.app-main.page-frame`, `footer`: the main is the column, so no page frames itself, bar a full-width `.page-bleed` band that draws its own `.page-frame` (`frame={false}` for a site that draws its own column). `RailFrame` is a section layout's rail beside its column, `.wiki-layout` > `rail` + `.wiki-layout__main` > `.page-frame`, inside `main`, where the main's frame gives way to it; it mounts `WikiLinkPreview` over the column from `/api/wiki/preview` unless `preview` names another `endpoint` or is `false`. `RailToggle` goes in every header: `base.css` hides it on a page with no rail. A `dock` is pinned to the window's foot in `.dock`, a click-through strip whose buttons are `.dock-button` (`--dock-button`, `--dock-inset`); the shell mounts the `Toaster`.
 - `SiteFooter` is `footer.app-footer`: the site's own matter (`children`), a row of `links` ending on the `x` follow link, and `© <year> <owner>` with a `note` (the licence, a disclaimer).
 
 ```tsx
-<SiteDocument className={font.variable} links={{ feeds, agentsMd: true }} graph={siteGraphLd(site)}>
-  <SiteShell header={<Header />} footer={<Footer />}>{children}</SiteShell>
+// @/lib/site
+export const site = defineSite({ name, url, description, x: X, image, feeds, agentsMd: true, themeColor, graph: { logo } });
+
+// src/app/layout.tsx
+export const metadata = site.metadata;
+export const viewport = site.viewport;
+<SiteDocument className={fontVariables} site={site}>
+  <SiteShell header={<Header />} footer={<Footer />} dock={<SearchButton />}>{children}</SiteShell>
 </SiteDocument>
 ```
 
@@ -425,6 +436,7 @@ export const generateMetadata = () => ({
 <JsonLd data={articleLd({ headline: title, url, image, published, modified, publisher: SITE.publisher, citation: citationsFromReferences(refs) })} />
 ```
 
+- `defineSite({ ...rootMetadata's options, x, feeds, agentsMd, themeColor, graph })` is a site's identity stated once in `@/lib/site`: it returns the facts (`name`, `url`, `description`, `x`) and what each surface takes, `metadata` and `viewport` for the root layout, `links` and `graph` for `<SiteDocument site>`. The handle and the graph's `sameAs` come from `x`; `graph` adds to `siteGraphLd`'s options or overrides them.
 - `rootMetadata({ name, url, description, title, image, handle, keywords, icons })` is the root layout's `metadata`: title template, robots, and an inherited card with no title, description or URL, which Next fills from each page's own; the site's name as author, creator and publisher; and Search Console and Bing verification from `GOOGLE_SITE_VERIFICATION` and `BING_SITE_VERIFICATION` where set.
 - Next replaces `openGraph` and `twitter` per segment rather than merging, so `pageMetadata` sets both; `sitePageMetadata({ siteName, handle })` binds the fields every page's card needs.
 - `sitePageMetadata({ ..., card: `${SITE_URL}/og` })` binds the site's card route, and a page then passes `card: { title, eyebrow, description, banner }` in place of `image`. `cardUrl(base, fields)` is the same address for JSON-LD: empty fields left out, the order fixed, so one card has one URL.

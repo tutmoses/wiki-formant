@@ -22,6 +22,7 @@
 import { decodeEntities } from './markdown.js';
 import { plainText } from './text.js';
 import type { ReferenceItem } from './blocks.js';
+import type { XAccount } from './social.js';
 
 export interface ArticleMeta {
   publishedTime?: string;
@@ -546,5 +547,60 @@ export function siteGraphLd(o: SiteGraphOptions): LdNode {
           }]
         : []),
     ],
+  };
+}
+
+export interface SiteOptions extends Omit<RootMetadataOptions, 'handle'> {
+  /** The site's X account: the cards' handle, the graph's `sameAs`, the footer's follow link. */
+  x?: XAccount;
+  /** The site's RSS feeds, linked from every page's head. */
+  feeds?: readonly { href: string; title: string }[];
+  /** Whether the origin serves `/AGENTS.md`. */
+  agentsMd?: boolean;
+  /** The browser chrome's colour on a phone: the page's ground. */
+  themeColor?: string;
+  /** What the graph states beyond the name, origin, description and X account, or in place of them. */
+  graph?: Partial<SiteGraphOptions>;
+}
+
+/** A site's identity as `defineSite` returns it: the facts, and each surface's object built from them. */
+export interface SiteDefinition {
+  name: string;
+  url: string;
+  description: string;
+  x?: XAccount;
+  /** The root layout's `metadata`. */
+  metadata: ReturnType<typeof rootMetadata>;
+  /** The root layout's `viewport`. */
+  viewport: { themeColor?: string };
+  /** `SiteDocument`'s head links. */
+  links: { feeds?: readonly { href: string; title: string }[]; agentsMd?: boolean };
+  /** `SiteDocument`'s JSON-LD graph. */
+  graph: LdNode;
+}
+
+/**
+ * One site's identity, stated once in `@/lib/site` and read by the root layout
+ * (`metadata`, `viewport`, `<SiteDocument site>`) and the footer (`x`, `name`).
+ * Each root layout had passed the same name, origin and account three times,
+ * to `rootMetadata`, to the document's links and graph and to the footer, from
+ * constants each repo named its own way.
+ */
+export function defineSite({ x, feeds, agentsMd, themeColor, graph, ...root }: SiteOptions): SiteDefinition {
+  return {
+    name: root.name,
+    url: root.url,
+    description: root.description,
+    ...(x ? { x } : {}),
+    metadata: rootMetadata({ ...root, ...(x ? { handle: x.handle } : {}) }),
+    viewport: themeColor ? { themeColor } : {},
+    links: { ...(feeds ? { feeds } : {}), ...(agentsMd ? { agentsMd } : {}) },
+    graph: siteGraphLd({
+      name: root.name,
+      url: root.url,
+      description: root.description,
+      ...(x ? { sameAs: [x.url] } : {}),
+      ...graph,
+    }),
   };
 }

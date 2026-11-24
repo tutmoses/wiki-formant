@@ -77,6 +77,17 @@
 .skip-link { position: absolute; inset-inline-start: 1rem; top: -100%; z-index: 60; }
 .skip-link:focus { top: 0; }
 
+/* ---- the dock (SiteShell dock) -------------------------------------------------
+   What stays pinned to the window's foot on every route. A strip the width of
+   the window that lets clicks through, so the page between its buttons stays
+   the page's; only `.dock-button` takes them. The buttons sit at the trailing
+   edge unless the site spreads them; a `.dock__group` keeps two together.
+   The disc's size (`--dock-button`, 48px, past the 44px target), the inset
+   (`--dock-inset`) and every colour are the site's. */
+.dock { position: fixed; inset-inline: 0; bottom: var(--dock-inset, 1rem); z-index: 40; display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem; padding-inline: var(--dock-inset, 1rem); pointer-events: none; }
+.dock__group { display: flex; align-items: center; gap: 0.75rem; }
+.dock-button { pointer-events: auto; display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: var(--dock-button, 3rem); height: var(--dock-button, 3rem); border-radius: 9999px; }
+
 /* ---- ColumnsView ----------------------------------------------------------
    Stacked until there is room for a row. `data-gap` and `data-align` replace
    the Tailwind utilities the view used to emit, which only reached a site whose
@@ -346,6 +357,16 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
 .see-also-detail { font-size: var(--ui-small); color: var(--ui-muted); }
 
 .link-preview-card { position: fixed; z-index: 50; width: 20rem; max-width: calc(100vw - 1rem); overflow: hidden; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); box-shadow: var(--ui-shadow, 0 8px 24px -4px rgb(0 0 0 / 0.25)); }
+/* `Toaster`: a stack at the foot of the window, above the dock, newest last.
+   An error is edged in `--ui-down`, a success in `--ui-up`. */
+.toast-stack { position: fixed; inset-inline: 1rem; bottom: calc(var(--dock-inset, 1rem) + var(--dock-button, 3rem) + 0.75rem); z-index: 60; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; pointer-events: none; }
+.toast { pointer-events: auto; display: flex; align-items: center; gap: 0.75rem; width: min(100%, 24rem); padding: 0.75rem 0.75rem 0.75rem 1rem; background: var(--ui-surface); border: 1px solid var(--ui-border); border-inline-start-width: 3px; border-radius: var(--ui-radius); box-shadow: var(--ui-shadow, 0 8px 24px -4px rgb(0 0 0 / 0.25)); }
+.toast--success { border-inline-start-color: var(--ui-up); }
+.toast--error { border-inline-start-color: var(--ui-down); }
+.toast__message { flex: 1 1 auto; min-width: 0; }
+.toast__action { color: var(--ui-accent); text-decoration: underline; white-space: nowrap; }
+.toast__close { display: inline-flex; flex-shrink: 0; padding: 0.25rem; border: 0; border-radius: var(--ui-radius); background: none; color: var(--ui-muted); cursor: pointer; }
+.toast__close:hover { color: inherit; }
 .link-preview-banner { display: block; width: 100%; height: 7rem; object-fit: cover; }
 .link-preview-body { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.75rem; }
 .link-preview-title { font-weight: 600; }
@@ -470,6 +491,8 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
 .wiki-rail__item--active,
 .wiki-rail__item--active:hover { background: var(--ui-accent-soft); color: var(--ui-accent); font-weight: 600; }
 .wiki-rail__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* `Rail`'s title: what the rail is the rail of. */
+.wiki-rail__title { padding: 0 0.5rem; font-weight: 600; }
 .wiki-rail__label { padding: 0 0.5rem 0.25rem; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ui-muted); }
 .wiki-rail__toc-btn, .wiki-rail__toc-item { display: flex; align-items: center; gap: 0.25rem; width: 100%; padding: 0.25rem 0.5rem; border: 0; background: none; font: inherit; color: var(--ui-muted); text-align: left; cursor: pointer; }
 .wiki-rail__toc-item { border-inline-start: 2px solid var(--ui-border); font-size: var(--ui-small); text-decoration: none; transition: color 150ms, border-color 150ms; }

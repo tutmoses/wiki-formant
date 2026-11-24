@@ -45,8 +45,10 @@ import {
   useEffect,
   useId,
   useMemo,
+  useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type DependencyList,
   type RefObject,
@@ -186,10 +188,36 @@ export interface SidebarProviderProps extends SidebarOptions {
   children: ReactNode;
 }
 
-/** Wrap the layout that contains both the rail and its toggle. */
+// The article's headings, which the layout that mounts the rail cannot read:
+// the page hands them up through `RailHeadings`. They are the ones the server
+// pass gave ids (`wiki-formant/headings`), so "on this page" scans no DOM, runs
+// no MutationObserver, and cannot list an anchor the article lacks.
+const RailHeadingsContext = createContext<{ headings: TocHeading[]; set: (headings: TocHeading[]) => void } | null>(null);
+
+/** Wrap the layout that contains both the rail and its toggle. It holds the article's headings for the rail too. */
 export function SidebarProvider({ children, ...options }: SidebarProviderProps) {
   const state = useCollapsibleSidebar(options);
-  return createElement(SidebarContext.Provider, { value: state }, children);
+  const [headings, setHeadings] = useState<TocHeading[]>([]);
+  const outline = useMemo(
+    () => ({ headings, set: (next: TocHeading[]) => setHeadings(prev => (sameHeadings(prev, next) ? prev : next)) }),
+    [headings],
+  );
+  return createElement(SidebarContext.Provider, { value: state }, createElement(RailHeadingsContext.Provider, { value: outline }, children));
+}
+
+/**
+ * An article's headings, in the rail's "On this page" while this is mounted.
+ * Render it in the page beside a rail its layout mounts; a page with none
+ * leaves the list empty. The editor passes the headings of what is being
+ * written, so the list follows the draft.
+ */
+export function RailHeadings({ headings }: { headings: TocHeading[] }) {
+  const set = useContext(RailHeadingsContext)?.set;
+  useLayoutEffect(() => {
+    set?.(headings);
+  }, [set, headings]);
+  useLayoutEffect(() => () => set?.([]), [set]);
+  return null;
 }
 
 /**
@@ -224,33 +252,17 @@ export interface TocClassNames {
 
 export interface TableOfContentsProps {
   /**
-   * The element holding the article. A wiki whose content streams in as blocks
-   * has to read the DOM, which is why a selector is the default route — by the
-   * time the rail mounts, the article may not be there yet.
-   *
-   * Optional when `headings` is given: a wiki that renders its article on the
-   * server already knows them and should not pay for a MutationObserver to
-   * rediscover what it just wrote.
+   * The article's headings, with the ids the server gave them
+   * (`wiki-formant/headings`). Read from the article's source, never from the
+   * DOM: an id is a URL, and one minted in the browser is not the one the
+   * wiki published. Scroll-spy watches the rendered elements by these ids.
    */
-  containerSelector?: string;
-  /**
-   * Headings known ahead of time. Supplying these skips the DOM scan entirely;
-   * scroll-spy still runs, since that needs the rendered elements either way.
-   */
-  headings?: TocHeading[];
-  /** Re-query and re-observe when this changes. Pass the pathname. */
-  resetKey?: string;
+  headings: TocHeading[];
   /** The rail's `wiki-rail__*` classes, which `base.css` draws, unless given. */
   classNames?: TocClassNames;
   /** Rendered before the label. Receives the current expanded state. A chevron unless given. */
   icon?: (expanded: boolean) => ReactNode;
   label?: string;
-  /**
-   * Mint an id for a heading that lacks one. Wikis that inject ids server-side
-   * (see `wiki-formant/headings`) should leave this off — an id is a URL, and
-   * one minted in the browser is not the one the server published.
-   */
-  slug?: (text: string) => string;
   /**
    * CSS custom property holding the sticky header's height, used to place the
    * scroll-spy line. `--rail-top`, the one the rail clears, unless given.
@@ -286,99 +298,23 @@ const sameHeadings = (a: TocHeading[], b: TocHeading[]): boolean =>
   a.length === b.length && a.every((h, i) => h.id === b[i]!.id && h.text === b[i]!.text);
 
 /**
- * An "on this page" rail with scroll-spy, read from the rendered article.
- *
- * Both wikis this came from had written the same thing: a debounced
- * MutationObserver to survive content arriving late, an IntersectionObserver to
- * track the section under the viewport top, and the same reference-stability
- * trick so an unrelated DOM mutation (a price ticker, an RSS feed) does not tear
- * the observer down.
+ * An "on this page" list with scroll-spy: an IntersectionObserver tracks the
+ * section under the viewport top, the earliest visible heading in document
+ * order winning. A rail's comes from `Rail`, which reads the headings a page
+ * handed up through `RailHeadings`.
  */
 export function TableOfContents({
-  containerSelector,
-  headings: providedHeadings,
-  resetKey,
+  headings,
   classNames = RAIL_TOC_CLASSES,
   icon = railChevron,
   label = 'On this page',
-  slug,
   offsetVar = '--rail-top',
   offsetFallback = 64,
   indentRem = 0.75,
   empty = null,
 }: TableOfContentsProps) {
-  const [scanned, setScanned] = useState<TocHeading[]>([]);
   const [expanded, setExpanded] = useState(true);
   const [activeId, setActiveId] = useState('');
-
-  const headings = providedHeadings ?? scanned;
-
-  useEffect(() => {
-    // Nothing to scan for when the caller already knows the headings.
-    if (providedHeadings || !containerSelector) return;
-    let timer: ReturnType<typeof setTimeout>;
-
-    const update = () => {
-      clearTimeout(timer);
-      // Debounced: block content can arrive in bursts, and re-reading the whole
-      // article per mutation is what makes a rail janky.
-      timer = setTimeout(() => {
-        const root = document.querySelector(containerSelector);
-        // No container is an answer, not a reason to skip: a rail that bailed
-        // here kept the LAST page's headings, so a section index reached from
-        // one of its own articles listed that article's sections under "on this
-        // page". It only looked right when a loading skeleton happened to render
-        // the container and scan to nothing.
-        if (!root) {
-          setScanned(prev => (prev.length ? [] : prev));
-          return;
-        }
-        const used = new Set<string>();
-        const next: TocHeading[] = [];
-
-        for (const el of Array.from(root.querySelectorAll('h1, h2, h3'))) {
-          const text = el.textContent?.trim() ?? '';
-          if (!text) continue;
-          let id = el.id;
-          if (!id) {
-            if (!slug) continue; // ids are the server's business here
-            const base = slug(text) || 'section';
-            id = base;
-            let n = 2;
-            while (used.has(id) || document.getElementById(id)) id = `${base}-${n++}`;
-            el.id = id;
-          }
-          used.add(id);
-          next.push({ id, text, level: Number(el.tagName[1]) });
-        }
-
-        // Keep the same array reference when nothing changed, so the scroll-spy
-        // effect below is not torn down by an unrelated mutation.
-        setScanned(prev => (sameHeadings(prev, next) ? prev : next));
-      }, 200);
-    };
-
-    // A container missing at mount is waited for from the body, so an article
-    // that streams in later is still read; once it exists only it is watched.
-    let watched: Element | null | undefined;
-    const observer = new MutationObserver(() => {
-      follow();
-      update();
-    });
-    const follow = () => {
-      const root = document.querySelector(containerSelector);
-      if (root === watched) return;
-      watched = root;
-      observer.disconnect();
-      observer.observe(root ?? document.body, { childList: true, subtree: true });
-    };
-    follow();
-    update();
-    return () => {
-      clearTimeout(timer);
-      observer.disconnect();
-    };
-  }, [containerSelector, resetKey, slug, providedHeadings]);
 
   useEffect(() => {
     if (!headings.length) return;
@@ -1796,11 +1732,11 @@ export function GlobalRouteError({ htmlClassName, bodyClassName, className, ...e
 export interface RailShellProps {
   children: ReactNode;
   /**
-   * Class prefix the stylesheet implements. `"wiki-sidebar"` is the one
-   * `wiki-formant/base.css` lays out, column and drawer both; another prefix
-   * leaves the layout to the site's own stylesheet.
+   * Class prefix the stylesheet implements. `"wiki-sidebar"`, the default, is
+   * the one `wiki-formant/base.css` lays out, column and drawer both; another
+   * prefix leaves the layout to the site's own stylesheet.
    */
-  prefix: string;
+  prefix?: string;
   /** Accessible name. A rail with none is an unlabelled landmark. */
   label?: string;
   className?: string;
@@ -1832,7 +1768,7 @@ export interface RailShellProps {
  *
  * With `prefix="wiki-sidebar"`, `wiki-formant/base.css` lays the rail out.
  */
-export function RailShell({ children, prefix, label, className }: RailShellProps) {
+export function RailShell({ children, prefix = 'wiki-sidebar', label, className }: RailShellProps) {
   const { open, setOpen, isMobile, ready } = useSidebar();
 
   const close = useCallback(
@@ -2005,7 +1941,158 @@ export function RailGroup({ label, ...list }: RailGroupProps) {
   );
 }
 
+export interface RailProps {
+  /** The rail's accessible name. */
+  label: string;
+  /** A heading at its top, `.wiki-rail__title`: what this is the rail of. */
+  title?: ReactNode;
+  /** A search box, ahead of the links. */
+  search?: ReactNode;
+  /** The unlabelled links that lead: home, the site's own surfaces. */
+  nav?: RailLink[];
+  /** Labelled groups after "On this page": sections, categories. An empty one is left out. */
+  groups?: readonly { label: string; links: RailLink[] }[];
+  /** The article's headings, where the page mounts the rail itself; otherwise those `RailHeadings` handed up. */
+  headings?: TocHeading[];
+  /** How "On this page" is drawn. */
+  toc?: Pick<TableOfContentsProps, 'label' | 'indentRem' | 'offsetFallback' | 'empty'>;
+  /** The address being read. */
+  pathname: string;
+  /** `next/link`, or whatever navigates on this site. */
+  link: WikiLinkComponent;
+}
+
+/**
+ * Every site's rail, one order: a title, a search box, the leading links, "On
+ * this page", then the labelled groups. Four rails had each composed
+ * `RailShell`, `RailGroup` and `TableOfContents` by hand, three in this order
+ * and one with the contents last, under a tree long enough to bury it.
+ *
+ * A client component: a site's thin wrapper passes its router link and
+ * pathname, and its layout passes the data.
+ */
+export function Rail({ label, title, search, nav = [], groups = [], headings, toc, pathname, link }: RailProps) {
+  const handed = useContext(RailHeadingsContext)?.headings ?? [];
+  return (
+    <RailShell label={label}>
+      {title !== undefined && <span className="wiki-rail__title">{title}</span>}
+      {search}
+      {nav.length > 0 && <RailGroup links={nav} pathname={pathname} link={link} />}
+      <TableOfContents {...toc} headings={headings ?? handed} />
+      {groups
+        .filter(group => group.links.length > 0)
+        .map(group => (
+          <RailGroup key={group.label} label={group.label} links={group.links} pathname={pathname} link={link} />
+        ))}
+    </RailShell>
+  );
+}
+
 export type { WikiLinkComponent, WikiLinkProps } from './react-server.js';
+
+// ---- toasts -----------------------------------------------------------------
+
+export type ToastTone = 'success' | 'error';
+
+export interface ToastOptions {
+  /** A link beside the message: a transaction in the explorer, the page just made. */
+  action?: { label: string; href: string };
+  /** Milliseconds before it goes: 5s, or 10s for an error, unless given. */
+  duration?: number;
+}
+
+interface ToastEntry extends ToastOptions {
+  id: number;
+  message: string;
+  tone: ToastTone;
+}
+
+const CARRIED_TOAST = 'wiki-formant:toast';
+let toastList: ToastEntry[] = [];
+let toastSeq = 0;
+const toastListeners = new Set<() => void>();
+const NO_TOASTS: ToastEntry[] = [];
+
+const setToasts = (next: ToastEntry[]) => {
+  toastList = next;
+  for (const listener of toastListeners) listener();
+};
+const subscribeToasts = (listener: () => void) => {
+  toastListeners.add(listener);
+  return () => toastListeners.delete(listener);
+};
+const showToast = (tone: ToastTone, message: string, options: ToastOptions = {}): number => {
+  const id = ++toastSeq;
+  setToasts([...toastList, { id, message, tone, ...options }]);
+  return id;
+};
+
+/**
+ * Raise a toast from anywhere, a component or not: `toast.success('Saved')`,
+ * `toast.error(err.message)`. The shell's `Toaster` draws it. Two sites had
+ * written a store and a renderer each, one a single toast and one a stack.
+ */
+export const toast = {
+  success: (message: string, options?: ToastOptions) => showToast('success', message, options),
+  error: (message: string, options?: ToastOptions) => showToast('error', message, options),
+  /** Shown by the next page a full load reaches: for an action that leaves by `location.assign`. */
+  carry(message: string, tone: ToastTone = 'success') {
+    try {
+      sessionStorage.setItem(CARRIED_TOAST, JSON.stringify({ message, tone }));
+    } catch {
+      /* storage unavailable: the page that loads says nothing */
+    }
+  },
+  dismiss: (id: number) => setToasts(toastList.filter(t => t.id !== id)),
+};
+
+function ToastCard({ entry }: { entry: ToastEntry }) {
+  const { id, message, tone, action, duration = tone === 'error' ? 10_000 : 5_000 } = entry;
+  useEffect(() => {
+    const timer = setTimeout(() => toast.dismiss(id), duration);
+    return () => clearTimeout(timer);
+  }, [id, duration]);
+  const external = action && /^https?:/.test(action.href);
+  return (
+    <div className={`toast toast--${tone}`} role={tone === 'error' ? 'alert' : 'status'}>
+      <span className="toast__message">{message}</span>
+      {action && (
+        <a href={action.href} className="toast__action" {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}>
+          {action.label}
+        </a>
+      )}
+      <button type="button" className="toast__close" onClick={() => toast.dismiss(id)} aria-label="Dismiss">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden focusable="false">
+          <path d="M18 6 6 18M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+/** The toasts `toast()` raised, stacked at the foot of the window. `SiteShell` mounts it; a site mounts none of its own. */
+export function Toaster() {
+  const list = useSyncExternalStore(subscribeToasts, () => toastList, () => NO_TOASTS);
+  useEffect(() => {
+    try {
+      const carried = sessionStorage.getItem(CARRIED_TOAST);
+      if (!carried) return;
+      sessionStorage.removeItem(CARRIED_TOAST);
+      const { message, tone } = JSON.parse(carried) as { message: string; tone: ToastTone };
+      showToast(tone, message);
+    } catch {
+      /* storage unavailable, or not ours to read */
+    }
+  }, []);
+  if (!list.length) return null;
+  return (
+    <div className="toast-stack">
+      {list.map(entry => (
+        <ToastCard key={entry.id} entry={entry} />
+      ))}
+    </div>
+  );
+}
 
 // ---- maths ------------------------------------------------------------------
 

@@ -20,7 +20,8 @@
 
 import { Fragment } from 'react';
 import type { ComponentProps, ComponentType, ReactNode } from 'react';
-import { Beacon, SidebarProvider, WikiLinkPreview, type WikiLinkPreviewProps } from './react.js';
+import { Beacon, SidebarProvider, Toaster, WikiLinkPreview, type WikiLinkPreviewProps } from './react.js';
+import type { SiteDefinition } from './metadata.js';
 import { followLinkProps, type XAccount } from './social.js';
 import { sidebarBootScript } from './sidebar.js';
 import type { Control, FacetControlGroup, MetadataRow } from './taxonomy.js';
@@ -883,10 +884,8 @@ export function Highlight({ text, query, lead, className = 'search-mark' }: { te
 export interface SiteDocumentProps extends Omit<ComponentProps<'html'>, 'children'> {
   children: ReactNode;
   bodyClassName?: string;
-  /** The agent-surface `<link>`s. Omitted on a host whose tenants state their own. */
-  links?: SiteLinksProps;
-  /** The site's JSON-LD graph, from `siteGraphLd`. */
-  graph?: unknown;
+  /** The site from `defineSite`: its agent-surface `<link>`s and JSON-LD graph. Omitted on a host whose tenants state their own. */
+  site?: Pick<SiteDefinition, 'links' | 'graph'>;
   /** Count the page views (`Beacon`). Off where each tenant counts its own. */
   beacon?: boolean;
 }
@@ -901,15 +900,15 @@ export interface SiteDocumentProps extends Omit<ComponentProps<'html'>, 'childre
  * scripts hashes `sidebarBootScript()`. Attributes other than the body's go on
  * `<html>`: the font variables.
  */
-export function SiteDocument({ children, bodyClassName, links, graph, beacon = true, lang = 'en', ...html }: SiteDocumentProps) {
+export function SiteDocument({ children, bodyClassName, site, beacon = true, lang = 'en', ...html }: SiteDocumentProps) {
   return (
     <html lang={lang} suppressHydrationWarning {...html}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: sidebarBootScript() }} />
-        {links && <SiteLinks {...links} />}
+        {site && <SiteLinks {...site.links} />}
       </head>
       <body className={bodyClassName}>
-        {graph !== undefined && <JsonLd data={graph} />}
+        {site && <JsonLd data={site.graph} />}
         {beacon && <Beacon />}
         {children}
       </body>
@@ -930,6 +929,12 @@ export interface SiteShellProps {
    * its own column on `.app-main`.
    */
   frame?: boolean;
+  /**
+   * What stays pinned to the foot of the window on every route: a search, a
+   * room, the way into a reference section. Drawn in `.dock`, a click-through
+   * strip whose buttons are `.dock-button`.
+   */
+  dock?: ReactNode;
 }
 
 /**
@@ -937,9 +942,11 @@ export interface SiteShellProps {
  * `.app-shell` > skip link, `header.app-header`, `main#main.app-main`, footer.
  * The rail's toggle is in the header on every route and the rail in a
  * section's layout, below `main`; `base.css` hides the toggle on a page with
- * no rail, and the state that spans the two sits around both.
+ * no rail, and the state that spans the two sits around both. A `dock` is
+ * pinned to the window's foot, and the `Toaster` that `toast()` fills is
+ * mounted here, once for every site.
  */
-export function SiteShell({ header, footer, children, className, frame = true }: SiteShellProps) {
+export function SiteShell({ header, footer, children, className, frame = true, dock }: SiteShellProps) {
   return (
     <SidebarProvider>
       <div className={className ? `app-shell ${className}` : 'app-shell'}>
@@ -951,7 +958,9 @@ export function SiteShell({ header, footer, children, className, frame = true }:
           {children}
         </main>
         {footer}
+        {dock && <div className="dock">{dock}</div>}
       </div>
+      <Toaster />
     </SidebarProvider>
   );
 }
