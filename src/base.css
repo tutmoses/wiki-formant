@@ -166,7 +166,16 @@
 
    The site sets `--rail-top` (what the sticky rail clears, a header's height),
    `--rail-border` (the rule between rail and article, which becomes the
-   drawer's foot) and the rail's surface, padding and gap. Closed is the class
+   drawer's foot) and the rail's surface. Its rows are tokens, so a site sets
+   numbers in `:root` rather than restating the classes:
+     --rail-pad-block  the scroll box's block padding (1rem 3rem)
+     --rail-section    the gap between its groups (1.5rem)
+     --rail-gap        the gap between its rows (1px)
+     --rail-row        a row's block padding (0.35rem)
+     --rail-inline     a row's inline padding (0.5rem)
+     --rail-size       a row's type size (inherited)
+     --rail-ink        a row's colour (--ui-muted)
+     --rail-weight     the lit row's weight (600) Closed is the class
    or `html[data-sidebar='closed']`, whichever says so first: the boot script
    writes the attribute before React can, and React writes the class. */
 .wiki-layout { display: flex; align-items: flex-start; }
@@ -482,23 +491,23 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
    Its inset is every site's: the gutter up to 1.5rem, so a drawer's entries line up with the page below it
    and an 18rem rail keeps its width for them. A site sets the rail's block padding, never this. */
 .wiki-sidebar { --rail-border: 1px solid var(--ui-border); }
-.wiki-sidebar__scroll { gap: 1.5rem; padding: 1rem min(var(--page-pad), 1.5rem) 3rem; }
-.wiki-rail__group, .wiki-rail__toc-list { display: flex; flex-direction: column; gap: 1px; }
+.wiki-sidebar__scroll { gap: var(--rail-section, 1.5rem); padding-block: var(--rail-pad-block, 1rem 3rem); padding-inline: min(var(--page-pad), 1.5rem); }
+.wiki-rail__group, .wiki-rail__toc-list { display: flex; flex-direction: column; gap: var(--rail-gap, 1px); }
 /* `RailGroup`: its links, lit where the reader is, a trail's children indented under their section. */
-.wiki-rail__list { display: flex; flex-direction: column; gap: 1px; margin: 0; padding: 0; list-style: none; }
+.wiki-rail__list { display: flex; flex-direction: column; gap: var(--rail-gap, 1px); margin: 0; padding: 0; list-style: none; }
 .wiki-rail__subtree { padding-inline-start: 0.75rem; }
-.wiki-rail__item { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem; border-radius: var(--ui-radius); color: var(--ui-muted); text-decoration: none; transition: background-color 150ms, color 150ms; }
+.wiki-rail__item { display: flex; align-items: center; gap: 0.5rem; padding: var(--rail-row, 0.35rem) var(--rail-inline, 0.5rem); border-radius: var(--ui-radius); font-size: var(--rail-size); color: var(--rail-ink, var(--ui-muted)); text-decoration: none; transition: background-color 150ms, color 150ms; }
 .wiki-rail__item:hover { background: var(--ui-surface-2); color: inherit; }
 .wiki-rail__item--active,
-.wiki-rail__item--active:hover { background: var(--ui-accent-soft); color: var(--ui-accent); font-weight: 600; }
+.wiki-rail__item--active:hover { background: var(--ui-accent-soft); color: var(--ui-accent); font-weight: var(--rail-weight, 600); }
 .wiki-rail__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* `Rail`'s title: what the rail is the rail of. */
 .wiki-rail__title { padding: 0 0.5rem; font-weight: 600; }
 .wiki-rail__label { padding: 0 0.5rem 0.25rem; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ui-muted); }
-.wiki-rail__toc-btn, .wiki-rail__toc-item { display: flex; align-items: center; gap: 0.25rem; width: 100%; padding: 0.25rem 0.5rem; border: 0; background: none; font: inherit; color: var(--ui-muted); text-align: left; cursor: pointer; }
+.wiki-rail__toc-btn, .wiki-rail__toc-item { display: flex; align-items: center; gap: 0.25rem; width: 100%; padding: var(--rail-row, 0.25rem) var(--rail-inline, 0.5rem); border: 0; background: none; font: inherit; color: var(--ui-muted); text-align: left; cursor: pointer; }
 .wiki-rail__toc-item { border-inline-start: 2px solid var(--ui-border); font-size: var(--ui-small); text-decoration: none; transition: color 150ms, border-color 150ms; }
 .wiki-rail__toc-item:hover, .wiki-rail__toc-item--active { border-inline-start-color: var(--ui-accent); color: var(--ui-accent); }
-.wiki-rail__toc-item--active { background: var(--ui-accent-soft); font-weight: 600; }
+.wiki-rail__toc-item--active { background: var(--ui-accent-soft); font-weight: var(--rail-weight, 600); }
 /* `RailToggle`, in the header: a 20px glyph in a 36px button, on every route,
    and gone from a page with no rail. A stylesheet rule rather than a check of
    the path or a flag the rail sets: it is right on the first paint, and no list
@@ -668,6 +677,7 @@ body:not(:has(.wiki-layout)) .wiki-rail__toggle { display: none; }
 .skeleton { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
 .empty-state { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding-block: 3rem; text-align: center; }
 .empty-state > h1, .empty-state-title { margin: 0; }
+.empty-state-desc { margin: 0; color: var(--ui-muted); }
 /* `Highlight`: a search's words in a result, in bold, in the text's own colour. */
 .search-mark { background: none; color: inherit; font-weight: 700; }
 .route-error__actions { justify-content: center; }
@@ -833,6 +843,8 @@ pre:hover > .code-copy-btn,
 }
 .stats-figures button[aria-pressed='true'] { opacity: 1; }
 .stats-figures strong { font-variant-numeric: tabular-nums; }
+/* A figure's name and a list's heading, under what they name. */
+.stats-figures button > span, .stats-list h2 { color: var(--ui-muted); }
 .stats-delta { margin-inline-start: 0.4em; }
 .stats-lists {
   display: grid;

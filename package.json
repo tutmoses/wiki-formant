@@ -1,6 +1,6 @@
 {
   "name": "wiki-formant",
-  "version": "0.139.0",
+  "version": "0.140.0",
   "description": "The portable half of a wiki: derived taxonomy and facet controls, a version-negotiating MCP transport, markdown twins, block rendering, a rich-text editor engine, conditional-GET plumbing, and the headers and CSP every origin sends.",
   "type": "module",
   "license": "MIT",
@@ -202,6 +202,11 @@
       "import": "./dist/react.js",
       "default": "./dist/react.js"
     },
+    "./next": {
+      "types": "./dist/next.d.ts",
+      "import": "./dist/next.js",
+      "default": "./dist/next.js"
+    },
     "./react-server": {
       "types": "./dist/react-server.d.ts",
       "import": "./dist/react-server.js",
@@ -355,6 +360,7 @@
     "@types/sanitize-html": "^2.16.1",
     "@vercel/blob": "^2.8.2",
     "jose": "^6.2.12",
+    "next": "^16.4.6",
     "pg": "^8.23.1",
     "react": "^19.2.4",
     "sharp": "^0.35.5",
@@ -364,11 +370,15 @@
     "@radixdlt/rola": ">=2",
     "@vercel/blob": ">=2",
     "jose": ">=6",
+    "next": ">=15",
     "pg": ">=8",
     "react": ">=18",
     "sharp": ">=0.33"
   },
   "peerDependenciesMeta": {
+    "next": {
+      "optional": true
+    },
     "react": {
       "optional": true
     },

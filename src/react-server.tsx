@@ -917,9 +917,9 @@ export function SiteDocument({ children, bodyClassName, site, beacon = true, lan
   );
 }
 
-export interface SiteShellProps {
-  /** The header's contents: the shell draws the `header.app-header` around them. */
-  header: ReactNode;
+export interface SiteShellProps extends Omit<ComponentProps<'div'>, 'children'> {
+  /** The header's contents: the shell draws the `header.app-header` around them. None, no header. */
+  header?: ReactNode;
   /** The footer, a `SiteFooter` or a site's own `footer.app-footer`. */
   footer?: ReactNode;
   children: ReactNode;
@@ -936,6 +936,12 @@ export interface SiteShellProps {
    * strip whose buttons are `.dock-button`.
    */
   dock?: ReactNode;
+  /**
+   * The boxes' class prefix: `app`, the default, is `base.css`'s
+   * `.app-shell` > `.app-header`, `.app-main`. A host that draws a shell of its
+   * own, as miow does each tenant's, names it here and keeps the landmarks.
+   */
+  prefix?: string;
 }
 
 /**
@@ -947,15 +953,15 @@ export interface SiteShellProps {
  * pinned to the window's foot, and the `Toaster` that `toast()` fills is
  * mounted here, once for every site.
  */
-export function SiteShell({ header, footer, children, className, frame = true, dock }: SiteShellProps) {
+export function SiteShell({ header, footer, children, className, frame = true, dock, prefix = 'app', ...shell }: SiteShellProps) {
   return (
     <SidebarProvider>
-      <div className={className ? `app-shell ${className}` : 'app-shell'}>
+      <div {...shell} className={className ? `${prefix}-shell ${className}` : `${prefix}-shell`}>
         <a href="#main" className="skip-link">
           Skip to content
         </a>
-        <header className="app-header">{header}</header>
-        <main id="main" className={frame ? 'app-main page-frame' : 'app-main'}>
+        {header && <header className={`${prefix}-header`}>{header}</header>}
+        <main id="main" className={frame ? `${prefix}-main page-frame` : `${prefix}-main`}>
           {children}
         </main>
         {footer}

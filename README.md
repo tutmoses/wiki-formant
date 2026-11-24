@@ -266,18 +266,15 @@ if (!limit.ok) return rateLimitedResponse(limit.retryAfterSec);
 `wiki-formant/react` carries `'use client'`. What is shared is behaviour; class names and icons are passed in.
 
 ```tsx
-// The site's one client wrapper: its router link and pathname.
-'use client';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Rail, type RailProps } from 'wiki-formant/react';
+// A Next layout passes the rail its data: `wiki-formant/next`'s `Rail` brings the router's link and pathname.
+import { Rail } from 'wiki-formant/next';
 
-export const SiteRail = (props: Omit<RailProps, 'pathname' | 'link'>) => <Rail {...props} pathname={usePathname()} link={Link} />;
-
-// The layout passes the data; the page hands up its headings.
-<RailFrame rail={<SiteRail label="Wiki" nav={[{ href: '/', label: 'Home' }]} groups={[{ label: 'Sections', links: sections }]} />}>
+<RailFrame rail={<Rail label="Wiki" nav={[{ href: '/', label: 'Home' }]} groups={[{ label: 'Sections', links: sections }]} />}>
+// The page hands up its headings.
 <RailHeadings headings={article.headings} />
 ```
+
+`wiki-formant/next` (`'use client'`, `next` an optional peer) is `Rail` bound to `next/link` and `usePathname()`, `/index` read as `/`; a `pathname` prop overrides the router's. Off Next, `wiki-formant/react`'s `Rail` takes `pathname` and `link` itself.
 
 - `SidebarProvider` / `useSidebar` hold the rail's collapse state, remembered across loads and defaulted from the viewport only when the reader never chose. Pair it with `sidebarBootScript` (`wiki-formant/sidebar`) in `<head>`, or a remembered-closed rail paints open first.
 - `Rail` is every rail, in one order: a `title` (`.wiki-rail__title`), a `search` box, the unlabelled `nav` links, "On this page", then the labelled `groups`, an empty one left out. "On this page" lists the `headings` passed, or else those a page handed up with `RailHeadings`, which `SidebarProvider` holds; a heading a view draws rather than the stored HTML is added with `referencesHeading(id?, title?)` or `seeAlsoHeading(text, id?)` (`wiki-formant/headings`, callable on the server), the ids `ReferencesView` and `RelatedPages` use; `toc` sets its label, indent and offset.
@@ -298,7 +295,7 @@ export const SiteRail = (props: Omit<RailProps, 'pathname' | 'link'>) => <Rail {
 - `useArticlePasses(ref, [blocks])` runs `wiki-formant/dom`'s passes and renders math with KaTeX (an optional peer, loaded only when a page has `$$…$$`, `\[…\]` or `\(…\)`).
 - `<Beacon />` sends page views and outbound clicks to `wiki-formant/analytics`.
 - `toast.success(message)` and `toast.error(message)`, with an optional `action` link and `duration`, raise a toast from any code; `toast.carry(message)` shows one on the page a full load reaches. `Toaster`, which `SiteShell` mounts, stacks them above the dock, `.toast-stack` > `.toast.toast--success|error` > `.toast__message`, `.toast__action`, `.toast__close`, drawn by `base.css` on the `--ui-*` tokens.
-- `RouteError` is what `error.tsx` draws: an `EmptyState` with the heading, an optional `description`, Try again (Next's `retry`, never `reset`) and Home (or `home`); the site passes its button's classes. `GlobalRouteError` is `global-error.tsx`: the document, `.app-shell` and `main#main.app-main.page-frame` around a `RouteError`, with `htmlClassName` for the font variables the root layout sets on `<html>`; the file imports the site's stylesheet and fonts itself.
+- `RouteError` is what `error.tsx` draws: an `EmptyState` with the heading, an optional `description`, Try again (Next's `retry`, never `reset`) and Home (or `home`); the button is `.btn-primary`, the class every site gives its primary button, unless `buttonClassName` names another. `GlobalRouteError` is `global-error.tsx`: the document, `.app-shell` and `main#main.app-main.page-frame` around a `RouteError`, with `htmlClassName` for the font variables the root layout sets on `<html>`; the file imports the site's stylesheet and fonts itself.
 
 `useClickOutside`, `useSnapRow` and the editor hooks ship no class names.
 
@@ -322,7 +319,7 @@ import { Breadcrumbs, FacetBar, FacetSummary, InfoboxFacts, JsonLd, Pager } from
 - `Breadcrumbs` renders the trail and its `BreadcrumbList` JSON-LD together; `base` makes the URLs absolute.
 - `JsonLd` escapes every `<`, so an authored `</script>` cannot close the tag.
 - `SiteDocument` is the root layout's `<html>`: the rail's boot script and the `site`'s `SiteLinks` in the head, its `JsonLd` graph and `Beacon` (`beacon`, on by default) in the body, `suppressHydrationWarning` for the attribute the script stamps. Other props go on `<html>`; `bodyClassName` on the body.
-- `SiteShell` is `base.css`'s shell under `SidebarProvider`: `.app-shell` > skip link, `header.app-header` (around `header`, which is its contents), `main#main.app-main.page-frame`, `footer`: the main is the column, so no page frames itself, bar a full-width `.page-bleed` band that draws its own `.page-frame` (`frame={false}` for a site that draws its own column). `RailFrame` is a section layout's rail beside its column, `.wiki-layout` > `rail` + `.wiki-layout__main` > `.page-frame`, inside `main`, where the main's frame gives way to it; it mounts `WikiLinkPreview` over the column from `/api/wiki/preview` unless `preview` names another `endpoint` or is `false`. `RailToggle` goes in every header: `base.css` hides it on a page with no rail. A `dock` is pinned to the window's foot in `.dock`, a click-through strip whose buttons are `.dock-button` (`--dock-button`, `--dock-inset`); the shell mounts the `Toaster`.
+- `SiteShell` is `base.css`'s shell under `SidebarProvider`: `.app-shell` > skip link, `header.app-header` (around `header`, which is its contents), `main#main.app-main.page-frame`, `footer`: the main is the column, so no page frames itself, bar a full-width `.page-bleed` band that draws its own `.page-frame` (`frame={false}` for a site that draws its own column). `RailFrame` is a section layout's rail beside its column, `.wiki-layout` > `rail` + `.wiki-layout__main` > `.page-frame`, inside `main`, where the main's frame gives way to it; it mounts `WikiLinkPreview` over the column from `/api/wiki/preview` unless `preview` names another `endpoint` or is `false`. `RailToggle` goes in every header: `base.css` hides it on a page with no rail. A `dock` is pinned to the window's foot in `.dock`, a click-through strip whose buttons are `.dock-button` (`--dock-button`, `--dock-inset`); the shell mounts the `Toaster`. With no `header` it draws none; other attributes go on the shell's box; `prefix` renames the boxes (`<prefix>-shell`, `-header`, `-main`) for a host that styles a shell of its own and keeps the skip link and landmarks.
 - `SiteFooter` is `footer.app-footer`: the site's own matter (`children`), a row of `links` ending on the `x` follow link, and `© <year> <owner>` with a `note` (the licence, a disclaimer).
 
 ```tsx
@@ -823,7 +820,7 @@ const tools = rolaLoginTools({
 @import "wiki-formant/base.css" layer(components);
 ```
 
-It declares the page frame (`--content-width` 120rem for every page, `--sidebar-width` 18rem, `--infobox-width`, `--page-pad` 16/24/64px) in the components layer, so a site never restates them in `@theme`; the shell every root layout draws (`.app-shell`, `.app-main`, `.page-frame`, `.skip-link`); the primitives `.spinner`, `.skeleton`, `.empty-state`; and the reduced-motion guard. It also splits a page beside its infobox at 768px of its column; whether the infobox sticks, and the rail's surface, stay the site's.
+It declares the page frame (`--content-width` 120rem for every page, `--sidebar-width` 18rem, `--infobox-width`, `--page-pad` 16/24/64px) in the components layer, so a site never restates them in `@theme`; the shell every root layout draws (`.app-shell`, `.app-main`, `.page-frame`, `.skip-link`); the primitives `.spinner`, `.skeleton`, `.empty-state`; and the reduced-motion guard. The rail's rows are tokens a site sets in `:root` rather than restating `wiki-rail__*`: `--rail-pad-block`, `--rail-section`, `--rail-gap`, `--rail-row`, `--rail-inline`, `--rail-size`, `--rail-ink`, `--rail-weight` (the list and defaults are `base.css`'s comment). It also splits a page beside its infobox at 768px of its column; whether the infobox sticks, and the rail's surface, stay the site's.
 
 ## Database and scripts
 

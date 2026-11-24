@@ -1656,7 +1656,7 @@ export interface RouteErrorProps {
   description?: ReactNode;
   /** The way out beside Try again: the site's home unless given. */
   home?: { href: string; label: string };
-  /** The Try again button's classes, the site's button. */
+  /** The Try again button's classes: `.btn-primary`, every site's primary button, unless given. */
   buttonClassName?: string;
   /** The Home link's classes. */
   linkClassName?: string;
@@ -1667,13 +1667,13 @@ export interface RouteErrorProps {
  * as an `EmptyState`.
  *
  *   export default function Error({ retry }: { retry: () => void }) {
- *     return <RouteError retry={retry} buttonClassName="btn-primary" />;
+ *     return <RouteError retry={retry} />;
  *   }
  *
  * `retry`, not `reset`: `reset` clears the boundary and renders the same
  * failed payload again, where `retry` fetches it anew.
  */
-export function RouteError({ retry, title = 'This page did not load', description, home = { href: '/', label: 'Home' }, buttonClassName, linkClassName }: RouteErrorProps) {
+export function RouteError({ retry, title = 'This page did not load', description, home = { href: '/', label: 'Home' }, buttonClassName = 'btn-primary', linkClassName }: RouteErrorProps) {
   return (
     <EmptyState
       as="h1"
@@ -1710,7 +1710,7 @@ export interface GlobalRouteErrorProps extends RouteErrorProps {
  *   import '@/styles/globals.css';
  *   import { fontVariables } from '@/app/fonts';
  *   export default function GlobalError({ retry }: { retry: () => void }) {
- *     return <GlobalRouteError retry={retry} htmlClassName={fontVariables} buttonClassName="btn-primary" />;
+ *     return <GlobalRouteError retry={retry} htmlClassName={fontVariables} />;
  *   }
  */
 export function GlobalRouteError({ htmlClassName, bodyClassName, className, ...error }: GlobalRouteErrorProps) {
