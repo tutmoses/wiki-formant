@@ -310,6 +310,7 @@ import { Breadcrumbs, FacetBar, FacetSummary, InfoboxFacts, JsonLd, Pager } from
 <Pager href={p => `?page=${p}`} page={page} total={totalPages} noun="Page" />
 ```
 
+- `Highlight({ text, query, lead })` marks where a search's words fall in a result's title or snippet, in `<mark class="search-mark">` (`base.css` sets it in bold), matched as the search matched: case and accents ignored, a hyphenated word as its parts, each word anywhere and its stem at the start of a word, no stop words or excluded `-words`. `lead` starts a snippet at most that many characters before its first mark, after an ellipsis, so a line-clamped snippet keeps its mark in sight. `wiki-formant/highlight`'s `highlightRanges(text, query)` is the same answer as ranges, for a caller that must know whether a text is marked at all.
 - `EmptyState({ title, description, action, as, className })` is "there is nothing here": a 404 (`as="h1"`), an empty table, a filtered-out grid. `.empty-state` > the title (`h1`, or `p.empty-state-title`), `.empty-state-desc`, `.empty-state-action`; `base.css` stacks and centres it, the site sets its type and colour.
 
 - `FacetBar` renders `facetControls` and `alphaControls`; `letterRow`, `letterControl`, `text` and `letterCounts="title"` separate the A–Z row and let a label truncate while its count stays.

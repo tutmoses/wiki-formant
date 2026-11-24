@@ -25,6 +25,7 @@ import { followLinkProps, type XAccount } from './social.js';
 import { sidebarBootScript } from './sidebar.js';
 import type { Control, FacetControlGroup, MetadataRow } from './taxonomy.js';
 import { safeLinkHref } from './validation.js';
+import { highlightRanges } from './highlight.js';
 import { isoDate } from './html.js';
 import { blockLocation, type BlockChange } from './revisions.js';
 import type { HistoryChange } from './history.js';
@@ -844,6 +845,38 @@ export function Cite({ className = 'article-cite', ...page }: CiteProps) {
 }
 
 export { EmptyState, type EmptyStateProps } from './empty-state.js';
+
+/**
+ * `text` with every place `query` matched it in `<mark class="search-mark">`,
+ * matched as the search matched (`highlightRanges`): every result list, the
+ * typeahead's and the results page's, marks its titles and snippets with it.
+ * `lead` starts the text at most that many characters before its first mark, at
+ * a word and after an ellipsis, so a snippet clamped to a line or two keeps its
+ * mark in sight.
+ */
+export function Highlight({ text, query, lead, className = 'search-mark' }: { text: string; query: string; lead?: number; className?: string }) {
+  const ranges = highlightRanges(text, query);
+  if (!ranges.length) return <>{text}</>;
+  let at = 0;
+  const out: ReactNode[] = [];
+  const first = ranges[0]![0];
+  if (lead !== undefined && first > lead) {
+    const space = text.lastIndexOf(' ', first - lead);
+    at = space === -1 ? first - lead : space + 1;
+    out.push('…');
+  }
+  for (const [start, end] of ranges) {
+    if (start > at) out.push(text.slice(at, start));
+    out.push(
+      <mark key={start} className={className}>
+        {text.slice(start, end)}
+      </mark>,
+    );
+    at = end;
+  }
+  if (at < text.length) out.push(text.slice(at));
+  return <>{out}</>;
+}
 
 // ---- the document and the shell ---------------------------------------------
 
