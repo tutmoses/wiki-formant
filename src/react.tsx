@@ -1273,6 +1273,224 @@ export const focusShown = (input: HTMLInputElement | null): boolean => {
   return true;
 };
 
+// ---- search field -----------------------------------------------------------
+
+export interface SearchFieldClassNames {
+  /** The `<search>` landmark around everything. */
+  root?: string;
+  form?: string;
+  input?: string;
+  /** The magnifier a folded field shows in its place. */
+  toggle?: string;
+  list?: string;
+  item?: string;
+  /** Alongside `item` on the row the arrows chose. */
+  itemActive?: string;
+  /** The list's last row, to the results page. */
+  all?: string;
+  /** The line a failed or empty search shows. */
+  note?: string;
+}
+
+export interface SearchFieldProps<T> {
+  /** The rows for `query`, first few only; a throw is a failed search, never "nothing". Module scope, so the reference is stable. */
+  fetch: (query: string, signal: AbortSignal) => Promise<T[]>;
+  minLength?: number;
+  /** The results page, read with `?q=`: the form's GET target, Enter's destination and the list's last row. */
+  action: string;
+  /** Where a row leads. */
+  hrefOf: (item: T) => string;
+  /** A row's contents, inside the link the field draws. */
+  renderRow: (item: T, query: string) => ReactNode;
+  /** The router's push: a row and Enter navigate without a page load. */
+  navigate: (href: string) => void;
+  label: string;
+  placeholder?: string;
+  /** Given, the field is this magnifier until opened, and folds again when left empty. */
+  icon?: ReactNode;
+  /** Drawn in the form before the input: a leading magnifier. */
+  before?: ReactNode;
+  /** Drawn in the form after the input while a search is in flight. */
+  spinner?: ReactNode;
+  /** Shows a field "/" cannot reach because it is hidden: a closed rail opens. */
+  reveal?: () => void;
+  classNames?: SearchFieldClassNames;
+  /** The last row's words. */
+  all?: (query: string) => ReactNode;
+  /** What a search that matched nothing says. */
+  empty?: (query: string) => ReactNode;
+  failed?: ReactNode;
+}
+
+const navigable = (e: ReactMouseEvent) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+
+/**
+ * A search box with the first few rows under it, as the reader types. Enter
+ * opens the results page, unless the arrows have chosen a row, which Enter then
+ * opens; with no script the form's GET is all there is, and a row and the last
+ * row are plain links. "/" reaches it from anywhere. Escape shuts the list, or
+ * folds an empty iconified field; so does a click outside. The state machine is
+ * `useTypeahead`; this is the one view of it the wikis' search boxes share.
+ */
+export function SearchField<T>({
+  fetch,
+  minLength,
+  action,
+  hrefOf,
+  renderRow,
+  navigate,
+  label,
+  placeholder = label,
+  icon,
+  before,
+  spinner,
+  reveal,
+  classNames: c = {},
+  all = q => <>Every result for “{q}”</>,
+  empty = q => <>Nothing matches “{q}”.</>,
+  failed = 'Search did not answer. Press Enter for the results page.',
+}: SearchFieldProps<T>) {
+  // The list under the box: open, open with a row chosen by the arrows, which Enter then opens, or shut. Shutting it forgets the choice.
+  const [list, setList] = useState<'open' | 'chosen' | 'shut'>('open');
+  const [folded, setFolded] = useState(!!icon);
+  const input = useRef<HTMLInputElement>(null);
+  const close = useCallback(() => setList('shut'), []);
+  const ref = useClickOutside<HTMLElement>(close);
+  const leave = (href: string) => {
+    reset();
+    setList('open');
+    if (icon) setFolded(true);
+    navigate(href);
+  };
+  const { query, setQuery, items, results, highlight, setHighlight, onKeyDown, reset, combobox } = useTypeahead<T>({
+    fetch,
+    minLength,
+    onPick: item => leave(hrefOf(item)),
+  });
+  const q = query.trim();
+  const resultsHref = `${action}?${new URLSearchParams({ q })}`;
+  const chosen = list === 'chosen';
+  const shut = list === 'shut';
+  // What the box last heard for the words now in it.
+  const answer = results.status !== 'idle' && results.query === q ? results.status : null;
+  const open = !!q && !shut && items.length > 0;
+  const { inputProps, listProps, optionProps } = combobox(undefined, open);
+
+  useEffect(() => {
+    if (icon && !folded) input.current?.focus();
+  }, [icon, folded]);
+  useSearchShortcut(() => {
+    if (folded) return setFolded(false);
+    if (focusShown(input.current) || !reveal) return;
+    reveal();
+    requestAnimationFrame(() => input.current?.focus());
+  });
+
+  const follow = (href: string) => (e: ReactMouseEvent) => {
+    if (!navigable(e)) return;
+    e.preventDefault();
+    leave(href);
+  };
+
+  if (folded)
+    return (
+      <search className={c.root} data-folded="">
+        <a
+          href={action}
+          className={c.toggle}
+          aria-label={label}
+          title={label}
+          onClick={e => {
+            if (!navigable(e)) return;
+            e.preventDefault();
+            setFolded(false);
+          }}
+        >
+          {icon}
+        </a>
+      </search>
+    );
+  return (
+    <search className={c.root} ref={ref}>
+      <form
+        action={action}
+        className={c.form}
+        onSubmit={e => {
+          e.preventDefault();
+          if (q) leave(resultsHref);
+        }}
+      >
+        {before}
+        <input
+          ref={input}
+          type="search"
+          name="q"
+          autoComplete="off"
+          className={c.input}
+          value={query}
+          onChange={e => {
+            setQuery(e.target.value);
+            setList('open');
+          }}
+          onFocus={() => setList(l => (l === 'shut' ? 'open' : l))}
+          onBlur={() => icon && !query && setFolded(true)}
+          onKeyDown={e => {
+            if (e.key === 'Escape') return icon && !query ? setFolded(true) : close();
+            if (e.key === 'Enter' && !chosen) return;
+            // The first arrow chooses the first row (or the last, going up), not the one past the hook's resting highlight.
+            if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !chosen && items.length) {
+              e.preventDefault();
+              setHighlight(e.key === 'ArrowDown' ? 0 : items.length - 1);
+              setList('chosen');
+              return;
+            }
+            onKeyDown(e);
+          }}
+          placeholder={placeholder}
+          aria-label={label}
+          {...inputProps}
+          aria-activedescendant={chosen ? inputProps['aria-activedescendant'] : undefined}
+        />
+        {results.status === 'searching' && spinner}
+        {open && (
+          <div className={c.list} {...listProps}>
+            {items.map((item, i) => {
+              const href = hrefOf(item);
+              const active = chosen && i === highlight;
+              return (
+                <a
+                  key={href}
+                  href={href}
+                  className={active && c.itemActive ? `${c.item ?? ''} ${c.itemActive}` : c.item}
+                  onMouseEnter={() => setHighlight(i)}
+                  onClick={follow(href)}
+                  {...optionProps(i)}
+                  aria-selected={active}
+                >
+                  {renderRow(item, q)}
+                </a>
+              );
+            })}
+            <a href={resultsHref} className={c.all} onClick={follow(resultsHref)}>
+              {all(q)}
+            </a>
+          </div>
+        )}
+        {q && !shut && answer === 'failed' && (
+          <p className={c.note} aria-live="polite">
+            {failed}
+          </p>
+        )}
+        {q && !shut && answer === 'found' && !items.length && (
+          <p className={c.note} aria-live="polite">
+            {empty(q)}
+          </p>
+        )}
+      </form>
+    </search>
+  );
+}
+
 // ---- revision restore ---------------------------------------------------------
 
 /** Resolves to an error message to show, or null on success. */
@@ -1711,8 +1929,10 @@ const decodePath = (path: string): string => {
 export interface RailLink {
   href: string;
   label: ReactNode;
-  /** Drawn before the label: an icon, or a glyph in the site's own span. */
+  /** Drawn before the label: an icon component, as it is. */
   icon?: ReactNode;
+  /** Drawn before the label in `.wiki-rail__glyph`, hidden from a screen reader: an emoji, a tree mark, a small icon. */
+  glyph?: ReactNode;
   title?: string;
   /** Lit for the pages beneath it too, not only its own. A link with `children` is one. */
   tree?: boolean;
@@ -1749,6 +1969,11 @@ function RailList({ links, pathname, link: Link, nested }: Omit<RailGroupProps, 
               aria-current={lit ? (isRailLinkActive(pathname, entry.href) ? 'page' : 'true') : undefined}
             >
               {entry.icon}
+              {entry.glyph !== undefined && (
+                <span className="wiki-rail__glyph" aria-hidden>
+                  {entry.glyph}
+                </span>
+              )}
               <span className="wiki-rail__text">{entry.label}</span>
             </Link>
             {open.length > 0 && <RailList links={open} pathname={pathname} link={Link} nested />}
