@@ -40,15 +40,15 @@
 /* ---- the shell ----------------------------------------------------------------
    The same four boxes in every root layout, under one set of names:
 
-     .app-shell > a.skip-link, header.app-header, main#main.app-main, footer.app-footer
-                  .app-main > .page-frame   (or .wiki-layout beside a rail,
-                                             whose .wiki-layout__main > .page-frame)
+     .app-shell > a.skip-link, header.app-header, main#main.app-main.page-frame, footer.app-footer
+                  (.app-main > .wiki-layout beside a rail, whose
+                   .wiki-layout__main > .page-frame)
 
    A column the height of the window, whose main takes what the header and the
    footer leave, so a short page's footer sits at the foot. `.page-frame` is the
    shared column, --content-width with its gutters, centred, drawn once by
-   whatever owns the column: `RailFrame` beside a rail, otherwise the shell's
-   main or the page. A frame around a rail gives way to it, so the rail sits
+   whatever owns the column: the shell's main, and `RailFrame` beside a rail,
+   so no page frames itself. A frame around a rail gives way to it, so the rail sits
    flush left and the column centres in what it leaves; a frame inside a frame
    adds nothing. The header and footer span the window on the gutter; their
    height, contents and surface are the site's, and a sticky header's height is
@@ -65,8 +65,10 @@
 .app-footer__note { display: flex; flex-direction: column; gap: 0.25rem; }
 .app-footer__note > * { margin: 0; }
 .app-footer__note a { color: inherit; text-decoration: underline; }
-.page-frame:has(> .wiki-layout),
-.page-frame:not(:has(> .wiki-layout)) .page-frame { max-width: none; padding-inline: 0; }
+/* A full-width band, `.page-bleed` (a form's ground), gives the frame back the
+   way a rail does, and draws its own `.page-frame` inside. */
+.page-frame:has(> .wiki-layout, > .page-bleed),
+.page-frame:not(:has(> .wiki-layout, > .page-bleed)) .page-frame { max-width: none; padding-inline: 0; }
 /* `clip`, not `hidden`, which the spec promotes to a scroll box of its own: a
    page wider than the window is cut at its edge and the window stays the one
    scroller, so the sticky rail still sticks. */

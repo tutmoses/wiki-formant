@@ -889,7 +889,12 @@ export interface SiteShellProps {
   footer?: ReactNode;
   children: ReactNode;
   className?: string;
-  mainClassName?: string;
+  /**
+   * The main is the column, `.page-frame`, so no page frames itself; a rail
+   * under it takes the full width (`base.css`). False for a site that draws
+   * its own column on `.app-main`.
+   */
+  frame?: boolean;
 }
 
 /**
@@ -899,7 +904,7 @@ export interface SiteShellProps {
  * section's layout, below `main`; `base.css` hides the toggle on a page with
  * no rail, and the state that spans the two sits around both.
  */
-export function SiteShell({ header, footer, children, className, mainClassName }: SiteShellProps) {
+export function SiteShell({ header, footer, children, className, frame = true }: SiteShellProps) {
   return (
     <SidebarProvider>
       <div className={className ? `app-shell ${className}` : 'app-shell'}>
@@ -907,7 +912,7 @@ export function SiteShell({ header, footer, children, className, mainClassName }
           Skip to content
         </a>
         <header className="app-header">{header}</header>
-        <main id="main" className={mainClassName ? `app-main ${mainClassName}` : 'app-main'}>
+        <main id="main" className={frame ? 'app-main page-frame' : 'app-main'}>
           {children}
         </main>
         {footer}
@@ -978,9 +983,10 @@ export interface RailFrameProps {
   children: ReactNode;
   /**
    * Hover cards for the wiki links in the column (`WikiLinkPreview`), mounted
-   * once beside it. `scope` defaults to the column, `.wiki-layout__main`.
+   * once beside it, or false for none. `endpoint` defaults to
+   * `/api/wiki/preview` and `scope` to the column, `.wiki-layout__main`.
    */
-  preview?: Omit<WikiLinkPreviewProps, 'scope'> & { scope?: string };
+  preview?: false | (Omit<WikiLinkPreviewProps, 'scope' | 'endpoint'> & { scope?: string; endpoint?: string });
 }
 
 /**
@@ -989,7 +995,7 @@ export interface RailFrameProps {
  * (`RailShell prefix="wiki-sidebar"`) and `.wiki-layout__main` > `.page-frame`.
  * The column is framed here, so no page under a rail frames itself.
  */
-export function RailFrame({ rail, children, preview }: RailFrameProps) {
+export function RailFrame({ rail, children, preview = {} }: RailFrameProps) {
   return (
     <>
       <div className="wiki-layout">
@@ -999,7 +1005,7 @@ export function RailFrame({ rail, children, preview }: RailFrameProps) {
         </div>
       </div>
       {/* Outside the column it previews from: the card is fixed at viewport coordinates. */}
-      {preview && <WikiLinkPreview {...preview} scope={preview.scope ?? '.wiki-layout__main'} />}
+      {preview && <WikiLinkPreview {...preview} endpoint={preview.endpoint ?? '/api/wiki/preview'} scope={preview.scope ?? '.wiki-layout__main'} />}
     </>
   );
 }
