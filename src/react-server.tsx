@@ -843,6 +843,8 @@ export function Cite({ className = 'article-cite', ...page }: CiteProps) {
   );
 }
 
+export { EmptyState, type EmptyStateProps } from './empty-state.js';
+
 // ---- the document and the shell ---------------------------------------------
 
 export interface SiteDocumentProps extends Omit<ComponentProps<'html'>, 'children'> {
@@ -864,7 +866,7 @@ export interface SiteDocumentProps extends Omit<ComponentProps<'html'>, 'childre
  * `data-sidebar` on `<html>` before React hydrates, so the server's HTML and the
  * browser's DOM differ by exactly that attribute. A CSP that hashes inline
  * scripts hashes `sidebarBootScript()`. Attributes other than the body's go on
- * `<html>`: the font variables, `data-scroll-behavior`.
+ * `<html>`: the font variables.
  */
 export function SiteDocument({ children, bodyClassName, links, graph, beacon = true, lang = 'en', ...html }: SiteDocumentProps) {
   return (

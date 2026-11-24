@@ -34,6 +34,7 @@ import {
 } from './sidebar.js';
 import { activateTabGroups, addCopyButtons, hydrateTweetEmbeds, onTweetResize, sizeTweetEmbed, sortTables, startBeacon } from './dom.js';
 import { comboboxAria, type ComboboxAria } from './combobox.js';
+import { EmptyState } from './empty-state.js';
 import type { WikiLinkComponent } from './react-server.js';
 import {
   Component,
@@ -1498,6 +1499,9 @@ export interface RouteErrorProps {
   /** Next's `retry`, which fetches the segment again and re-renders it. */
   retry: () => void;
   title?: string;
+  description?: ReactNode;
+  /** The way out beside Try again: the site's home unless given. */
+  home?: { href: string; label: string };
   /** The Try again button's classes, the site's button. */
   buttonClassName?: string;
   /** The Home link's classes. */
@@ -1505,8 +1509,8 @@ export interface RouteErrorProps {
 }
 
 /**
- * What `error.tsx` and `global-error.tsx` draw: the page's one heading, Try
- * again, and the way home, in the `.empty-state` every site already styles.
+ * What `error.tsx` draws: the page's one heading, Try again, and the way home,
+ * as an `EmptyState`.
  *
  *   export default function Error({ retry }: { retry: () => void }) {
  *     return <RouteError retry={retry} buttonClassName="btn-primary" />;
@@ -1515,19 +1519,57 @@ export interface RouteErrorProps {
  * `retry`, not `reset`: `reset` clears the boundary and renders the same
  * failed payload again, where `retry` fetches it anew.
  */
-export function RouteError({ retry, title = 'This page did not load', buttonClassName, linkClassName }: RouteErrorProps) {
+export function RouteError({ retry, title = 'This page did not load', description, home = { href: '/', label: 'Home' }, buttonClassName, linkClassName }: RouteErrorProps) {
   return (
-    <div className="empty-state">
-      <h1>{title}</h1>
-      <div className="row-md route-error__actions">
-        <button type="button" onClick={() => retry()} className={buttonClassName}>
-          Try again
-        </button>
-        <a href="/" className={linkClassName}>
-          Home
-        </a>
-      </div>
-    </div>
+    <EmptyState
+      as="h1"
+      title={title}
+      description={description}
+      action={
+        <div className="row-md route-error__actions">
+          <button type="button" onClick={() => retry()} className={buttonClassName}>
+            Try again
+          </button>
+          <a href={home.href} className={linkClassName}>
+            {home.label}
+          </a>
+        </div>
+      }
+    />
+  );
+}
+
+export interface GlobalRouteErrorProps extends RouteErrorProps {
+  /** `<html>`'s classes: the font variables the root layout sets there. */
+  htmlClassName?: string;
+  bodyClassName?: string;
+  /** Added to `.app-shell`, as on `SiteShell`. */
+  className?: string;
+}
+
+/**
+ * What `global-error.tsx` draws: the root layout itself failed, so this is the
+ * document, the shell's box and its main, around a `RouteError`. The file still
+ * imports the site's stylesheet and fonts, which only it can name.
+ *
+ *   'use client';
+ *   import '@/styles/globals.css';
+ *   import { fontVariables } from '@/app/fonts';
+ *   export default function GlobalError({ retry }: { retry: () => void }) {
+ *     return <GlobalRouteError retry={retry} htmlClassName={fontVariables} buttonClassName="btn-primary" />;
+ *   }
+ */
+export function GlobalRouteError({ htmlClassName, bodyClassName, className, ...error }: GlobalRouteErrorProps) {
+  return (
+    <html lang="en" className={htmlClassName}>
+      <body className={bodyClassName}>
+        <div className={className ? `app-shell ${className}` : 'app-shell'}>
+          <main id="main" className="app-main page-frame">
+            <RouteError {...error} />
+          </main>
+        </div>
+      </body>
+    </html>
   );
 }
 

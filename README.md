@@ -292,7 +292,7 @@ import { RailGroup, RailShell, TableOfContents } from 'wiki-formant/react';
 - `useBlockOperations(blocks, setBlocks, { duplicate })` and `BlockActions` are a block list's five edits and their buttons; `useRevisionRestore(restore, { onRestored })` confirms and restores, `restoreViaPost(endpoint)` being the usual `restore`.
 - `useArticlePasses(ref, [blocks])` runs `wiki-formant/dom`'s passes and renders math with KaTeX (an optional peer, loaded only when a page has `$$…$$`, `\[…\]` or `\(…\)`).
 - `<Beacon />` sends page views and outbound clicks to `wiki-formant/analytics`.
-- `RouteError` is what `error.tsx` and `global-error.tsx` draw: the heading, Try again (Next's `retry`, never `reset`) and Home, in `.empty-state`; the site passes its button's classes.
+- `RouteError` is what `error.tsx` draws: an `EmptyState` with the heading, an optional `description`, Try again (Next's `retry`, never `reset`) and Home (or `home`); the site passes its button's classes. `GlobalRouteError` is `global-error.tsx`: the document, `.app-shell` and `main#main.app-main.page-frame` around a `RouteError`, with `htmlClassName` for the font variables the root layout sets on `<html>`; the file imports the site's stylesheet and fonts itself.
 
 `useClickOutside`, `useSnapRow` and the editor hooks ship no class names.
 
@@ -308,6 +308,8 @@ import { Breadcrumbs, FacetBar, FacetSummary, InfoboxFacts, JsonLd, Pager } from
 <FacetBar link={Link} facets={groups} letters={letters} alphaFirst />
 <Pager href={p => `?page=${p}`} page={page} total={totalPages} noun="Page" />
 ```
+
+- `EmptyState({ title, description, action, as, className })` is "there is nothing here": a 404 (`as="h1"`), an empty table, a filtered-out grid. `.empty-state` > the title (`h1`, or `p.empty-state-title`), `.empty-state-desc`, `.empty-state-action`; `base.css` stacks and centres it, the site sets its type and colour.
 
 - `FacetBar` renders `facetControls` and `alphaControls`; `letterRow`, `letterControl`, `text` and `letterCounts="title"` separate the A–Z row and let a label truncate while its count stays.
 - `Breadcrumbs` renders the trail and its `BreadcrumbList` JSON-LD together; `base` makes the URLs absolute.
@@ -421,7 +423,7 @@ export const generateMetadata = () => ({
 <JsonLd data={articleLd({ headline: title, url, image, published, modified, publisher: SITE.publisher, citation: citationsFromReferences(refs) })} />
 ```
 
-- `rootMetadata({ name, url, description, title, image, handle, keywords, icons })` is the root layout's `metadata`: title template, robots, and an inherited card with no title, description or URL, which Next fills from each page's own.
+- `rootMetadata({ name, url, description, title, image, handle, keywords, icons })` is the root layout's `metadata`: title template, robots, and an inherited card with no title, description or URL, which Next fills from each page's own; the site's name as author, creator and publisher; and Search Console and Bing verification from `GOOGLE_SITE_VERIFICATION` and `BING_SITE_VERIFICATION` where set.
 - Next replaces `openGraph` and `twitter` per segment rather than merging, so `pageMetadata` sets both; `sitePageMetadata({ siteName, handle })` binds the fields every page's card needs.
 - `sitePageMetadata({ ..., card: `${SITE_URL}/og` })` binds the site's card route, and a page then passes `card: { title, eyebrow, description, banner }` in place of `image`. `cardUrl(base, fields)` is the same address for JSON-LD: empty fields left out, the order fixed, so one card has one URL.
 - `articleLd` requires `image`. `collectionLd` is an index over an `ItemList`. `siteGraphLd` is the Organization, WebSite and `WebAPI` `@graph` for the root layout (search defaults to `/search?q=` on the origin, the API's documentation to its `llms.txt`), and `siteRefs(url)` hands out the same `@id`s for a page's `publisher` and `isPartOf`.

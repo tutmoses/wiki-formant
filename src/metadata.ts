@@ -391,12 +391,24 @@ export interface RootMetadataOptions {
  * the Open Graph one, so a page that sets no card still describes itself; a URL
  * here would tell every such page's unfurler it was the homepage. Three sites
  * wrote this object three ways, and two of them set that URL.
+ *
+ * The site is its own author, creator and publisher. Search Console and Bing
+ * verify the origin from `GOOGLE_SITE_VERIFICATION` and `BING_SITE_VERIFICATION`
+ * where the environment sets them.
  */
 export function rootMetadata(o: RootMetadataOptions) {
+  const google = process.env.GOOGLE_SITE_VERIFICATION;
+  const bing = process.env.BING_SITE_VERIFICATION;
   return {
     metadataBase: new URL(o.url),
     title: { default: o.title ?? o.name, template: `%s | ${o.name}` },
     description: o.description,
+    authors: [{ name: o.name }],
+    creator: o.name,
+    publisher: o.name,
+    ...(google || bing
+      ? { verification: { ...(google ? { google } : {}), ...(bing ? { other: { 'msvalidate.01': [bing] } } : {}) } }
+      : {}),
     ...(o.keywords?.length ? { keywords: o.keywords } : {}),
     ...(o.icons ? { icons: o.icons } : {}),
     robots: {
