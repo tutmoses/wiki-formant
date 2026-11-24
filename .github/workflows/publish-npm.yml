@@ -1,15 +1,14 @@
-# Publish wiki-formant to npm when its version changes.
+# Publish wiki-formant to npm whenever npm lacks the version in package.json.
 #
-# Gated on the version actually moving, not on package.json being touched: a
-# README link or a devDependency bump edits the same file, and an ungated job
-# would fail the publish with EPUBLISHCONFLICT every time.
+# The gate is npm itself, never git history. GitHub runs this once per push, on
+# the tip commit, so a push carrying several commits at one version has a
+# single run, and that run must publish. The npm-publish concurrency group
+# queues runs instead of cancelling them, so a run that starts after another
+# published sees the version on npm and stops.
 #
-# The job runs on EVERY push to main rather than only on package.json changes,
-# because the interesting failure is the one that used to be silent: editing
-# src/ and pushing without a version bump did nothing at all — no run, no error,
-# and npm quietly fell behind the repo. That is now a failed run that names the
-# fix. A push touching only docs or this workflow still ends as a clean
-# no-op.
+# Every push to main runs the job. A version already on npm is a clean no-op,
+# except that scripts/unshipped.sh fails the run when src/ differs from what
+# npm serves under that version: a src change without a bump ships nowhere.
 #
 # Auth note: this publishes with TRUSTED PUBLISHING (OIDC) — no token. The
 # registry trusts a short-lived token minted by GitHub for this repository and
@@ -51,7 +50,7 @@ jobs:
       id-token: write
 
     steps:
-      # Full history: the bump check diffs this push against its base commit.
+      # Full history: unshipped.sh diffs HEAD against the commit npm built from.
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
@@ -61,25 +60,16 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
-      # npm takes a minute to serve a version it has just accepted, so a push
-      # landing right after a release still reads the old one here, publishes
-      # again and fails 409. A version the parent commit already carried was
-      # that commit's run to publish. A manual run skips the parent check, so it
-      # retries a release whose own run failed.
-      - name: Check whether the version actually changed
+      - name: Check whether npm has this version
         id: check
         run: |
           LOCAL="$(jq -r .version package.json)"
           NAME="$(jq -r .name package.json)"
-          PUBLISHED="$(npm view "$NAME" version 2>/dev/null || echo none)"
-          PARENT="$(git show HEAD~1:package.json 2>/dev/null | jq -r .version || echo none)"
-          echo "local=$LOCAL published=$PUBLISHED parent=$PARENT"
-          if [ "$LOCAL" = "$PUBLISHED" ]; then
+          SERVED="$(npm view "$NAME@$LOCAL" version --prefer-online 2>/dev/null || true)"
+          echo "local=$LOCAL served=${SERVED:-none}"
+          if [ "$SERVED" = "$LOCAL" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "::notice::Version $LOCAL is already on npm — nothing to publish."
-          elif [ "$LOCAL" = "$PARENT" ] && [ "${{ github.event_name }}" = "push" ]; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Version $LOCAL came with the parent commit, whose run publishes it — re-run by hand if that run failed."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
@@ -122,6 +112,14 @@ jobs:
       # XXXXX-XXXXX) and the registry answers with a 404 naming the package,
       # which reads as if the package were missing. Verbose turns that into
       # "oidc Failed token exchange request" with the registry's own reason.
+      #
+      # npm can take a minute to serve a version it has just accepted, so a run
+      # queued behind a release may read it as missing and publish again. The
+      # registry refuses that with E403; it means the version is out, so it ends
+      # the run cleanly. Every other failure stays a failure.
       - name: Publish
         if: steps.check.outputs.changed == 'true'
-        run: npm publish --provenance --access public --loglevel verbose
+        run: |
+          if npm publish --provenance --access public --loglevel verbose 2>&1 | tee publish.log; then exit 0; fi
+          grep -q 'cannot publish over the previously published versions' publish.log || exit 1
+          echo "::notice::$(jq -r .version package.json) was published by an earlier run."
