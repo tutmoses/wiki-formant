@@ -26,6 +26,23 @@ export interface Heading {
   level: number;
 }
 
+/**
+ * The heading `ReferencesView` draws, as "On this page" lists it. A page's
+ * headings are read from its stored HTML, which cannot see a heading a view
+ * draws, so a page adds this one, and `seeAlsoHeading`, to what it hands up.
+ */
+export function referencesHeading(id?: string, title = 'References'): Heading {
+  return { id: id ? `references-${id}` : 'references-heading', text: title, level: 2 };
+}
+
+/** `RelatedPages`'s heading id unless it is given one. */
+export const SEE_ALSO_ID = 'see-also-heading';
+
+/** The heading `RelatedPages` draws, as "On this page" lists it (see `referencesHeading`). */
+export function seeAlsoHeading(text: string, id = SEE_ALSO_ID): Heading {
+  return { id, text, level: 2 };
+}
+
 /** The default slug rule: lowercase words joined by hyphens. */
 export function slugifyHeading(text: string): string {
   return text
