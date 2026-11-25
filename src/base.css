@@ -55,7 +55,10 @@
    `--rail-top`. The header's surface is three tokens a site sets in `:root`
    rather than restating `.app-header`: `--header-bg`, `--header-border` (the
    rule under it) and `--header-filter` (a `backdrop-filter`, for a
-   translucent one). Every header sticks, at every width. The skip link is
+   translucent one). Its row is tokens too: `--header-gap` (1rem),
+   `--header-pad` (the inline padding, --page-pad), `--header-wrap` (nowrap;
+   `wrap` lets an opened search take a line of its own), `--header-justify`
+   and `--header-z` (40). Every header sticks, at every width. The skip link is
    off-screen until focused, then hangs from the top of the window in the
    site's accent, on the `--ui-*` tokens.
 
@@ -66,7 +69,7 @@
    while its `Menu` is open. A site sets
    the tokens, never the class. */
 .app-shell { display: flex; flex-direction: column; min-height: 100dvh; }
-.app-header { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 1rem; min-height: var(--rail-top, auto); padding-inline: var(--page-pad); background: var(--header-bg, none); border-block-end: var(--header-border, none); backdrop-filter: var(--header-filter, none); }
+.app-header { position: sticky; top: 0; z-index: var(--header-z, 40); display: flex; flex-wrap: var(--header-wrap, nowrap); align-items: center; justify-content: var(--header-justify, normal); gap: var(--header-gap, 1rem); min-height: var(--rail-top, auto); padding-inline: var(--header-pad, var(--page-pad)); background: var(--header-bg, none); border-block-end: var(--header-border, none); backdrop-filter: var(--header-filter, none); }
 .app-footer { padding-block: 2rem; font-size: var(--ui-small); color: var(--ui-muted); }
 /* `SiteFooter`: the site's matter, a row of links, the owner and licence line. */
 .app-footer__frame { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; text-align: center; }
@@ -89,6 +92,19 @@
 .header-btn { display: inline-grid; place-items: center; flex-shrink: 0; min-width: var(--header-btn, 2.25rem); min-height: var(--header-btn, 2.25rem); padding: 0; border: 0; border-radius: var(--header-btn-radius, var(--ui-radius)); background: none; color: var(--header-ink, inherit); font: inherit; text-decoration: none; cursor: pointer; transition: background-color 150ms, color 150ms; }
 .header-btn:hover, .header-btn:has(+ .menu:popover-open) { background: var(--header-btn-hover, var(--ui-surface-2)); color: var(--header-ink-hover, var(--header-ink, inherit)); }
 .skip-link:focus { top: 0; }
+
+/* `HeaderNav`: the header's links in one row that scrolls sideways where the
+   window is too narrow for it, never a second line; the link being read is
+   `aria-current`, lit in the accent. Its links are `.header-nav__link`, on the
+   header's tokens and `--header-nav-gap` (0.25rem), `--header-nav-pad`
+   (0.375rem 0.75rem) and `--header-nav-weight` (600, the lit link's). */
+.header-nav { display: flex; flex: 1 1 auto; min-width: 0; gap: var(--header-nav-gap, 0.25rem); overflow-x: auto; scrollbar-width: none; }
+.header-nav::-webkit-scrollbar { display: none; }
+.header-nav__link { flex-shrink: 0; padding: var(--header-nav-pad, 0.375rem 0.75rem); border-radius: var(--header-btn-radius, var(--ui-radius)); color: var(--header-ink, inherit); white-space: nowrap; text-decoration: none; transition: background-color 150ms, color 150ms; }
+.header-nav__link:hover { background: var(--header-btn-hover, var(--ui-surface-2)); color: var(--header-ink-hover, var(--header-ink, inherit)); }
+.header-nav__link[aria-current] { color: var(--ui-accent); font-weight: var(--header-nav-weight, 600); }
+/* `AccountSlot` while the session is read: a disc the size of a header button. */
+.account-slot__pending { display: inline-block; flex-shrink: 0; width: var(--header-btn, 2.25rem); height: var(--header-btn, 2.25rem); border-radius: 50%; background: var(--ui-surface-2); }
 
 /* ---- the dock (SiteShell dock) -------------------------------------------------
    What stays pinned to the window's foot on every route. A strip the width of
@@ -196,7 +212,22 @@
      --rail-ink        a row's colour (--ui-muted)
      --rail-radius     a row's corner (--ui-radius)
      --rail-hover      a hovered row's surface (--ui-surface-2)
-     --rail-weight     the lit row's weight (600) Closed is the class
+     --rail-weight     the lit row's weight (600)
+   and the rail's other parts the same way:
+     --rail-title-pad, --rail-title-ink         the title (0 0.5rem, inherited)
+     --rail-label-pad                           a group label's padding (0 0.5rem 0.25rem)
+     --rail-label-size, -weight, -tracking, -case  a label's type, which "On this page"
+                                                takes too (0.75rem, 600, 0.04em, uppercase)
+     --rail-label-rule                          a rule under a label (none)
+     --rail-glyph-size, --rail-glyph-ink        an entry's glyph (1em, the entry's ink;
+                                                it takes the entry's on hover and lit)
+     --rail-subtree-indent, -offset, -rule, -size  a trail's children (0.75rem of padding,
+                                                no margin, no rule, the rows' size)
+     --rail-toc-top, --rail-toc-border          the space and rule above "On this page" (none)
+     --rail-toc-indent                          its list's indent (0)
+     --rail-toc-row, --rail-toc-inline          its rows' padding (the rows')
+     --rail-toc-rule, --rail-toc-radius         a row's resting rule (--ui-border) and corner (0)
+   Closed is the class
    or `html[data-sidebar='closed']`, whichever says so first: the boot script
    writes the attribute before React can, and React writes the class. */
 .wiki-layout { display: flex; flex: 1 1 auto; align-items: flex-start; }
@@ -530,23 +561,30 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
 .wiki-rail__group, .wiki-rail__toc-list { display: flex; flex-direction: column; gap: var(--rail-gap, 1px); }
 /* `RailGroup`: its links, lit where the reader is, a trail's children indented under their section. */
 .wiki-rail__list { display: flex; flex-direction: column; gap: var(--rail-gap, 1px); margin: 0; padding: 0; list-style: none; }
-.wiki-rail__subtree { padding-inline-start: 0.75rem; }
+.wiki-rail__list li { display: flex; flex-direction: column; gap: var(--rail-gap, 1px); }
+.wiki-rail__subtree { margin-inline-start: var(--rail-subtree-offset, 0); padding-inline-start: var(--rail-subtree-indent, 0.75rem); border-inline-start: var(--rail-subtree-rule, none); }
+.wiki-rail__subtree .wiki-rail__item { font-size: var(--rail-subtree-size, var(--rail-size)); }
 .wiki-rail__item { display: flex; align-items: center; gap: 0.5rem; padding: var(--rail-row, 0.35rem) var(--rail-inline, 0.5rem); border-radius: var(--rail-radius, var(--ui-radius)); font-size: var(--rail-size); color: var(--rail-ink, var(--ui-muted)); text-decoration: none; transition: background-color 150ms, color 150ms; }
 .wiki-rail__item:hover { background: var(--rail-hover, var(--ui-surface-2)); color: inherit; }
 .wiki-rail__item--active,
 .wiki-rail__item--active:hover { background: var(--ui-accent-soft); color: var(--ui-accent); font-weight: var(--rail-weight, 600); }
 .wiki-rail__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wiki-rail__glyph { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; font-size: var(--rail-glyph-size, 1em); line-height: 1; color: var(--rail-glyph-ink, currentColor); }
+.wiki-rail__item:hover .wiki-rail__glyph, .wiki-rail__item--active .wiki-rail__glyph { color: inherit; }
 /* `Rail`'s title: what the rail is the rail of. */
-.wiki-rail__title { padding: 0 0.5rem; font-weight: 600; }
-.wiki-rail__label { padding: 0 0.5rem 0.25rem; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ui-muted); }
-.wiki-rail__toc-btn, .wiki-rail__toc-item { display: flex; align-items: center; gap: 0.25rem; width: 100%; padding: var(--rail-row, 0.25rem) var(--rail-inline, 0.5rem); border: 0; background: none; font: inherit; color: var(--ui-muted); text-align: left; cursor: pointer; }
+.wiki-rail__title { padding: var(--rail-title-pad, 0 0.5rem); font-weight: 600; color: var(--rail-title-ink, inherit); }
+.wiki-rail__label { padding: var(--rail-label-pad, 0 0.5rem 0.25rem); border-block-end: var(--rail-label-rule, none); font-size: var(--rail-label-size, 0.75rem); font-weight: var(--rail-label-weight, 600); letter-spacing: var(--rail-label-tracking, 0.04em); text-transform: var(--rail-label-case, uppercase); color: var(--ui-muted); }
+.wiki-rail__group:has(> .wiki-rail__toc-btn) { padding-block-start: var(--rail-toc-top, 0); border-block-start: var(--rail-toc-border, none); }
+.wiki-rail__toc-list { padding-inline-start: var(--rail-toc-indent, 0); }
+.wiki-rail__toc-btn, .wiki-rail__toc-item { display: flex; align-items: center; gap: 0.25rem; width: 100%; padding: var(--rail-toc-row, var(--rail-row, 0.25rem)) var(--rail-toc-inline, var(--rail-inline, 0.5rem)); border: 0; background: none; font: inherit; color: var(--ui-muted); text-align: left; cursor: pointer; }
 /* "On this page" is a button whose words are a label: the button takes the
    label's type, and the label inside it is the button's words, with none of a
    group label's inset of its own. Two sites had each stripped it. */
-.wiki-rail__toc-btn { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; transition: color 150ms; }
+.wiki-rail__toc-btn { font-size: var(--rail-label-size, 0.75rem); font-weight: var(--rail-label-weight, 600); letter-spacing: var(--rail-label-tracking, 0.04em); text-transform: var(--rail-label-case, uppercase); transition: color 150ms; }
 .wiki-rail__toc-btn:hover { color: inherit; }
 .wiki-rail__toc-btn > .wiki-rail__label { padding: 0; border: 0; font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; }
-.wiki-rail__toc-item { border-inline-start: 2px solid var(--ui-border); font-size: var(--ui-small); text-decoration: none; transition: color 150ms, border-color 150ms; }
+/* An entry is one line, cut short with an ellipsis: a long heading does not wrap the rail. */
+.wiki-rail__toc-item { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-inline-start: 2px solid var(--rail-toc-rule, var(--ui-border)); border-radius: var(--rail-toc-radius, 0); font-size: var(--ui-small); text-decoration: none; transition: color 150ms, border-color 150ms; }
 .wiki-rail__toc-item:hover, .wiki-rail__toc-item--active { border-inline-start-color: var(--ui-accent); color: var(--ui-accent); }
 .wiki-rail__toc-item--active { background: var(--ui-accent-soft); font-weight: var(--rail-weight, 600); }
 /* `RailToggle`, in the header: a 20px glyph in a `.header-btn`, on every route,

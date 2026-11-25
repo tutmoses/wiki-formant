@@ -51,6 +51,7 @@ import {
   useSyncExternalStore,
   type CSSProperties,
   type DependencyList,
+  type Ref,
   type RefObject,
   type KeyboardEvent,
   type MouseEvent as ReactMouseEvent,
@@ -491,6 +492,37 @@ export function Menu({ label, trigger, children, triggerClassName = 'header-btn'
         {opened && children}
       </div>
     </>
+  );
+}
+
+export interface AccountSlotProps {
+  /** `unknown` until the session is read, when neither the menu nor the sign-in shows: either could be the wrong one for a beat. */
+  status: 'unknown' | 'signedIn' | 'signedOut';
+  /** The signed-in menu's button: an avatar. */
+  avatar: ReactNode;
+  /** The signed-in menu's rows. */
+  children: ReactNode;
+  /** What a reader who is not signed in sees: a sign-in button, or a menu of ways in. */
+  signIn: ReactNode;
+  /** In place of either while the session is read; a disc the size of a header button by default. */
+  pending?: ReactNode;
+  label?: string;
+  /** The menu's classes. */
+  className?: string;
+}
+
+/**
+ * The header's account corner: a placeholder while the session is read, the
+ * account `Menu` once signed in, the way in otherwise. Three headers had each
+ * written this switch.
+ */
+export function AccountSlot({ status, avatar, children, signIn, pending, label = 'Account menu', className }: AccountSlotProps) {
+  if (status === 'unknown') return pending ?? <span className="account-slot__pending" aria-hidden />;
+  if (status === 'signedOut') return signIn;
+  return (
+    <Menu label={label} trigger={avatar} className={className}>
+      {children}
+    </Menu>
   );
 }
 
@@ -1321,6 +1353,79 @@ const classes = (...names: (string | false | undefined)[]): string => names.filt
 
 const navigable = (e: ReactMouseEvent) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 
+export interface SearchFoldProps {
+  /** The magnifier's name and tooltip. */
+  label: string;
+  /** The magnifier shown while folded. None, and the field never folds. */
+  icon?: ReactNode;
+  /** Where the magnifier leads with no script: the search's own page. */
+  href: string;
+  /** Where the field was opened: when it changes, a page reached, the field folds again. */
+  at?: string | number;
+  /** The `<search>` landmark's classes. */
+  className?: string;
+  toggleClassName?: string;
+  ref?: Ref<HTMLElement>;
+  /** The field: any search form, or a function of `fold` that returns one. */
+  children: ReactNode | ((fold: () => void) => ReactNode);
+}
+
+/**
+ * A search in a header that is a magnifier until opened, by a click or "/",
+ * when the field takes its place and the focus; Escape or leaving it empty
+ * folds it again, and so does reaching another page (`at`). With no script the
+ * magnifier is a link to the search's page. `SearchField`'s `icon` is this, and
+ * a search form of a site's own can be wrapped in it: two headers had each kept
+ * this state by hand.
+ */
+export function SearchFold({ label, icon, href, at = '', className, toggleClassName, ref, children }: SearchFoldProps) {
+  const [openAt, setOpenAt] = useState<string | number | null>(null);
+  const folded = !!icon && openAt !== at;
+  const box = useRef<HTMLElement | null>(null);
+  const setBox = (el: HTMLElement | null) => {
+    box.current = el;
+    if (typeof ref === 'function') ref(el);
+    else if (ref) (ref as RefObject<HTMLElement | null>).current = el;
+  };
+  const fold = useCallback(() => setOpenAt(null), []);
+  const input = () => box.current?.querySelector('input') ?? null;
+  const foldIfEmpty = () => icon && !input()?.value && fold();
+
+  useEffect(() => {
+    if (icon && !folded) box.current?.querySelector('input')?.focus();
+  }, [icon, folded]);
+  useSearchShortcut(() => (folded ? (setOpenAt(at), true) : !!icon && focusShown(input())));
+
+  if (folded)
+    return (
+      <search ref={setBox} className={className} data-folded="">
+        <a
+          href={href}
+          className={toggleClassName}
+          aria-label={label}
+          title={label}
+          onClick={e => {
+            if (!navigable(e)) return;
+            e.preventDefault();
+            setOpenAt(at);
+          }}
+        >
+          {icon}
+        </a>
+      </search>
+    );
+  return (
+    <search
+      ref={setBox}
+      className={className}
+      onKeyDown={e => e.key === 'Escape' && foldIfEmpty()}
+      onBlur={e => !e.currentTarget.contains(e.relatedTarget) && foldIfEmpty()}
+    >
+      {typeof children === 'function' ? children(fold) : children}
+    </search>
+  );
+}
+
 /**
  * A search box with the first few rows under it, as the reader types. Enter
  * opens the results page, unless the arrows have chosen a row, which Enter then
@@ -1349,14 +1454,15 @@ export function SearchField<T>({
 }: SearchFieldProps<T>) {
   // The list under the box: open, open with a row chosen by the arrows, which Enter then opens, or shut. Shutting it forgets the choice.
   const [list, setList] = useState<'open' | 'chosen' | 'shut'>('open');
-  const [folded, setFolded] = useState(!!icon);
+  // Each page left for counts up, which folds an iconified field (`SearchFold`'s `at`).
+  const [left, setLeft] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const close = useCallback(() => setList('shut'), []);
   const ref = useClickOutside<HTMLElement>(close);
   const leave = (href: string) => {
     reset();
     setList('open');
-    if (icon) setFolded(true);
+    setLeft(n => n + 1);
     navigate(href);
   };
   const { query, setQuery, items, results, highlight, setHighlight, onKeyDown, reset, combobox } = useTypeahead<T>({
@@ -1373,11 +1479,7 @@ export function SearchField<T>({
   const open = !!q && !shut && items.length > 0;
   const { inputProps, listProps, optionProps } = combobox(undefined, open);
 
-  useEffect(() => {
-    if (icon && !folded) input.current?.focus();
-  }, [icon, folded]);
   useSearchShortcut(() => {
-    if (folded) return setFolded(false);
     if (focusShown(input.current) || !reveal) return;
     reveal();
     requestAnimationFrame(() => input.current?.focus());
@@ -1389,26 +1491,16 @@ export function SearchField<T>({
     leave(href);
   };
 
-  if (folded)
-    return (
-      <search className={classes('search-field', c.root)} data-folded="">
-        <a
-          href={action}
-          className={classes('search-field__toggle', c.toggle)}
-          aria-label={label}
-          title={label}
-          onClick={e => {
-            if (!navigable(e)) return;
-            e.preventDefault();
-            setFolded(false);
-          }}
-        >
-          {icon}
-        </a>
-      </search>
-    );
   return (
-    <search className={classes('search-field', c.root)} ref={ref}>
+    <SearchFold
+      label={label}
+      icon={icon}
+      href={action}
+      at={left}
+      className={classes('search-field', c.root)}
+      toggleClassName={classes('search-field__toggle', c.toggle)}
+      ref={ref}
+    >
       <form
         action={action}
         className={classes('search-field__form', c.form)}
@@ -1430,9 +1522,8 @@ export function SearchField<T>({
             setList('open');
           }}
           onFocus={() => setList(l => (l === 'shut' ? 'open' : l))}
-          onBlur={() => icon && !query && setFolded(true)}
           onKeyDown={e => {
-            if (e.key === 'Escape') return icon && !query ? setFolded(true) : close();
+            if (e.key === 'Escape') return close();
             if (e.key === 'Enter' && !chosen) return;
             // The first arrow chooses the first row (or the last, going up), not the one past the hook's resting highlight.
             if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !chosen && items.length) {
@@ -1484,7 +1575,7 @@ export function SearchField<T>({
           </p>
         )}
       </form>
-    </search>
+    </SearchFold>
   );
 }
 
@@ -1883,6 +1974,56 @@ export function RailToggle() {
         <path d={open ? 'M18 6 6 18M6 6l12 12' : 'M4 5h16M4 12h16M4 19h16'} />
       </svg>
     </button>
+  );
+}
+
+/** One of the header's links. */
+export interface HeaderNavLink {
+  href: string;
+  label: ReactNode;
+  title?: string;
+  /** Lit for the pages beneath it too. */
+  tree?: boolean;
+  /** Classes of its own: one hidden at a width where another way in stands. */
+  className?: string;
+}
+
+export interface HeaderNavProps {
+  links: readonly HeaderNavLink[];
+  /** The landmark's name. */
+  label: string;
+  /** The address being read. */
+  pathname: string;
+  /** `next/link`, or whatever navigates on this site; another origin's link is an `<a>`. */
+  link: WikiLinkComponent;
+  /** False where the header is on every page and a prefetch per link per view costs more than it saves. */
+  prefetch?: boolean;
+  className?: string;
+}
+
+/**
+ * The header's links, the one being read `aria-current` as a rail's are: one
+ * row that scrolls sideways where the window is too narrow, drawn by
+ * `base.css` as `.header-nav`. Three headers had each kept their own list,
+ * one marking its link with a class, one folding it behind a button of its own.
+ */
+export function HeaderNav({ links, label, pathname, link: Link, prefetch, className }: HeaderNavProps) {
+  return (
+    <nav className={classes('header-nav', className)} aria-label={label}>
+      {links.map(({ href, label: words, title, tree, className: own }) => {
+        const lit = isRailLinkActive(pathname, href, tree);
+        const props = { title, className: classes('header-nav__link', own) };
+        return href.startsWith('/') ? (
+          <Link key={href} href={href} {...props} aria-current={lit ? (isRailLinkActive(pathname, href) ? 'page' : 'true') : undefined} {...(prefetch === undefined ? {} : { prefetch })}>
+            {words}
+          </Link>
+        ) : (
+          <a key={href} href={href} {...props}>
+            {words}
+          </a>
+        );
+      })}
+    </nav>
   );
 }
 

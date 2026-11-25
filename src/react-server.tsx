@@ -23,6 +23,7 @@ import type { ComponentProps, ComponentType, ReactNode } from 'react';
 import { Beacon, SidebarProvider, Toaster, WikiLinkPreview, type RailLink, type WikiLinkPreviewProps } from './react.js';
 import type { WikiNode } from './tree.js';
 import { SEE_ALSO_ID } from './headings.js';
+import type { License } from './license.js';
 import type { SiteDefinition } from './metadata.js';
 import { followLinkProps, type XAccount } from './social.js';
 import { sidebarBootScript } from './sidebar.js';
@@ -921,8 +922,12 @@ export function SiteDocument({ children, bodyClassName, site, beacon = true, lan
 export interface SiteShellProps extends Omit<ComponentProps<'div'>, 'children'> {
   /** The header's contents: the shell draws the `header.app-header` around them. None, no header. */
   header?: ReactNode;
-  /** The footer, a `SiteFooter` or a site's own `footer.app-footer`. */
+  /** The site from `defineSite`, whose `footer` the shell draws as a `SiteFooter`. */
+  site?: FooterSite;
+  /** In place of the site's footer: a `SiteFooter` with matter of the site's own, or a site's own `footer.app-footer`. */
   footer?: ReactNode;
+  /** A site's router link, for the footer's own paths. */
+  link?: WikiLinkComponent;
   children: ReactNode;
   className?: string;
   /**
@@ -954,7 +959,7 @@ export interface SiteShellProps extends Omit<ComponentProps<'div'>, 'children'> 
  * pinned to the window's foot, and the `Toaster` that `toast()` fills is
  * mounted here, once for every site.
  */
-export function SiteShell({ header, footer, children, className, frame = true, dock, prefix = 'app', ...shell }: SiteShellProps) {
+export function SiteShell({ header, site, footer, link, children, className, frame = true, dock, prefix = 'app', ...shell }: SiteShellProps) {
   return (
     <SidebarProvider>
       <div {...shell} className={className ? `${prefix}-shell ${className}` : `${prefix}-shell`}>
@@ -965,7 +970,7 @@ export function SiteShell({ header, footer, children, className, frame = true, d
         <main id="main" className={frame ? `${prefix}-main page-frame` : `${prefix}-main`}>
           {children}
         </main>
-        {footer}
+        {footer === undefined && site?.footer ? <SiteFooter site={site} link={link} /> : footer}
         {dock && <div className="dock">{dock}</div>}
       </div>
       <Toaster />
@@ -1020,14 +1025,20 @@ export interface SiteFooterLink {
   label: string;
 }
 
+type FooterSite = Pick<SiteDefinition, 'footer' | 'x'>;
+
 export interface SiteFooterProps {
+  /** The site from `defineSite`: its footer's links, owner, licence and note, and its X account. Each prop below stands in for its own. */
+  site?: FooterSite;
   /** What nothing else on the page links to: about, policies, `llms.txt`. */
-  links: readonly SiteFooterLink[];
+  links?: readonly SiteFooterLink[];
   /** The site's X account, last in the row as a follow link. */
   x?: XAccount;
   /** Who holds the copyright, set as `© <this year> <owner>` ahead of `note`. */
   owner?: string;
-  /** The closing line: a licence, a disclaimer. */
+  /** The licence the content is under, named and linked after the owner. */
+  license?: License;
+  /** The closing line: a disclaimer, a credit. */
   note?: ReactNode;
   /** The site's own matter ahead of the links: a manifesto, a mission line. */
   children?: ReactNode;
@@ -1042,7 +1053,17 @@ export interface SiteFooterProps {
  * written this by hand, one with a year that would have gone stale, one with
  * separators in the markup; `base.css` draws it on the `--ui-*` tokens.
  */
-export function SiteFooter({ links, x, owner, note, children, className, link: Link = Anchor }: SiteFooterProps) {
+export function SiteFooter({
+  site,
+  links = site?.footer?.links ?? [],
+  x = site?.x,
+  owner = site?.footer?.owner,
+  license = site?.footer?.license,
+  note = site?.footer?.note,
+  children,
+  className,
+  link: Link = Anchor,
+}: SiteFooterProps) {
   return (
     <footer className={className ? `app-footer ${className}` : 'app-footer'}>
       <div className="page-frame app-footer__frame">
@@ -1061,10 +1082,19 @@ export function SiteFooter({ links, x, owner, note, children, className, link: L
           )}
           {x && <a {...followLinkProps(x)}>{x.label}</a>}
         </nav>
-        {(owner || note) && (
+        {(owner || license || note) && (
           <div className="app-footer__note">
             {owner && <p>© {new Date().getFullYear()} {owner}.</p>}
-            {note}
+            {license && (
+              <p>
+                Content licensed under{' '}
+                <a href={license.url} rel="license">
+                  {license.spdx.replaceAll('-', ' ')}
+                </a>
+                .
+              </p>
+            )}
+            {typeof note === 'string' ? <p>{note}</p> : note}
           </div>
         )}
       </div>

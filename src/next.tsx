@@ -8,7 +8,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { Rail as RouterlessRail, type RailProps as RouterlessRailProps } from './react.js';
+import {
+  HeaderNav as RouterlessHeaderNav,
+  Rail as RouterlessRail,
+  type HeaderNavProps as RouterlessHeaderNavProps,
+  type RailProps as RouterlessRailProps,
+} from './react.js';
 
 export interface RailProps extends Omit<RouterlessRailProps, 'pathname' | 'link'> {
   /** The address being read, where it is not the router's. */
@@ -21,6 +26,20 @@ export interface RailProps extends Omit<RouterlessRailProps, 'pathname' | 'link'
  * production, and the rail's Home would otherwise go unlit there.
  */
 export function Rail({ pathname, ...props }: RailProps) {
+  return <RouterlessRail {...props} pathname={useRoutedPath(pathname)} link={Link} />;
+}
+
+export interface HeaderNavProps extends Omit<RouterlessHeaderNavProps, 'pathname' | 'link'> {
+  /** The address being read, where it is not the router's. */
+  pathname?: string;
+}
+
+/** `HeaderNav` on Next's router, its pathname read as the rail's is. */
+export function HeaderNav({ pathname, ...props }: HeaderNavProps) {
+  return <RouterlessHeaderNav {...props} pathname={useRoutedPath(pathname)} link={Link} />;
+}
+
+function useRoutedPath(pathname: string | undefined): string {
   const routed = usePathname();
-  return <RouterlessRail {...props} pathname={pathname ?? (routed === '/index' ? '/' : routed)} link={Link} />;
+  return pathname ?? (routed === '/index' ? '/' : routed);
 }
