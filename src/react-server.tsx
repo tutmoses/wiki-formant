@@ -20,7 +20,8 @@
 
 import { Fragment } from 'react';
 import type { ComponentProps, ComponentType, ReactNode } from 'react';
-import { Beacon, SidebarProvider, Toaster, WikiLinkPreview, type WikiLinkPreviewProps } from './react.js';
+import { Beacon, SidebarProvider, Toaster, WikiLinkPreview, type RailLink, type WikiLinkPreviewProps } from './react.js';
+import type { WikiNode } from './tree.js';
 import { SEE_ALSO_ID } from './headings.js';
 import type { SiteDefinition } from './metadata.js';
 import { followLinkProps, type XAccount } from './social.js';
@@ -969,6 +970,48 @@ export function SiteShell({ header, footer, children, className, frame = true, d
       </div>
       <Toaster />
     </SidebarProvider>
+  );
+}
+
+/**
+ * A category tree as rail links under `base`: each node a section, lit for the
+ * pages beneath it, titled by its description, its children opening while the
+ * reader is on its trail. A hidden node is left out with everything under it.
+ * `glyph` draws a node's mark. Three rails had each walked their tree into links. Here rather than in
+ * `wiki-formant/react`, so a server layout can call it.
+ */
+export function treeRailLinks<N extends WikiNode>(nodes: readonly N[], base = '', glyph?: (node: N) => ReactNode, parent = ''): RailLink[] {
+  return nodes
+    .filter(node => !node.hidden)
+    .map(node => {
+      const path = parent ? `${parent}/${node.slug}` : node.slug;
+      return {
+        href: `${base}/${path}`,
+        label: node.name,
+        title: node.description,
+        glyph: glyph?.(node),
+        tree: true,
+        children: treeRailLinks((node.children ?? []) as readonly N[], base, glyph, path),
+      };
+    });
+}
+
+export interface DockLinkProps {
+  href: string;
+  /** Its name, and the tooltip a glyph needs. */
+  label: string;
+  /** The glyph. */
+  children: ReactNode;
+  /** `next/link`, or whatever navigates on this site. */
+  link?: WikiLinkComponent;
+}
+
+/** A dock disc that is a link: the way into a section from every route. */
+export function DockLink({ href, label, children, link: Link = Anchor }: DockLinkProps) {
+  return (
+    <Link href={href} aria-label={label} title={label} className="dock-button">
+      {children}
+    </Link>
   );
 }
 

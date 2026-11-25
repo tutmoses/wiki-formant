@@ -1,6 +1,6 @@
 {
   "name": "wiki-formant",
-  "version": "0.140.0",
+  "version": "0.141.0",
   "description": "The portable half of a wiki: derived taxonomy and facet controls, a version-negotiating MCP transport, markdown twins, block rendering, a rich-text editor engine, conditional-GET plumbing, and the headers and CSP every origin sends.",
   "type": "module",
   "license": "MIT",
@@ -96,6 +96,11 @@
       "types": "./dist/rola.d.ts",
       "import": "./dist/rola.js",
       "default": "./dist/rola.js"
+    },
+    "./rola-client": {
+      "types": "./dist/rola-client.d.ts",
+      "import": "./dist/rola-client.js",
+      "default": "./dist/rola-client.js"
     },
     "./blocks": {
       "types": "./dist/blocks.d.ts",
@@ -352,6 +357,7 @@
     "sanitize-html": "^2.17.7"
   },
   "devDependencies": {
+    "@radixdlt/radix-dapp-toolkit": "^2.3.0",
     "@radixdlt/rola": "^2.1.0",
     "@types/katex": "^0.16.8",
     "@types/node": "^22.0.0",
@@ -367,6 +373,7 @@
     "typescript": "^5.9.0"
   },
   "peerDependencies": {
+    "@radixdlt/radix-dapp-toolkit": ">=2",
     "@radixdlt/rola": ">=2",
     "@vercel/blob": ">=2",
     "jose": ">=6",
@@ -395,6 +402,9 @@
       "optional": true
     },
     "@vercel/blob": {
+      "optional": true
+    },
+    "@radixdlt/radix-dapp-toolkit": {
       "optional": true
     }
   }

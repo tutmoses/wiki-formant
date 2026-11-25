@@ -710,7 +710,7 @@ export function useLinkPreview<T>({
   fetch,
   cardClassName = 'link-preview-card',
   cardWidth = 320,
-  cardHeight = 240,
+  cardHeight = 200,
   showDelay = 350,
   hideDelay = 200,
   margin = 8,
@@ -1211,6 +1211,12 @@ export const focusShown = (input: HTMLInputElement | null): boolean => {
 
 // ---- search field -----------------------------------------------------------
 
+/**
+ * Classes added to the field's own, which are always drawn: `search-field`,
+ * `__form`, `__input`, `__toggle`, `__list`, `__item` (`--active` on the row the
+ * arrows chose), `__all` beside `__item` on the last row, and `__note`.
+ * `base.css` draws the list and the note on the `--ui-*` tokens.
+ */
 export interface SearchFieldClassNames {
   /** The `<search>` landmark around everything. */
   root?: string;
@@ -1220,7 +1226,7 @@ export interface SearchFieldClassNames {
   toggle?: string;
   list?: string;
   item?: string;
-  /** Alongside `item` on the row the arrows chose. */
+  /** On the row the arrows chose. */
   itemActive?: string;
   /** The list's last row, to the results page. */
   all?: string;
@@ -1257,6 +1263,9 @@ export interface SearchFieldProps<T> {
   empty?: (query: string) => ReactNode;
   failed?: ReactNode;
 }
+
+/** The field's own classes and the site's additions, the unset left out. */
+const classes = (...names: (string | false | undefined)[]): string => names.filter(Boolean).join(' ');
 
 const navigable = (e: ReactMouseEvent) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 
@@ -1330,10 +1339,10 @@ export function SearchField<T>({
 
   if (folded)
     return (
-      <search className={c.root} data-folded="">
+      <search className={classes('search-field', c.root)} data-folded="">
         <a
           href={action}
-          className={c.toggle}
+          className={classes('search-field__toggle', c.toggle)}
           aria-label={label}
           title={label}
           onClick={e => {
@@ -1347,10 +1356,10 @@ export function SearchField<T>({
       </search>
     );
   return (
-    <search className={c.root} ref={ref}>
+    <search className={classes('search-field', c.root)} ref={ref}>
       <form
         action={action}
-        className={c.form}
+        className={classes('search-field__form', c.form)}
         onSubmit={e => {
           e.preventDefault();
           if (q) leave(resultsHref);
@@ -1362,7 +1371,7 @@ export function SearchField<T>({
           type="search"
           name="q"
           autoComplete="off"
-          className={c.input}
+          className={classes('search-field__input', c.input)}
           value={query}
           onChange={e => {
             setQuery(e.target.value);
@@ -1389,7 +1398,7 @@ export function SearchField<T>({
         />
         {results.status === 'searching' && spinner}
         {open && (
-          <div className={c.list} {...listProps}>
+          <div className={classes('search-field__list', c.list)} {...listProps}>
             {items.map((item, i) => {
               const href = hrefOf(item);
               const active = chosen && i === highlight;
@@ -1397,7 +1406,7 @@ export function SearchField<T>({
                 <a
                   key={href}
                   href={href}
-                  className={active && c.itemActive ? `${c.item ?? ''} ${c.itemActive}` : c.item}
+                  className={classes('search-field__item', c.item, active && 'search-field__item--active', active && c.itemActive)}
                   onMouseEnter={() => setHighlight(i)}
                   onClick={follow(href)}
                   {...optionProps(i)}
@@ -1407,18 +1416,18 @@ export function SearchField<T>({
                 </a>
               );
             })}
-            <a href={resultsHref} className={c.all} onClick={follow(resultsHref)}>
+            <a href={resultsHref} className={classes('search-field__item search-field__all', c.all)} onClick={follow(resultsHref)}>
               {all(q)}
             </a>
           </div>
         )}
         {q && !shut && answer === 'failed' && (
-          <p className={c.note} aria-live="polite">
+          <p className={classes('search-field__note', c.note)} aria-live="polite">
             {failed}
           </p>
         )}
         {q && !shut && answer === 'found' && !items.length && (
-          <p className={c.note} aria-live="polite">
+          <p className={classes('search-field__note', c.note)} aria-live="polite">
             {empty(q)}
           </p>
         )}

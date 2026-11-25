@@ -51,11 +51,14 @@
    so no page frames itself. A frame around a rail gives way to it, so the rail sits
    flush left and the column centres in what it leaves; a frame inside a frame
    adds nothing. The header and footer span the window on the gutter; their
-   height, contents and surface are the site's, and a sticky header's height is
-   `--rail-top`. The skip link is off-screen until focused; its colour and
+   height and contents are the site's, and a sticky header's height is
+   `--rail-top`. The header's surface is three tokens a site sets in `:root`
+   rather than restating `.app-header`: `--header-bg`, `--header-border` (the
+   rule under it) and `--header-filter` (a `backdrop-filter`, for a
+   translucent one). Every header sticks, at every width. The skip link is off-screen until focused; its colour and
    shape are the site's. */
 .app-shell { display: flex; flex-direction: column; min-height: 100dvh; }
-.app-header { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 1rem; min-height: var(--rail-top, auto); padding-inline: var(--page-pad); }
+.app-header { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 1rem; min-height: var(--rail-top, auto); padding-inline: var(--page-pad); background: var(--header-bg, none); border-block-end: var(--header-border, none); backdrop-filter: var(--header-filter, none); }
 .app-footer { padding-block: 2rem; font-size: var(--ui-small); color: var(--ui-muted); }
 /* `SiteFooter`: the site's matter, a row of links, the owner and licence line. */
 .app-footer__frame { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; text-align: center; }
@@ -83,10 +86,14 @@
    the page's; only `.dock-button` takes them. The buttons sit at the trailing
    edge unless the site spreads them; a `.dock__group` keeps two together.
    The disc's size (`--dock-button`, 48px, past the 44px target), the inset
-   (`--dock-inset`) and every colour are the site's. */
+   (`--dock-inset`) and its look are the site's, on tokens: `--dock-bg`,
+   `--dock-ink`, `--dock-border`, `--dock-shadow`, and `--dock-hover`, the
+   brightness a hovered or focused disc takes. `DockLink` is a disc that is
+   a link. */
 .dock { position: fixed; inset-inline: 0; bottom: var(--dock-inset, 1rem); z-index: 40; display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem; padding-inline: var(--dock-inset, 1rem); pointer-events: none; }
 .dock__group { display: flex; align-items: center; gap: 0.75rem; }
-.dock-button { pointer-events: auto; display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: var(--dock-button, 3rem); height: var(--dock-button, 3rem); border-radius: 9999px; }
+.dock-button { pointer-events: auto; display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: var(--dock-button, 3rem); height: var(--dock-button, 3rem); border-radius: 9999px; background: var(--dock-bg, var(--ui-surface-2)); color: var(--dock-ink, inherit); border: var(--dock-border, none); box-shadow: var(--dock-shadow, none); transition: filter 150ms; }
+.dock-button:is(:hover, :focus-visible) { filter: brightness(var(--dock-hover, 1.25)); }
 
 /* ---- ColumnsView ----------------------------------------------------------
    Stacked until there is room for a row. `data-gap` and `data-align` replace
@@ -166,7 +173,8 @@
 
    The site sets `--rail-top` (what the sticky rail clears, a header's height),
    `--rail-border` (the rule between rail and article, which becomes the
-   drawer's foot) and the rail's surface. Its rows are tokens, so a site sets
+   drawer's foot) and `--rail-bg`, the rail's surface. The column beside it is
+   a flex column, as the shell's main is, its blocks `--frame-gap` apart. Its rows are tokens, so a site sets
    numbers in `:root` rather than restating the classes:
      --rail-pad-block  the scroll box's block padding (1rem 3rem)
      --rail-section    the gap between its groups (1.5rem)
@@ -178,8 +186,9 @@
      --rail-weight     the lit row's weight (600) Closed is the class
    or `html[data-sidebar='closed']`, whichever says so first: the boot script
    writes the attribute before React can, and React writes the class. */
-.wiki-layout { display: flex; align-items: flex-start; }
+.wiki-layout { display: flex; flex: 1 1 auto; align-items: flex-start; }
 .wiki-layout__main { flex: 1 1 0%; min-width: 0; }
+.wiki-layout__main > .page-frame { display: flex; flex-direction: column; gap: var(--frame-gap, 0); }
 .wiki-sidebar {
   position: sticky;
   top: var(--rail-top, 0px);
@@ -188,6 +197,7 @@
   height: calc(100dvh - var(--rail-top, 0px));
   overflow: hidden;
   border-inline-end: var(--rail-border, none);
+  background: var(--rail-bg, none);
   transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 /* Closed gives the column back; the scroll box keeps its width, so nothing
@@ -486,6 +496,18 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
 
 .link { color: var(--ui-accent); text-decoration: none; cursor: pointer; }
 .link:hover { text-decoration: underline; }
+
+/* `SearchField`: the rows drop from the field over the page, as does the note
+   for a failed or empty search; the last row, to the results page, is a row
+   set apart. Four sites had drawn this list under four sets of names. A site
+   sizes the field and its input; one whose rows sit in the page's flow sets
+   `position: static` on the list. */
+.search-field { position: relative; }
+.search-field__list, .search-field__note { position: absolute; top: 100%; inset-inline: 0; z-index: 50; margin: 0.25rem 0 0; overflow: hidden; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); box-shadow: var(--ui-shadow, 0 8px 24px -4px rgb(0 0 0 / 0.25)); }
+.search-field__item { display: block; padding: 0.625rem var(--ui-pad); color: inherit; text-decoration: none; transition: background-color 150ms; }
+.search-field__item:hover, .search-field__item--active { background: var(--ui-surface-2); }
+.search-field__all { border-top: 1px solid var(--ui-border); text-align: center; font-size: var(--ui-small); color: var(--ui-accent); }
+.search-field__note { padding: 0.625rem var(--ui-pad); font-size: var(--ui-small); color: var(--ui-muted); }
 
 /* The rail's contents: a label over a group of entries, and the article's contents with the section being read lit.
    Its inset is every site's: the gutter up to 1.5rem, so a drawer's entries line up with the page below it
