@@ -20,7 +20,7 @@
 
 import { Fragment } from 'react';
 import type { ComponentProps, ComponentType, ReactNode } from 'react';
-import { Beacon, SidebarProvider, Toaster, WikiLinkPreview, type RailLink, type WikiLinkPreviewProps } from './react.js';
+import { Beacon, RailToggle, SidebarProvider, Toaster, WikiLinkPreview, type RailLink, type WikiLinkPreviewProps } from './react.js';
 import type { WikiNode } from './tree.js';
 import { SEE_ALSO_ID } from './headings.js';
 import type { License } from './license.js';
@@ -848,6 +848,206 @@ export function Cite({ className = 'article-cite', ...page }: CiteProps) {
   );
 }
 
+// ---- article ------------------------------------------------------------------
+
+export interface ArticleMetaProps {
+  /** The day the page last changed: the visible twin of the JSON-LD's `dateModified`. */
+  updated?: Date | string;
+  /** In place of the date: a relative time, read on the client. */
+  updatedLabel?: ReactNode;
+  version?: string | null;
+  /** How many revisions the page has; linked to its history where `historyHref` is set. */
+  revisions?: number;
+  historyHref?: string;
+  /** The day its facts were last checked, where that differs from the last edit. */
+  verified?: Date | string | null;
+  /** The grant the page is under. A page under none states none. */
+  license?: License;
+  cite?: Omit<CiteProps, 'className'>;
+  /** Items ahead of the date: who wrote it. */
+  children?: ReactNode;
+  link?: WikiLinkComponent;
+  className?: string;
+}
+
+/**
+ * An article's one provenance line, under its body: who, Updated, the
+ * version, the revisions, Verified, the licence and Cite, dot-separated. Four
+ * sites had each written it, under three class names and two separators.
+ */
+export function ArticleMeta({ updated, updatedLabel, version, revisions, historyHref, verified, license, cite, children, link: Link = Anchor, className = 'article-meta' }: ArticleMetaProps) {
+  const count = revisions !== undefined && revisions > 0 && `${revisions} revision${revisions === 1 ? '' : 's'}`;
+  return (
+    <ul className={className}>
+      {children && <li>{children}</li>}
+      {(updatedLabel || updated) && (
+        <li>{updatedLabel ?? <>Updated <time dateTime={isoDate(new Date(updated!))}>{formatDay(updated!, { month: 'long' })}</time></>}</li>
+      )}
+      {version && <li>v{version}</li>}
+      {count && <li>{historyHref ? <Link href={historyHref}>{count}</Link> : count}</li>}
+      {verified && <li>Verified {formatDay(verified, { month: 'long' })}</li>}
+      {license && (
+        <li>
+          <a href={license.url} rel="license" title={license.name}>
+            {license.spdx.replaceAll('-', ' ')}
+          </a>
+        </li>
+      )}
+      {cite && (
+        <li>
+          <Cite {...cite} />
+        </li>
+      )}
+    </ul>
+  );
+}
+
+/**
+ * The body beside its facts: `.page-with-infobox`, the prose in
+ * `.page-main-content` and the infobox after it, one column with the infobox
+ * first below 768px of its column. With no infobox, the body alone.
+ */
+export function PageWithInfobox({ infobox, children, className }: { infobox?: ReactNode; children: ReactNode; className?: string }) {
+  if (!infobox) return <>{children}</>;
+  return (
+    <div className={className ? `page-with-infobox ${className}` : 'page-with-infobox'}>
+      <div className="page-main-content">{children}</div>
+      {infobox}
+    </div>
+  );
+}
+
+// ---- section index --------------------------------------------------------------
+
+export interface IndexCard {
+  href: string;
+  /** Text, or text with a search's words marked (`Highlight`). */
+  title: ReactNode;
+  /** A section card's sub-line; a page tile's tooltip, so it must then be text. */
+  blurb?: ReactNode;
+  glyph?: ReactNode;
+  /** Pages beneath it, where it stands for a whole section. */
+  count?: number;
+  /** A page's `status` facet value, beside its title. */
+  status?: ReactNode;
+  /** A banner along its top: `CardBanner`. */
+  thumb?: ReactNode;
+}
+
+export interface IndexGroup {
+  title: ReactNode;
+  /** The section's own page. Without one the head is a label. */
+  href?: string;
+  blurb?: string;
+  glyph?: ReactNode;
+  count?: number;
+  /** Its sections, as cards with a sub-line. */
+  sections?: readonly IndexCard[];
+  /** Its pages, as dense title tiles. */
+  pages?: readonly IndexCard[];
+  /** A closing link to `href`, where `pages` is only the first few: "All 33 pages". */
+  more?: ReactNode;
+}
+
+/**
+ * A section's card: glyph, title, status and count on one line, the blurb
+ * under it, and a banner above them where it has one. The same card wherever a
+ * section is listed, so a section looks the same from every page that lists it.
+ */
+export function IndexCardLink({ card, link: Link = Anchor }: { card: IndexCard; link?: WikiLinkComponent }) {
+  const text = (
+    <>
+      <span className="wiki-card__head">
+        {card.glyph && (
+          <span className="wiki-card__glyph" aria-hidden>
+            {card.glyph}
+          </span>
+        )}
+        <span className="wiki-card__title">{card.title}</span>
+        {card.status && <span className="wiki-card__status">{card.status}</span>}
+        {card.count !== undefined && <span className="wiki-card__count">{card.count}</span>}
+      </span>
+      {card.blurb && <span className="wiki-card__blurb">{card.blurb}</span>}
+    </>
+  );
+  return card.thumb ? (
+    <Link href={card.href} className="wiki-card wiki-card--section wiki-card--thumb">
+      {card.thumb}
+      <span className="wiki-card__body">{text}</span>
+    </Link>
+  ) : (
+    <Link href={card.href} className="wiki-card wiki-card--section">
+      {text}
+    </Link>
+  );
+}
+
+/** Section cards in a grid of aligned rows. */
+export function IndexCards({ cards, link }: { cards: readonly IndexCard[]; link?: WikiLinkComponent }) {
+  return (
+    <div className="wiki-grid wiki-grid--sections">
+      {cards.map(card => (
+        <IndexCardLink key={card.href} card={card} link={link} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * What a wiki front page or a section page lists below it (STRUCTURE.md S12):
+ * one group per section, headed by a link to it, then its own sections as
+ * cards and its pages as title tiles, the blurb a tooltip, every page once.
+ * `level` is the heads' heading level.
+ */
+export function SectionIndex({ groups, level = 2, link: Link = Anchor, className }: { groups: readonly IndexGroup[]; level?: 2 | 3; link?: WikiLinkComponent; className?: string }) {
+  const H = `h${level}` as const;
+  return (
+    <div className={className ? `wiki-cats ${className}` : 'wiki-cats'}>
+      {groups.map((group, i) => {
+        const head = (
+          <>
+            {group.glyph && (
+              <span className="wiki-cat__glyph" aria-hidden>
+                {group.glyph}
+              </span>
+            )}
+            <H className="wiki-cat__title">{group.title}</H>
+            {group.count !== undefined && <span className="wiki-cat__count">{group.count}</span>}
+          </>
+        );
+        return (
+          <section key={group.href ?? i} className="wiki-cat">
+            {group.href ? (
+              <Link href={group.href} className="wiki-cat__head" title={group.blurb}>
+                {head}
+              </Link>
+            ) : (
+              <div className="wiki-cat__head" title={group.blurb}>
+                {head}
+              </div>
+            )}
+            {group.sections && group.sections.length > 0 && <IndexCards cards={group.sections} link={Link} />}
+            {group.pages && group.pages.length > 0 && (
+              <div className="wiki-grid">
+                {group.pages.map(page => (
+                  <Link key={page.href} href={page.href} title={typeof page.blurb === 'string' ? page.blurb : undefined} className="wiki-card">
+                    <span className="wiki-card__title">{page.title}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+            {group.more && group.href && (
+              <Link href={group.href} className="wiki-cat__more">
+                {group.more}
+              </Link>
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
 export { EmptyState, type EmptyStateProps } from './empty-state.js';
 
 /**
@@ -922,8 +1122,14 @@ export function SiteDocument({ children, bodyClassName, site, beacon = true, lan
 export interface SiteShellProps extends Omit<ComponentProps<'div'>, 'children'> {
   /** The header's contents: the shell draws the `header.app-header` around them. None, no header. */
   header?: ReactNode;
-  /** The site from `defineSite`, whose `footer` the shell draws as a `SiteFooter`. */
-  site?: FooterSite;
+  /**
+   * The site's mark. Given one, the shell leads the header with the rail
+   * toggle and the mark as a link home, `.header-logo`, named for the site,
+   * ahead of `header`: every header opened on those two, each written its own way.
+   */
+  logo?: ReactNode;
+  /** The site from `defineSite`: its `footer`, drawn as a `SiteFooter`, and its name, the logo's. */
+  site?: FooterSite & { name?: string };
   /** In place of the site's footer: a `SiteFooter` with matter of the site's own, or a site's own `footer.app-footer`. */
   footer?: ReactNode;
   /** A site's router link, for the footer's own paths. */
@@ -959,14 +1165,27 @@ export interface SiteShellProps extends Omit<ComponentProps<'div'>, 'children'> 
  * pinned to the window's foot, and the `Toaster` that `toast()` fills is
  * mounted here, once for every site.
  */
-export function SiteShell({ header, site, footer, link, children, className, frame = true, dock, prefix = 'app', ...shell }: SiteShellProps) {
+export function SiteShell({ header, logo, site, footer, link, children, className, frame = true, dock, prefix = 'app', ...shell }: SiteShellProps) {
+  const Link = link ?? Anchor;
   return (
     <SidebarProvider>
       <div {...shell} className={className ? `${prefix}-shell ${className}` : `${prefix}-shell`}>
         <a href="#main" className="skip-link">
           Skip to content
         </a>
-        {header && <header className={`${prefix}-header`}>{header}</header>}
+        {(header || logo) && (
+          <header className={`${prefix}-header`}>
+            {logo && (
+              <>
+                <RailToggle />
+                <Link href="/" className="header-logo" aria-label={site?.name}>
+                  {logo}
+                </Link>
+              </>
+            )}
+            {header}
+          </header>
+        )}
         <main id="main" className={frame ? `${prefix}-main page-frame` : `${prefix}-main`}>
           {children}
         </main>
