@@ -55,8 +55,15 @@
    `--rail-top`. The header's surface is three tokens a site sets in `:root`
    rather than restating `.app-header`: `--header-bg`, `--header-border` (the
    rule under it) and `--header-filter` (a `backdrop-filter`, for a
-   translucent one). Every header sticks, at every width. The skip link is off-screen until focused; its colour and
-   shape are the site's. */
+   translucent one). Every header sticks, at every width. The skip link is
+   off-screen until focused, then hangs from the top of the window in the
+   site's accent, on the `--ui-*` tokens.
+
+   Every icon button in a header, the rail's toggle among them, is
+   `.header-btn`: a square of `--header-btn` (2.25rem) on `--header-btn-radius`
+   (--ui-radius), in `--header-ink` (inherited), lit on hover with
+   `--header-btn-hover` (--ui-surface-2) and `--header-ink-hover`. A site sets
+   the tokens, never the class. */
 .app-shell { display: flex; flex-direction: column; min-height: 100dvh; }
 .app-header { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 1rem; min-height: var(--rail-top, auto); padding-inline: var(--page-pad); background: var(--header-bg, none); border-block-end: var(--header-border, none); backdrop-filter: var(--header-filter, none); }
 .app-footer { padding-block: 2rem; font-size: var(--ui-small); color: var(--ui-muted); }
@@ -77,7 +84,9 @@
    scroller, so the sticky rail still sticks. */
 .app-main { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; overflow-x: clip; }
 .page-frame { width: 100%; max-width: var(--content-width); margin-inline: auto; padding-inline: var(--page-pad); }
-.skip-link { position: absolute; inset-inline-start: 1rem; top: -100%; z-index: 60; }
+.skip-link { position: absolute; inset-inline-start: 1rem; top: -100%; z-index: 60; padding: 0.5rem 1rem; border-radius: 0 0 var(--ui-radius) var(--ui-radius); background: var(--ui-accent); color: var(--ui-on-accent, var(--ui-surface)); font-size: var(--ui-small); font-weight: 600; text-decoration: none; }
+.header-btn { display: inline-grid; place-items: center; flex-shrink: 0; min-width: var(--header-btn, 2.25rem); min-height: var(--header-btn, 2.25rem); padding: 0; border: 0; border-radius: var(--header-btn-radius, var(--ui-radius)); background: none; color: var(--header-ink, inherit); font: inherit; text-decoration: none; cursor: pointer; transition: background-color 150ms, color 150ms; }
+.header-btn:hover { background: var(--header-btn-hover, var(--ui-surface-2)); color: var(--header-ink-hover, var(--header-ink, inherit)); }
 .skip-link:focus { top: 0; }
 
 /* ---- the dock (SiteShell dock) -------------------------------------------------
@@ -174,7 +183,8 @@
    The site sets `--rail-top` (what the sticky rail clears, a header's height),
    `--rail-border` (the rule between rail and article, which becomes the
    drawer's foot) and `--rail-bg`, the rail's surface. The column beside it is
-   a flex column, as the shell's main is, its blocks `--frame-gap` apart. Its rows are tokens, so a site sets
+   a flex column, as the shell's main is, its blocks `--frame-gap` apart and
+   `--frame-pad-block` from the header and footer. Its rows are tokens, so a site sets
    numbers in `:root` rather than restating the classes:
      --rail-pad-block  the scroll box's block padding (1rem 3rem)
      --rail-section    the gap between its groups (1.5rem)
@@ -183,12 +193,14 @@
      --rail-inline     a row's inline padding (0.5rem)
      --rail-size       a row's type size (inherited)
      --rail-ink        a row's colour (--ui-muted)
+     --rail-radius     a row's corner (--ui-radius)
+     --rail-hover      a hovered row's surface (--ui-surface-2)
      --rail-weight     the lit row's weight (600) Closed is the class
    or `html[data-sidebar='closed']`, whichever says so first: the boot script
    writes the attribute before React can, and React writes the class. */
 .wiki-layout { display: flex; flex: 1 1 auto; align-items: flex-start; }
 .wiki-layout__main { flex: 1 1 0%; min-width: 0; }
-.wiki-layout__main > .page-frame { display: flex; flex-direction: column; gap: var(--frame-gap, 0); }
+.wiki-layout__main > .page-frame { display: flex; flex-direction: column; gap: var(--frame-gap, 0); padding-block: var(--frame-pad-block, 0); }
 .wiki-sidebar {
   position: sticky;
   top: var(--rail-top, 0px);
@@ -518,8 +530,8 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
 /* `RailGroup`: its links, lit where the reader is, a trail's children indented under their section. */
 .wiki-rail__list { display: flex; flex-direction: column; gap: var(--rail-gap, 1px); margin: 0; padding: 0; list-style: none; }
 .wiki-rail__subtree { padding-inline-start: 0.75rem; }
-.wiki-rail__item { display: flex; align-items: center; gap: 0.5rem; padding: var(--rail-row, 0.35rem) var(--rail-inline, 0.5rem); border-radius: var(--ui-radius); font-size: var(--rail-size); color: var(--rail-ink, var(--ui-muted)); text-decoration: none; transition: background-color 150ms, color 150ms; }
-.wiki-rail__item:hover { background: var(--ui-surface-2); color: inherit; }
+.wiki-rail__item { display: flex; align-items: center; gap: 0.5rem; padding: var(--rail-row, 0.35rem) var(--rail-inline, 0.5rem); border-radius: var(--rail-radius, var(--ui-radius)); font-size: var(--rail-size); color: var(--rail-ink, var(--ui-muted)); text-decoration: none; transition: background-color 150ms, color 150ms; }
+.wiki-rail__item:hover { background: var(--rail-hover, var(--ui-surface-2)); color: inherit; }
 .wiki-rail__item--active,
 .wiki-rail__item--active:hover { background: var(--ui-accent-soft); color: var(--ui-accent); font-weight: var(--rail-weight, 600); }
 .wiki-rail__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -527,16 +539,35 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
 .wiki-rail__title { padding: 0 0.5rem; font-weight: 600; }
 .wiki-rail__label { padding: 0 0.5rem 0.25rem; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ui-muted); }
 .wiki-rail__toc-btn, .wiki-rail__toc-item { display: flex; align-items: center; gap: 0.25rem; width: 100%; padding: var(--rail-row, 0.25rem) var(--rail-inline, 0.5rem); border: 0; background: none; font: inherit; color: var(--ui-muted); text-align: left; cursor: pointer; }
+/* "On this page" is a button whose words are a label: the button takes the
+   label's type, and the label inside it is the button's words, with none of a
+   group label's inset of its own. Two sites had each stripped it. */
+.wiki-rail__toc-btn { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; transition: color 150ms; }
+.wiki-rail__toc-btn:hover { color: inherit; }
+.wiki-rail__toc-btn > .wiki-rail__label { padding: 0; border: 0; font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; }
 .wiki-rail__toc-item { border-inline-start: 2px solid var(--ui-border); font-size: var(--ui-small); text-decoration: none; transition: color 150ms, border-color 150ms; }
 .wiki-rail__toc-item:hover, .wiki-rail__toc-item--active { border-inline-start-color: var(--ui-accent); color: var(--ui-accent); }
 .wiki-rail__toc-item--active { background: var(--ui-accent-soft); font-weight: var(--rail-weight, 600); }
-/* `RailToggle`, in the header: a 20px glyph in a 36px button, on every route,
+/* `RailToggle`, in the header: a 20px glyph in a `.header-btn`, on every route,
    and gone from a page with no rail. A stylesheet rule rather than a check of
    the path or a flag the rail sets: it is right on the first paint, and no list
    of which routes carry a rail has to be kept beside the layouts that mount one. */
 body:not(:has(.wiki-layout)) .wiki-rail__toggle { display: none; }
-.wiki-rail__toggle { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 0.5rem; border: 0; border-radius: var(--ui-radius); background: none; color: inherit; cursor: pointer; transition: background-color 150ms; }
-.wiki-rail__toggle:hover { background: var(--ui-surface-2); }
+
+/* `Menu`: a popover hung from its button, at the button's trailing edge,
+   flipping where the window has no room; a browser with no anchor positioning
+   centres it. Its rows are `.menu__item`, a heading `.menu__label`, a rule
+   `.menu__rule`, and an item that signs out or deletes `.menu__item--danger`. */
+.menu { min-width: 12rem; max-width: calc(100vw - 1rem); max-height: 70dvh; overflow-y: auto; padding: 0.25rem; background: var(--ui-surface); color: inherit; border: 1px solid var(--ui-border); border-radius: var(--ui-radius); box-shadow: var(--ui-shadow, 0 8px 24px -4px rgb(0 0 0 / 0.25)); }
+.menu:popover-open { display: flex; flex-direction: column; }
+@supports (position-area: bottom) {
+  .menu { inset: auto; margin: 0.375rem 0; position-area: bottom span-left; position-try-fallbacks: flip-block, flip-inline; }
+}
+.menu__item { display: flex; align-items: center; gap: 0.5rem; width: 100%; padding: 0.5rem 0.75rem; border: 0; border-radius: var(--ui-radius); background: none; color: inherit; font: inherit; text-align: start; text-decoration: none; cursor: pointer; transition: background-color 150ms; }
+.menu__item:hover { background: var(--ui-surface-2); }
+.menu__item--danger { color: var(--ui-down); }
+.menu__label { padding: 0.5rem 0.75rem; font-size: var(--ui-small); color: var(--ui-muted); }
+.menu__rule { margin: 0.25rem 0; border: 0; border-top: 1px solid var(--ui-border); }
 
 /* ---- stored tab groups (activateTabGroups) --------------------------------
    Only the active panel shows. Before the script runs, the first tab's content

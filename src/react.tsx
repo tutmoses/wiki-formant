@@ -442,6 +442,54 @@ export function useClickOutside<T extends HTMLElement>(onClose: () => void) {
   return ref;
 }
 
+// ---- menu ---------------------------------------------------------------------
+
+export interface MenuProps {
+  /** The button's name and tooltip, and the panel's name. */
+  label: string;
+  /** What the button shows: an icon, an avatar. */
+  trigger: ReactNode;
+  children: ReactNode;
+  /** The button's classes; a header's button by default. */
+  triggerClassName?: string;
+  className?: string;
+}
+
+/**
+ * A panel that opens from a button and hangs from it: an account menu, a
+ * page's tools. The browser's own `popover`, so a click outside and Escape shut
+ * it, one open menu shuts another, and it sits above every stacking context
+ * with no script; `base.css` anchors it to its button as `.menu`, its rows
+ * `.menu__item`. A link or button inside shuts it once clicked, unless it
+ * carries `data-keep-open`. Three sites had each kept their own open state, a
+ * click-outside hook and an Escape listener for this.
+ */
+export function Menu({ label, trigger, children, triggerClassName = 'header-btn', className }: MenuProps) {
+  const id = useId();
+  const anchor = `--menu-${id.replace(/[^\w-]/g, '')}`;
+  return (
+    <>
+      <button type="button" className={triggerClassName} popoverTarget={id} aria-label={label} title={label} style={{ anchorName: anchor } as CSSProperties}>
+        {trigger}
+      </button>
+      <div
+        id={id}
+        popover="auto"
+        role="group"
+        aria-label={label}
+        className={classes('menu', className)}
+        style={{ positionAnchor: anchor } as CSSProperties}
+        onClick={e => {
+          const hit = (e.target as Element).closest('a, button');
+          if (hit && !hit.closest('[data-keep-open]')) e.currentTarget.hidePopover();
+        }}
+      >
+        {children}
+      </div>
+    </>
+  );
+}
+
 // ---- typeahead --------------------------------------------------------------
 
 const TYPEAHEAD_IDLE = { status: 'idle' } as const;
@@ -1814,15 +1862,14 @@ export function RailShell({ children, prefix = 'wiki-sidebar', label, className 
  * on every route, inside the same `SidebarProvider`: `base.css` hides it on a
  * page with no rail.
  *
- * `wiki-formant/base.css` draws it as `.wiki-rail__toggle`, on the `--ui-*`
- * tokens.
+ * `wiki-formant/base.css` draws it as every header button, `.header-btn`.
  */
 export function RailToggle() {
   const { open, toggle } = useSidebar();
   return (
     <button
       type="button"
-      className="wiki-rail__toggle"
+      className="wiki-rail__toggle header-btn"
       onClick={toggle}
       aria-expanded={open}
       aria-label="Toggle menu"
