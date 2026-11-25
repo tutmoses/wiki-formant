@@ -60,6 +60,9 @@ export function inlineToMarkdown(html: string): string {
   return decodeEntities(
     html
       .replace(/<br\s*\/?>/gi, ' ')
+      // A link inside code reads as linked code, not a backticked `[text](url)`.
+      .replace(/<code\b[^>]*>\s*<a\b([^>]*)>(.*?)<\/a>\s*<\/code>/gi, '<a$1><code>$2</code></a>')
+      .replace(/<sup\b[^>]*>(.*?)<\/sup>/gi, '^$1')
       .replace(/<(?:strong|b)\b[^>]*>(.*?)<\/(?:strong|b)>/gi, '**$1**')
       .replace(/<(?:em|i)\b[^>]*>(.*?)<\/(?:em|i)>/gi, '_$1_')
       .replace(/<code\b[^>]*>(.*?)<\/code>/gi, '`$1`')
@@ -150,7 +153,7 @@ export function htmlToMarkdown(html: string): string {
     .replace(
       // `<code>` is optional: a stored block may be `<pre><code>` or a bare `<pre>`.
       /<pre\b[^>]*>\s*(?:<code\b[^>]*>)?([\s\S]*?)(?:<\/code>\s*)?<\/pre>/gi,
-      (_m, code: string) => block(`\`\`\`\n${decodeEntities(code).trim()}\n\`\`\``),
+      (_m, code: string) => block(`\`\`\`\n${decodeEntities(code.replace(/<[^>]+>/g, '')).trim()}\n\`\`\``),
     )
     .replace(
       /<blockquote\b[^>]*>([\s\S]*?)<\/blockquote>/gi,
@@ -168,9 +171,13 @@ export function htmlToMarkdown(html: string): string {
     )
     .replace(/<hr\s*\/?>/gi, () => block('---'))
     .replace(/<p\b[^>]*>([\s\S]*?)<\/p>/gi, (_m, body: string) => block(inlineToMarkdown(body)))
-    .replace(/<div\b[^>]*>([\s\S]*?)<\/div>/gi, (_m, body: string) => `\n\n${inlineToMarkdown(body)}\n\n`);
+    .replace(/<div\b[^>]*>([\s\S]*?)<\/div>/gi, (_m, body: string) => block(inlineToMarkdown(body)));
 
-  return decodeEntities(restore(out).replace(/<[^>]+>/g, ''))
+  // Every block is already tag-free and decoded, so only the text between
+  // blocks is stripped and decoded here. Doing it after `restore` decoded a
+  // block twice and stripped what its first decode produced: `&lt;T&gt;` in
+  // code became `<T>`, then nothing.
+  return restore(decodeEntities(out.replace(/<[^>]+>/g, '')))
     .replace(/[ \t]+$/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
