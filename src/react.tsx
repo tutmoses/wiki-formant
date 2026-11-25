@@ -461,12 +461,15 @@ export interface MenuProps {
  * it, one open menu shuts another, and it sits above every stacking context
  * with no script; `base.css` anchors it to its button as `.menu`, its rows
  * `.menu__item`. A link or button inside shuts it once clicked, unless it
- * carries `data-keep-open`. Three sites had each kept their own open state, a
+ * carries `data-keep-open`. Its contents render the first time it opens and
+ * stay, so what they fetch is fetched when a reader first asks, not on every
+ * page that has the button. Three sites had each kept their own open state, a
  * click-outside hook and an Escape listener for this.
  */
 export function Menu({ label, trigger, children, triggerClassName = 'header-btn', className }: MenuProps) {
   const id = useId();
   const anchor = `--menu-${id.replace(/[^\w-]/g, '')}`;
+  const [opened, setOpened] = useState(false);
   return (
     <>
       <button type="button" className={triggerClassName} popoverTarget={id} aria-label={label} title={label} style={{ anchorName: anchor } as CSSProperties}>
@@ -479,12 +482,13 @@ export function Menu({ label, trigger, children, triggerClassName = 'header-btn'
         aria-label={label}
         className={classes('menu', className)}
         style={{ positionAnchor: anchor } as CSSProperties}
+        onBeforeToggle={e => e.newState === 'open' && setOpened(true)}
         onClick={e => {
           const hit = (e.target as Element).closest('a, button');
           if (hit && !hit.closest('[data-keep-open]')) e.currentTarget.hidePopover();
         }}
       >
-        {children}
+        {opened && children}
       </div>
     </>
   );

@@ -62,7 +62,8 @@
    Every icon button in a header, the rail's toggle among them, is
    `.header-btn`: a square of `--header-btn` (2.25rem) on `--header-btn-radius`
    (--ui-radius), in `--header-ink` (inherited), lit on hover with
-   `--header-btn-hover` (--ui-surface-2) and `--header-ink-hover`. A site sets
+   `--header-btn-hover` (--ui-surface-2) and `--header-ink-hover`, and lit so
+   while its `Menu` is open. A site sets
    the tokens, never the class. */
 .app-shell { display: flex; flex-direction: column; min-height: 100dvh; }
 .app-header { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 1rem; min-height: var(--rail-top, auto); padding-inline: var(--page-pad); background: var(--header-bg, none); border-block-end: var(--header-border, none); backdrop-filter: var(--header-filter, none); }
@@ -86,7 +87,7 @@
 .page-frame { width: 100%; max-width: var(--content-width); margin-inline: auto; padding-inline: var(--page-pad); }
 .skip-link { position: absolute; inset-inline-start: 1rem; top: -100%; z-index: 60; padding: 0.5rem 1rem; border-radius: 0 0 var(--ui-radius) var(--ui-radius); background: var(--ui-accent); color: var(--ui-on-accent, var(--ui-surface)); font-size: var(--ui-small); font-weight: 600; text-decoration: none; }
 .header-btn { display: inline-grid; place-items: center; flex-shrink: 0; min-width: var(--header-btn, 2.25rem); min-height: var(--header-btn, 2.25rem); padding: 0; border: 0; border-radius: var(--header-btn-radius, var(--ui-radius)); background: none; color: var(--header-ink, inherit); font: inherit; text-decoration: none; cursor: pointer; transition: background-color 150ms, color 150ms; }
-.header-btn:hover { background: var(--header-btn-hover, var(--ui-surface-2)); color: var(--header-ink-hover, var(--header-ink, inherit)); }
+.header-btn:hover, .header-btn:has(+ .menu:popover-open) { background: var(--header-btn-hover, var(--ui-surface-2)); color: var(--header-ink-hover, var(--header-ink, inherit)); }
 .skip-link:focus { top: 0; }
 
 /* ---- the dock (SiteShell dock) -------------------------------------------------
