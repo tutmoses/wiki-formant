@@ -938,7 +938,8 @@ export interface IndexGroup {
   title: ReactNode;
   /** The section's own page. Without one the head is a label. */
   href?: string;
-  blurb?: string;
+  /** What the section holds, under its head. */
+  blurb?: ReactNode;
   glyph?: ReactNode;
   count?: number;
   /** Its sections, as cards with a sub-line. */
@@ -995,8 +996,9 @@ export function IndexCards({ cards, link }: { cards: readonly IndexCard[]; link?
 
 /**
  * What a wiki front page or a section page lists below it (STRUCTURE.md S12):
- * one group per section, headed by a link to it, then its own sections as
- * cards and its pages as title tiles, the blurb a tooltip, every page once.
+ * one group per section, headed by a link to it and what it holds, then its
+ * own sections as cards and its pages as title tiles (a page's blurb its
+ * tooltip), every page once.
  * `level` is the heads' heading level.
  */
 export function SectionIndex({ groups, level = 2, link: Link = Anchor, className }: { groups: readonly IndexGroup[]; level?: 2 | 3; link?: WikiLinkComponent; className?: string }) {
@@ -1018,14 +1020,13 @@ export function SectionIndex({ groups, level = 2, link: Link = Anchor, className
         return (
           <section key={group.href ?? i} className="wiki-cat">
             {group.href ? (
-              <Link href={group.href} className="wiki-cat__head" title={group.blurb}>
+              <Link href={group.href} className="wiki-cat__head">
                 {head}
               </Link>
             ) : (
-              <div className="wiki-cat__head" title={group.blurb}>
-                {head}
-              </div>
+              <div className="wiki-cat__head">{head}</div>
             )}
+            {group.blurb && <p className="wiki-cat__blurb">{group.blurb}</p>}
             {group.sections && group.sections.length > 0 && <IndexCards cards={group.sections} link={Link} />}
             {group.pages && group.pages.length > 0 && (
               <div className="wiki-grid">
