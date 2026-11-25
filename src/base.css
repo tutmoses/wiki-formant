@@ -216,8 +216,8 @@
    and the rail's other parts the same way:
      --rail-title-pad, --rail-title-ink         the title (0 0.5rem, inherited)
      --rail-label-pad                           a group label's padding (0 0.5rem 0.25rem)
-     --rail-label-size, -weight, -tracking, -case  a label's type, which "On this page"
-                                                takes too (0.75rem, 600, 0.04em, uppercase)
+     --rail-label-font, -size, -weight, -tracking, -case  a label's type, which "On this page"
+                                                takes too (inherited, 0.75rem, 600, 0.04em, uppercase)
      --rail-label-rule                          a rule under a label (none)
      --rail-glyph-size, --rail-glyph-ink        an entry's glyph (1em, the entry's ink;
                                                 it takes the entry's on hover and lit)
@@ -573,14 +573,14 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
 .wiki-rail__item:hover .wiki-rail__glyph, .wiki-rail__item--active .wiki-rail__glyph { color: inherit; }
 /* `Rail`'s title: what the rail is the rail of. */
 .wiki-rail__title { padding: var(--rail-title-pad, 0 0.5rem); font-weight: 600; color: var(--rail-title-ink, inherit); }
-.wiki-rail__label { padding: var(--rail-label-pad, 0 0.5rem 0.25rem); border-block-end: var(--rail-label-rule, none); font-size: var(--rail-label-size, 0.75rem); font-weight: var(--rail-label-weight, 600); letter-spacing: var(--rail-label-tracking, 0.04em); text-transform: var(--rail-label-case, uppercase); color: var(--ui-muted); }
+.wiki-rail__label { padding: var(--rail-label-pad, 0 0.5rem 0.25rem); border-block-end: var(--rail-label-rule, none); font-family: var(--rail-label-font); font-size: var(--rail-label-size, 0.75rem); font-weight: var(--rail-label-weight, 600); letter-spacing: var(--rail-label-tracking, 0.04em); text-transform: var(--rail-label-case, uppercase); color: var(--ui-muted); }
 .wiki-rail__group:has(> .wiki-rail__toc-btn) { padding-block-start: var(--rail-toc-top, 0); border-block-start: var(--rail-toc-border, none); }
 .wiki-rail__toc-list { padding-inline-start: var(--rail-toc-indent, 0); }
 .wiki-rail__toc-btn, .wiki-rail__toc-item { display: flex; align-items: center; gap: 0.25rem; width: 100%; padding: var(--rail-toc-row, var(--rail-row, 0.25rem)) var(--rail-toc-inline, var(--rail-inline, 0.5rem)); border: 0; background: none; font: inherit; color: var(--ui-muted); text-align: left; cursor: pointer; }
 /* "On this page" is a button whose words are a label: the button takes the
    label's type, and the label inside it is the button's words, with none of a
    group label's inset of its own. Two sites had each stripped it. */
-.wiki-rail__toc-btn { font-size: var(--rail-label-size, 0.75rem); font-weight: var(--rail-label-weight, 600); letter-spacing: var(--rail-label-tracking, 0.04em); text-transform: var(--rail-label-case, uppercase); transition: color 150ms; }
+.wiki-rail__toc-btn { font-family: var(--rail-label-font); font-size: var(--rail-label-size, 0.75rem); font-weight: var(--rail-label-weight, 600); letter-spacing: var(--rail-label-tracking, 0.04em); text-transform: var(--rail-label-case, uppercase); transition: color 150ms; }
 .wiki-rail__toc-btn:hover { color: inherit; }
 .wiki-rail__toc-btn > .wiki-rail__label { padding: 0; border: 0; font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; }
 /* An entry is one line, cut short with an ellipsis: a long heading does not wrap the rail. */
