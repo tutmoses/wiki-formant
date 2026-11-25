@@ -9,7 +9,20 @@
    Three wikis had each restated these rules, and each had one missing: one
    emitted the stored-tab and copy-button markup with no CSS for it, so every
    panel showed at once; one never received the utility classes ColumnsView
-   used to emit, so two of its four alignments did nothing. */
+   used to emit, so two of its four alignments did nothing.
+
+   The classes on the @dressed line take their look from tokens, each listed
+   where its rules are: a site sets the tokens, on `:root` or on the element
+   that differs, and never restates the class. Four stylesheets had restated
+   them, each with its own values for the same few properties, and none could
+   be diffed against another. `check-classes --restated` reads this line and
+   fails on a site rule whose first compound names one of these classes (or a
+   `__` or `--` part of one) and declares anything but custom properties. A
+   rule that must, because no token covers what it does, is licensed by a
+   `/* licensed: <why> *\/` comment directly above it.
+
+   @dressed app-shell app-header app-main app-footer header-btn header-nav header-logo skip-link wiki-layout wiki-sidebar wiki-rail dock dock-button empty-state empty-state-title empty-state-desc empty-state-action breadcrumbs article-meta stats-figures infobox infobox-series infobox-facts page-with-infobox columns-layout code-block code-block-control code-block-button code-block-menu code-block-option search-field wiki-cat
+*/
 
 /* ---- the page frame ---------------------------------------------------------
    The numbers every site's page is laid out by, and the one exception to
@@ -68,15 +81,20 @@
    `--header-btn-hover` (--ui-surface-2) and `--header-ink-hover`, and lit so
    while its `Menu` is open. A site sets
    the tokens, never the class. */
-.app-shell { display: flex; flex-direction: column; min-height: 100dvh; }
+.app-shell { display: flex; flex-direction: column; min-height: 100dvh; padding-block: var(--shell-pad-block, 0); }
+/* The footer's rule and gap above it are `--footer-border` (none) and
+   `--footer-gap` (0); its padding `--footer-pad` (2rem). Under a dock its foot
+   clears the discs, `--footer-pad-end`, so the last line is never under one.
+   Its closing note stops at `--footer-note-width` (none). */
+.app-shell:has(> .dock) { --footer-pad-end: calc(var(--dock-button, 3rem) + 2 * var(--dock-inset, 1rem)); }
 .app-header { position: sticky; top: 0; z-index: var(--header-z, 40); display: flex; flex-wrap: var(--header-wrap, nowrap); align-items: center; justify-content: var(--header-justify, normal); gap: var(--header-gap, 1rem); min-height: var(--rail-top, auto); padding-inline: var(--header-pad, var(--page-pad)); background: var(--header-bg, none); border-block-end: var(--header-border, none); backdrop-filter: var(--header-filter, none); }
-.app-footer { padding-block: 2rem; font-size: var(--ui-small); color: var(--ui-muted); }
+.app-footer { margin-block-start: var(--footer-gap, 0); padding-block: var(--footer-pad, 2rem) var(--footer-pad-end, var(--footer-pad, 2rem)); border-block-start: var(--footer-border, none); font-size: var(--ui-small); color: var(--ui-muted); }
 /* `SiteFooter`: the site's matter, a row of links, the owner and licence line. */
 .app-footer__frame { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; text-align: center; }
 .app-footer__links { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.25rem 1.25rem; }
 .app-footer__links a { color: inherit; text-decoration: none; }
 .app-footer__links a:hover { color: var(--ui-accent); }
-.app-footer__note { display: flex; flex-direction: column; gap: 0.25rem; }
+.app-footer__note { display: flex; flex-direction: column; gap: 0.25rem; max-width: var(--footer-note-width, none); }
 .app-footer__note > * { margin: 0; }
 .app-footer__note a { color: inherit; text-decoration: underline; }
 /* A full-width band, `.page-bleed` (a form's ground), gives the frame back the
@@ -87,10 +105,14 @@
    page wider than the window is cut at its edge and the window stays the one
    scroller, so the sticky rail still sticks. */
 .app-main { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; overflow-x: clip; }
-.page-frame { width: 100%; max-width: var(--content-width); margin-inline: auto; padding-inline: var(--page-pad); }
+/* The column is a container, so a block inside it lays out by the width it
+   has (ColumnsView's split, the infobox's) rather than by the window's. */
+.page-frame { width: 100%; max-width: var(--content-width); margin-inline: auto; padding-inline: var(--page-pad); container-type: inline-size; }
 .skip-link { position: absolute; inset-inline-start: 1rem; top: -100%; z-index: 60; padding: 0.5rem 1rem; border-radius: 0 0 var(--ui-radius) var(--ui-radius); background: var(--ui-accent); color: var(--ui-on-accent, var(--ui-surface)); font-size: var(--ui-small); font-weight: 600; text-decoration: none; }
-/* `SiteShell`'s `logo`: the site's mark as the link home, after the rail toggle. */
-.header-logo { display: inline-flex; align-items: center; gap: 0.5rem; flex-shrink: 0; color: inherit; text-decoration: none; }
+/* The site's `logo` (`defineSite`): its mark as the link home, after the rail
+   toggle, dimmed to `--header-logo-hover` (1) under the pointer. */
+.header-logo { display: inline-flex; align-items: center; gap: 0.5rem; flex-shrink: 0; color: inherit; text-decoration: none; transition: opacity 150ms; }
+.header-logo:hover { opacity: var(--header-logo-hover, 1); }
 .header-btn { display: inline-grid; place-items: center; flex-shrink: 0; min-width: var(--header-btn, 2.25rem); min-height: var(--header-btn, 2.25rem); padding: 0; border: 0; border-radius: var(--header-btn-radius, var(--ui-radius)); background: none; color: var(--header-ink, inherit); font: inherit; text-decoration: none; cursor: pointer; transition: background-color 150ms, color 150ms; }
 .header-btn:hover, .header-btn:has(+ .menu:popover-open) { background: var(--header-btn-hover, var(--ui-surface-2)); color: var(--header-ink-hover, var(--header-ink, inherit)); }
 .skip-link:focus { top: 0; }
@@ -116,20 +138,29 @@
    The disc's size (`--dock-button`, 48px, past the 44px target), the inset
    (`--dock-inset`) and its look are the site's, on tokens: `--dock-bg`,
    `--dock-ink`, `--dock-border`, `--dock-shadow`, and `--dock-hover`, the
-   brightness a hovered or focused disc takes. `DockLink` is a disc that is
+   brightness a hovered or focused disc takes. Where they sit is
+   `--dock-justify` (flex-end), whether a group keeps its two together
+   `--dock-group` (flex; `contents` lets them spread), and whether a disc shows
+   at all `--dock-button-display` (flex), set on the disc a width drops. Set
+   the disc's size and inset on `:root`, not `.dock`: the footer's clearance
+   and the toast stack read them from outside the strip. `DockLink` is a disc that is
    a link. */
-.dock { position: fixed; inset-inline: 0; bottom: var(--dock-inset, 1rem); z-index: 40; display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem; padding-inline: var(--dock-inset, 1rem); pointer-events: none; }
-.dock__group { display: flex; align-items: center; gap: 0.75rem; }
-.dock-button { pointer-events: auto; display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: var(--dock-button, 3rem); height: var(--dock-button, 3rem); border-radius: 9999px; background: var(--dock-bg, var(--ui-surface-2)); color: var(--dock-ink, inherit); border: var(--dock-border, none); box-shadow: var(--dock-shadow, none); transition: filter 150ms; }
+.dock { position: fixed; inset-inline: 0; bottom: var(--dock-inset, 1rem); z-index: 40; display: flex; align-items: center; justify-content: var(--dock-justify, flex-end); gap: 0.75rem; padding-inline: var(--dock-inset, 1rem); pointer-events: none; }
+.dock__group { display: var(--dock-group, flex); align-items: center; gap: 0.75rem; }
+.dock-button { pointer-events: auto; display: var(--dock-button-display, flex); align-items: center; justify-content: center; flex-shrink: 0; width: var(--dock-button, 3rem); height: var(--dock-button, 3rem); border-radius: 9999px; background: var(--dock-bg, var(--ui-surface-2)); color: var(--dock-ink, inherit); border: var(--dock-border, none); box-shadow: var(--dock-shadow, none); transition: filter 150ms; }
 .dock-button:is(:hover, :focus-visible) { filter: brightness(var(--dock-hover, 1.25)); }
 
 /* ---- ColumnsView ----------------------------------------------------------
-   Stacked until there is room for a row. `data-gap` and `data-align` replace
-   the Tailwind utilities the view used to emit, which only reached a site whose
-   Tailwind happened to scan node_modules. */
+   Stacked until the column it sits in has room for a row: 40rem of the
+   column, never of the viewport, since beside a rail a 768px window leaves a
+   column too narrow to share. `data-gap` and `data-align` replace the Tailwind
+   utilities the view used to emit, which only reached a site whose Tailwind
+   happened to scan node_modules. `--columns-stack` (column) is the direction
+   below the split; a site that lays some rows out side by side at any width
+   sets it to `row` there, with `--column-flex: 1 1 0%`. */
 .columns-layout {
   display: flex;
-  flex-direction: column;
+  flex-direction: var(--columns-stack, column);
   gap: var(--columns-gap, 1rem);
 }
 .columns-layout[data-gap='sm'] { --columns-gap: 0.5rem; }
@@ -143,13 +174,12 @@
   flex-direction: column;
   min-width: 0;
 }
-@media (min-width: 48rem) {
-  .columns-layout { flex-direction: row; }
-  .column-view { flex: 1 1 0%; }
-}
 /* A stacked column is as wide as the row, whatever the alignment. */
-@media (max-width: 47.99rem) {
-  .columns-layout > .column-view { align-self: stretch; }
+.column-view { flex: var(--column-flex, 0 1 auto); }
+.columns-layout > .column-view { align-self: stretch; }
+@container (min-width: 40rem) {
+  .columns-layout { --columns-stack: row; --column-flex: 1 1 0%; }
+  .columns-layout > .column-view { align-self: auto; }
 }
 
 /* ---- layout primitives ------------------------------------------------------
@@ -173,14 +203,19 @@
    --infobox-width. Keyed to that column, never the viewport: beside an open
    rail a 1100px window leaves a 750px column. Both items need `min-width: 0`,
    or the one shared track sizes to the widest item's min-content and the
-   other inherits the overflow. Whether the infobox sticks, and where, is the
-   site's: it knows its header. */
+   other inherits the overflow. Beside the prose the infobox sticks
+   `--infobox-top` below the window's top (1.5rem under `--rail-top`, the
+   header) and scrolls inside itself past the window's height;
+   `--infobox-position: static` keeps it in the flow. */
 .page-with-infobox { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "infobox" "content"; }
 .page-with-infobox > .page-main-content { grid-area: content; min-width: 0; }
 .page-with-infobox > .infobox { grid-area: infobox; min-width: 0; }
 :has(> .page-with-infobox) { container-type: inline-size; }
 @container (min-width: 768px) {
   .page-with-infobox { grid-template-columns: minmax(0, 1fr) var(--infobox-width); grid-template-areas: "content infobox"; align-items: start; }
+  .page-with-infobox > .infobox { position: var(--infobox-position, sticky); top: var(--infobox-top, calc(var(--rail-top, 0px) + 1.5rem)); align-self: start; max-height: calc(100dvh - var(--infobox-top, calc(var(--rail-top, 0px) + 1.5rem)) - 1.5rem); overflow-y: auto; }
+  /* The panel scrolls as one: a child left shrinkable squeezes behind a scrollbar of its own. */
+  .page-with-infobox > .infobox > * { flex-shrink: 0; }
 }
 
 /* ---- the wiki rail (RailShell prefix="wiki-sidebar") ------------------------
@@ -201,7 +236,8 @@
 
    The site sets `--rail-top` (what the sticky rail clears, a header's height),
    `--rail-border` (the rule between rail and article, which becomes the
-   drawer's foot) and `--rail-bg`, the rail's surface. The column beside it is
+   drawer's foot), `--rail-bg`, the rail's surface, and `--layout-bg`, the
+   ground under rail and column together. The column beside it is
    a flex column, as the shell's main is, its blocks `--frame-gap` apart and
    `--frame-pad-block` from the header and footer. Its rows are tokens, so a site sets
    numbers in `:root` rather than restating the classes:
@@ -232,7 +268,7 @@
    Closed is the class
    or `html[data-sidebar='closed']`, whichever says so first: the boot script
    writes the attribute before React can, and React writes the class. */
-.wiki-layout { display: flex; flex: 1 1 auto; align-items: flex-start; }
+.wiki-layout { display: flex; flex: 1 1 auto; align-items: flex-start; background: var(--layout-bg, none); }
 .wiki-layout__main { flex: 1 1 0%; min-width: 0; }
 .wiki-layout__main > .page-frame { display: flex; flex-direction: column; gap: var(--frame-gap, 0); padding-block: var(--frame-pad-block, 0); }
 .wiki-sidebar {
@@ -331,42 +367,46 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
 
 /* ---- the look of the package's components ----------------------------------
    The panels, lists, cards and rails the package's markup produces, drawn once
-   on the tokens a site maps from its own palette in `:root`. Four
-   stylesheets had restated sixty of these classes with four vocabularies
-   (`--corner`, `--radius`, `--radius-wing`; `--space`, `--spacing-md`,
-   `--space-3`) and four bodies. A site that must differ overrides the rule;
-   one that sets no token gets a readable default off `currentColor`.
+   on the `--ui-*` tokens. Each reads the house colour vocabulary, so a site
+   whose `@theme` names its palette in it sets none of them:
 
-     :root {
-       --ui-surface: var(--color-surface-1);   a card's background
-       --ui-surface-2: var(--color-surface-2); a raised or hovered one
-       --ui-stripe: color-mix(in srgb, var(--color-text) 5%, transparent);  every other table row, over its cells
-       --ui-border: var(--color-border);
-       --ui-radius: var(--radius);
-       --ui-pad: 1rem;                          a panel's padding
-       --ui-small: var(--text-small);           the small type size
-       --ui-muted: var(--color-text-muted);
-       --ui-accent: var(--color-accent);
-       --ui-accent-soft: var(--color-accent-muted);  behind what is lit: the rail's page, its section being read
-       --ui-on-accent: var(--color-bg);         text on the accent
-       --ui-up: var(--color-success);           a gain, an addition
-       --ui-down: var(--color-error);           a loss, a removal, a warning
-       --ui-shadow: 0 8px 24px -4px rgb(0 0 0 / 0.25);  a floating card's; unset, that one
-     } */
+     --color-bg, --color-surface-1, --color-surface-2   the ground, a card, a raised one
+     --color-text, --color-text-muted                   ink, quiet ink
+     --color-border                                     lines
+     --color-accent, --color-accent-muted               links and buttons, what is lit
+     --color-success, --color-error                     a gain, a loss
+     --radius, --text-small                             a corner, the small size
+
+   A site sets a `--ui-*` token in its own unlayered `:root` only where it maps
+   it elsewhere (caper's accent is its green, `--color-getaway`). A site with
+   none of the vocabulary gets a readable default off `currentColor`:
+
+     --ui-surface      a card's background
+     --ui-surface-2    a raised or hovered one
+     --ui-stripe       every other table row, over its cells
+     --ui-border, --ui-radius
+     --ui-pad          a panel's padding (1rem)
+     --ui-small        the small type size
+     --ui-muted, --ui-accent
+     --ui-accent-soft  behind what is lit: the rail's page, its section being read
+     --ui-on-accent    text on the accent
+     --ui-up           a gain, an addition
+     --ui-down         a loss, a removal, a warning
+     --ui-shadow       a floating card's; unset, 0 8px 24px -4px rgb(0 0 0 / 0.25) */
 :root {
-  --ui-surface: color-mix(in srgb, currentColor 6%, transparent);
-  --ui-surface-2: color-mix(in srgb, currentColor 12%, transparent);
+  --ui-surface: var(--color-surface-1, color-mix(in srgb, currentColor 6%, transparent));
+  --ui-surface-2: var(--color-surface-2, color-mix(in srgb, currentColor 12%, transparent));
   --ui-stripe: color-mix(in srgb, currentColor 5%, transparent);
-  --ui-border: color-mix(in srgb, currentColor 20%, transparent);
-  --ui-radius: 0.5rem;
+  --ui-border: var(--color-border, color-mix(in srgb, currentColor 20%, transparent));
+  --ui-radius: var(--radius, 0.5rem);
   --ui-pad: 1rem;
-  --ui-small: 0.875rem;
-  --ui-muted: color-mix(in srgb, currentColor 70%, transparent);
-  --ui-accent: currentColor;
-  --ui-accent-soft: var(--ui-surface-2);
-  --ui-on-accent: Canvas;
-  --ui-up: currentColor;
-  --ui-down: currentColor;
+  --ui-small: var(--text-small, 0.875rem);
+  --ui-muted: var(--color-text-muted, color-mix(in srgb, currentColor 70%, transparent));
+  --ui-accent: var(--color-accent, currentColor);
+  --ui-accent-soft: var(--color-accent-muted, var(--ui-surface-2));
+  --ui-on-accent: var(--color-bg, Canvas);
+  --ui-up: var(--color-success, currentColor);
+  --ui-down: var(--color-error, currentColor);
 }
 
 /* A panel: the infobox, a section card, a stat card, a chart. */
@@ -375,7 +415,11 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius);
 }
-.infobox { padding: var(--ui-pad); }
+/* The infobox's look beyond the panel: `--infobox-th-width` (42%, the labels'
+   column), `--infobox-th-bg` (none), `--infobox-shadow` (none) and
+   `--infobox-size` (inherit, its type size). Narrower than 17rem, a fact's label
+   and value stack, since two columns that narrow read a word a line. */
+.infobox { padding: var(--ui-pad); container-type: inline-size; box-shadow: var(--infobox-shadow, none); font-size: var(--infobox-size, inherit); }
 .infobox table { width: 100%; table-layout: fixed; border-collapse: collapse; }
 /* A fixed column cannot grow, so a cell that cannot wrap spills out of it: caper's
    prose tables keep their labels on one line, and its infobox keys ran into the
@@ -383,8 +427,14 @@ html[data-sidebar='closed'] .wiki-sidebar { width: 0; }
 .infobox table :is(th, td) { white-space: normal; }
 .infobox :is(th, td) { padding: 0.375rem 0.5rem; border: 0; border-bottom: 1px solid var(--ui-border); background: none; text-align: left; vertical-align: top; }
 /* Labels are short and values are the reading: 42% still fits "Published:". */
-.infobox th { width: 42%; font-weight: 600; color: var(--ui-muted); }
+.infobox th { width: var(--infobox-th-width, 42%); background: var(--infobox-th-bg, none); font-weight: 600; color: var(--ui-muted); }
 .infobox tr:last-child :is(th, td) { border-bottom: 0; }
+/* After the cells' rules it narrows, which it must outrank at equal specificity. */
+@container (max-width: 17rem) {
+  .infobox :is(th, td):not(.chart *) { display: block; width: auto; }
+  .infobox th { border-bottom: 0; }
+  .infobox td { border-top: 0; }
+}
 /* Every table's body rows alternate, so a row reads across, the infobox's
    included. The stripe is an image laid over the cell rather than a colour, so
    it shows on whatever background a site gives its cells, and under a hover's.
@@ -398,9 +448,14 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
 .article-cite summary { cursor: pointer; color: var(--ui-accent); }
 .article-cite code { display: block; margin-top: 0.25rem; white-space: normal; }
 
-/* `ArticleMeta`: the article's provenance line, dot-separated, under its body. */
-.article-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.5rem; margin: 0; padding: 0; list-style: none; font-size: var(--ui-small); color: var(--ui-muted); }
-.article-meta > li + li::before { content: '·'; margin-inline-end: 0.5rem; }
+/* `ArticleMeta`: the article's provenance line, dot-separated, under its body,
+   clear of anything floated beside the prose. Its look is `--meta-gap`
+   (0.25rem 0.5rem), `--meta-sep-gap` (0.5rem, after each dot), `--meta-align`
+   (baseline), `--meta-size` (--ui-small), `--meta-line` (inherit),
+   `--meta-margin` (0), `--meta-pad` (0) and `--meta-rule` (none, a rule above it). */
+.article-meta { clear: both; display: flex; flex-wrap: wrap; align-items: var(--meta-align, baseline); gap: var(--meta-gap, 0.25rem 0.5rem); margin: var(--meta-margin, 0); padding: var(--meta-pad, 0); border-block-start: var(--meta-rule, none); list-style: none; font-size: var(--meta-size, var(--ui-small)); line-height: var(--meta-line, inherit); color: var(--ui-muted); }
+.article-meta > li { margin: 0; }
+.article-meta > li + li::before { content: '·'; margin-inline-end: var(--meta-sep-gap, 0.5rem); }
 .article-meta a { color: inherit; }
 .article-meta a:hover { color: var(--ui-accent); }
 .article-meta .article-cite, .article-meta .article-cite summary { display: inline; }
@@ -410,15 +465,18 @@ tbody > tr:nth-child(even) > :is(th, td):not(.chart *) { background-image: linea
    down columns rather than across grid rows: a grid row is as tall as its
    tallest tile, so one long title left a gap under every short one beside it.
    A section's look is tokens: `--index-glyph` (its mark's ink),
-   `--index-edge` (a section card's leading edge). */
+   `--index-glyph-size` (inherit), `--index-edge` (a section card's leading
+   edge), `--index-title-size` (1.0625rem), `--index-title-weight` (700),
+   `--index-title-line` (1.2), `--index-count-font` (inherit) and
+   `--index-count-bg` (--ui-surface). */
 .wiki-cats { display: flex; flex-direction: column; gap: 1.5rem; }
 .wiki-cat { display: flex; flex-direction: column; gap: 0.5rem; }
 .wiki-cat__head { display: flex; align-items: center; gap: 0.5rem; width: fit-content; color: inherit; text-decoration: none; }
-.wiki-cat__title { margin: 0; font-size: 1.0625rem; line-height: 1.2; font-weight: 700; transition: color 150ms; }
+.wiki-cat__title { margin: 0; border: 0; font-size: var(--index-title-size, 1.0625rem); line-height: var(--index-title-line, 1.2); font-weight: var(--index-title-weight, 700); transition: color 150ms; }
 a.wiki-cat__head:hover .wiki-cat__title { color: var(--ui-accent); }
-.wiki-cat__glyph, .wiki-card__glyph { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--index-glyph, var(--ui-muted)); }
-.wiki-cat__count, .wiki-card__count { flex-shrink: 0; font-size: 0.6875rem; font-variant-numeric: tabular-nums; color: var(--ui-muted); }
-.wiki-cat__count { padding: 0.0625rem 0.375rem; border-radius: 9999px; background: var(--ui-surface); }
+.wiki-cat__glyph, .wiki-card__glyph { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: var(--index-glyph-size, inherit); line-height: 1; color: var(--index-glyph, var(--ui-muted)); }
+.wiki-cat__count, .wiki-card__count { flex-shrink: 0; font-family: var(--index-count-font, inherit); font-size: 0.6875rem; font-variant-numeric: tabular-nums; color: var(--ui-muted); }
+.wiki-cat__count { padding: 0.0625rem 0.375rem; border-radius: 9999px; background: var(--index-count-bg, var(--ui-surface)); }
 .wiki-cat__blurb { margin: 0; max-width: var(--measure, 68ch); font-size: var(--ui-small); color: var(--ui-muted); }
 .wiki-cat__more { width: fit-content; font-size: var(--ui-small); color: var(--ui-accent); text-decoration: none; }
 .wiki-cat__more:hover { text-decoration: underline; }
@@ -588,12 +646,15 @@ a.wiki-cat__head:hover .wiki-cat__title { color: var(--ui-accent); }
    for a failed or empty search; the last row, to the results page, is a row
    set apart. Four sites had drawn this list under four sets of names. A site
    sizes the field and its input; one whose rows sit in the page's flow sets
-   `position: static` on the list. */
+   `--search-list-position: static`. A row's look is `--search-item-size`
+   (inherit) and `--search-item-hover` (--ui-surface-2), the last row's
+   `--search-all-weight` (inherit) and `--search-all-hover` (--ui-accent). */
 .search-field { position: relative; }
-.search-field__list, .search-field__note { position: absolute; top: 100%; inset-inline: 0; z-index: 50; margin: 0.25rem 0 0; overflow: hidden; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); box-shadow: var(--ui-shadow, 0 8px 24px -4px rgb(0 0 0 / 0.25)); }
-.search-field__item { display: block; padding: 0.625rem var(--ui-pad); color: inherit; text-decoration: none; transition: background-color 150ms; }
-.search-field__item:hover, .search-field__item--active { background: var(--ui-surface-2); }
-.search-field__all { border-top: 1px solid var(--ui-border); text-align: center; font-size: var(--ui-small); color: var(--ui-accent); }
+.search-field__list, .search-field__note { position: var(--search-list-position, absolute); top: 100%; inset-inline: 0; z-index: 50; margin: 0.25rem 0 0; overflow: hidden; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); box-shadow: var(--ui-shadow, 0 8px 24px -4px rgb(0 0 0 / 0.25)); }
+.search-field__item { display: block; padding: 0.625rem var(--ui-pad); font-size: var(--search-item-size, inherit); color: inherit; text-decoration: none; transition: background-color 150ms, color 150ms; }
+.search-field__item:hover, .search-field__item--active { background: var(--search-item-hover, var(--ui-surface-2)); }
+.search-field__all { border-top: 1px solid var(--ui-border); text-align: center; font-size: var(--ui-small); font-weight: var(--search-all-weight, inherit); color: var(--ui-accent); }
+.search-field__all:hover { color: var(--search-all-hover, var(--ui-accent)); }
 .search-field__note { padding: 0.625rem var(--ui-pad); font-size: var(--ui-small); color: var(--ui-muted); }
 
 /* The rail's contents: a label over a group of entries, and the article's contents with the section being read lit.
@@ -661,16 +722,22 @@ body:not(:has(.wiki-layout)) .wiki-rail__toggle { display: none; }
 .tab-button.active { border-bottom-color: currentColor; }
 
 /* ---- editor node views (createCodeBlock, createTabs) ---------------------------
-   Their default classes, drawn plainly enough to sit on any site; an app that
-   passes its own classes styles them itself. The tab editor shows the tab the
-   writer picked, which the stored-group rule above would otherwise hide. */
-.code-block { position: relative; }
-.code-block-control { position: absolute; top: 0.4rem; right: 0.4rem; z-index: 1; font-size: 0.8rem; }
+   Their default classes, drawn on the `--ui-*` tokens; an app that passes its
+   own classes styles them itself. A code block sits `--code-margin` (1rem)
+   from its neighbours; its language control is a small translucent button in
+   the corner, its menu a floating card, the language chosen in
+   `--code-active` (inherit). The tab editor shows the tab the writer picked,
+   which the stored-group rule above would otherwise hide. */
+.code-block { position: relative; margin-block: var(--code-margin, 1rem); }
+.code-block-control { position: absolute; top: 0.5rem; right: 0.5rem; z-index: 10; font-size: 0.75rem; }
 :is(.code-block-button, .code-block-option, .tab-title, .tab-remove, .tab-add) { font: inherit; color: inherit; background: none; border: 0; }
 :is(.code-block-button, .code-block-option, .tab-remove, .tab-add) { padding: 0.15em 0.5em; cursor: pointer; }
-.code-block-menu { position: absolute; right: 0; display: grid; max-height: 16rem; overflow: auto; background: Canvas; color: CanvasText; border: 1px solid color-mix(in srgb, currentColor 20%, transparent); border-radius: 0.4rem; }
-.code-block-option { text-align: left; }
-.code-block-option.active { font-weight: 600; }
+.code-block-button { display: flex; align-items: center; gap: 0.25rem; padding: 0.125rem 0.5rem; border-radius: var(--ui-radius); background: color-mix(in srgb, var(--ui-surface-2) 80%, transparent); color: var(--ui-muted); backdrop-filter: blur(4px); transition: background-color 150ms, color 150ms; }
+.code-block-button:hover { background: var(--ui-surface-2); color: inherit; }
+.code-block-menu { position: absolute; top: 100%; right: 0; z-index: 50; display: grid; min-width: 7rem; max-height: 12rem; margin-top: 0.25rem; overflow: auto; background: var(--ui-surface); color: inherit; border: 1px solid var(--ui-border); border-radius: var(--ui-radius); box-shadow: var(--ui-shadow, 0 8px 24px -4px rgb(0 0 0 / 0.25)); }
+.code-block-option { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 0.375rem 0.75rem; text-align: left; transition: background-color 150ms; }
+.code-block-option:hover { background: var(--ui-surface-2); }
+.code-block-option.active { font-weight: 600; color: var(--code-active, inherit); }
 .tabs-editor { border: 1px solid color-mix(in srgb, currentColor 20%, transparent); border-radius: 0.5rem; }
 .tabs-editor .tabs-list { align-items: center; padding: 0.4rem; border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent); }
 .tabs-editor .tab-button { display: inline-flex; align-items: center; padding: 0.15em 0.3em; border-bottom: 0; border-radius: 0.3rem; }
@@ -702,17 +769,25 @@ body:not(:has(.wiki-layout)) .wiki-rail__toggle { display: none; }
 
 /* ---- Breadcrumbs ------------------------------------------------------------
    The trail is a <nav> around an <ol>; the row is the list, not the nav.
-   Three sites restated this row, each a little differently. */
+   Three sites restated this row, each a little differently; its look is now
+   `--crumb-pad` (0, the trail's block padding), `--crumb-size` (inherit),
+   `--crumb-line` (inherit), `--crumb-gap` (0.25rem), `--crumb-ink`
+   (--ui-muted), `--crumb-hover` (--ui-accent), `--crumb-current-ink` (inherit),
+   `--crumb-current-weight` (inherit) and `--crumb-sep-ink` (inherit). */
+.breadcrumbs { padding-block: var(--crumb-pad, 0); font-size: var(--crumb-size, inherit); line-height: var(--crumb-line, inherit); }
+.breadcrumbs ol { gap: var(--crumb-gap, 0.25rem); color: var(--crumb-ink, var(--ui-muted)); }
+.breadcrumbs a { color: inherit; transition: color 150ms; }
+.breadcrumbs a:hover { color: var(--crumb-hover, var(--ui-accent)); }
+.breadcrumbs [aria-current='page'] { color: var(--crumb-current-ink, inherit); font-weight: var(--crumb-current-weight, inherit); }
 .breadcrumbs ol {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem;
   margin: 0;
   padding-left: 0;
   list-style: none;
 }
-.breadcrumbs .separator { user-select: none; }
+.breadcrumbs .separator { user-select: none; color: var(--crumb-sep-ink, inherit); }
 
 /* ---- PageBanner, CardBanner and BannerArt -----------------------------------------------
    4:1 is a floor, not a height: the ratio-holder and the body share one grid
@@ -810,9 +885,19 @@ body:not(:has(.wiki-layout)) .wiki-rail__toggle { display: none; }
   animation: spin 0.6s linear infinite;
 }
 .skeleton { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-.empty-state { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding-block: 3rem; text-align: center; }
+/* `EmptyState`, `NotFound` and `RouteError`: a centred title, what happened and
+   the way on. Its look is `--empty-gap` (0.5rem), `--empty-pad` (3rem 0),
+   `--empty-width` (none), `--empty-height` (0), `--empty-margin` (0),
+   `--empty-ink` (inherit), `--empty-bg` (none), `--empty-border` (0),
+   `--empty-radius` (0); a paragraph title's (not a page's `<h1>`, which is
+   the site's heading) `--empty-title-ink` and `--empty-title-weight` (inherit);
+   the description's `--empty-desc-ink` (--ui-muted) and `--empty-desc-size`
+   (inherit); and `--empty-action-gap` (0) above the way on. */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--empty-gap, 0.5rem); max-width: var(--empty-width, none); min-height: var(--empty-height, 0); margin: var(--empty-margin, 0); padding: var(--empty-pad, 3rem 0); text-align: center; color: var(--empty-ink, inherit); background: var(--empty-bg, none); border: var(--empty-border, 0); border-radius: var(--empty-radius, 0); }
 .empty-state > h1, .empty-state-title { margin: 0; }
-.empty-state-desc { margin: 0; color: var(--ui-muted); }
+.empty-state-title { color: var(--empty-title-ink, inherit); font-weight: var(--empty-title-weight, inherit); }
+.empty-state-desc { display: flex; flex-direction: column; gap: 0.5rem; margin: 0; font-size: var(--empty-desc-size, inherit); color: var(--empty-desc-ink, var(--ui-muted)); }
+.empty-state-action { margin-top: var(--empty-action-gap, 0); }
 /* `Highlight`: a search's words in a result, in bold, in the text's own colour. */
 .search-mark { background: none; color: inherit; font-weight: 700; }
 .route-error__actions { justify-content: center; }
@@ -977,7 +1062,8 @@ pre:hover > .code-copy-btn,
   opacity: 0.6;
 }
 .stats-figures button[aria-pressed='true'] { opacity: 1; }
-.stats-figures strong { font-variant-numeric: tabular-nums; }
+/* A figure's number: `--figure-size` (inherit), `--figure-weight` (bolder), `--figure-line` (inherit). */
+.stats-figures strong { font-size: var(--figure-size, inherit); font-weight: var(--figure-weight, bolder); line-height: var(--figure-line, inherit); font-variant-numeric: tabular-nums; }
 /* A figure's name and a list's heading, under what they name. */
 .stats-figures button > span, .stats-list h2 { color: var(--ui-muted); }
 .stats-delta { margin-inline-start: 0.4em; }

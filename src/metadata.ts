@@ -24,6 +24,7 @@ import { plainText } from './text.js';
 import type { ReferenceItem } from './blocks.js';
 import type { License } from './license.js';
 import type { XAccount } from './social.js';
+import type { ReactNode } from 'react';
 
 export interface ArticleMeta {
   publishedTime?: string;
@@ -576,6 +577,18 @@ export interface SiteOptions extends Omit<RootMetadataOptions, 'handle'> {
   graph?: Partial<SiteGraphOptions>;
   /** The footer's links, owner, licence and closing line. */
   footer?: SiteFooterOptions;
+  /** The site's mark, which `SiteShell` leads the header with as the link home. */
+  logo?: ReactNode;
+  /** What `NotFound` says. */
+  notFound?: SiteNotFoundOptions;
+}
+
+/** A 404's words: what is missing, and the one way on every visitor has. */
+export interface SiteNotFoundOptions {
+  /** Under the title, "Page not found". */
+  description?: string;
+  /** The way on: the front page, labelled Home, unless named. */
+  home?: { href: string; label: string };
 }
 
 /** A site's identity as `defineSite` returns it: the facts, and each surface's object built from them. */
@@ -594,6 +607,10 @@ export interface SiteDefinition {
   graph: LdNode;
   /** `SiteShell`'s footer. */
   footer?: SiteFooterOptions;
+  /** `SiteShell`'s header mark. */
+  logo?: ReactNode;
+  /** `NotFound`'s words. */
+  notFound?: SiteNotFoundOptions;
 }
 
 /**
@@ -604,7 +621,7 @@ export interface SiteDefinition {
  * to `rootMetadata`, to the document's links and graph and to the footer, from
  * constants each repo named its own way.
  */
-export function defineSite({ x, feeds, agentsMd, themeColor, graph, footer, ...root }: SiteOptions): SiteDefinition {
+export function defineSite({ x, feeds, agentsMd, themeColor, graph, footer, logo, notFound, ...root }: SiteOptions): SiteDefinition {
   return {
     name: root.name,
     url: root.url,
@@ -621,5 +638,7 @@ export function defineSite({ x, feeds, agentsMd, themeColor, graph, footer, ...r
       ...graph,
     }),
     ...(footer ? { footer: { owner: root.name, ...footer } } : {}),
+    ...(logo ? { logo } : {}),
+    ...(notFound ? { notFound } : {}),
   };
 }

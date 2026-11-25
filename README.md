@@ -317,25 +317,30 @@ import { Breadcrumbs, FacetBar, FacetSummary, InfoboxFacts, JsonLd, Pager } from
 ```
 
 - `Highlight({ text, query, lead })` marks where a search's words fall in a result's title or snippet, in `<mark class="search-mark">` (`base.css` sets it in bold), matched as the search matched: case and accents ignored, a hyphenated word as its parts, each word anywhere and its stem at the start of a word, no stop words or excluded `-words`. `lead` starts a snippet at most that many characters before its first mark, after an ellipsis, so a line-clamped snippet keeps its mark in sight. `wiki-formant/highlight`'s `highlightRanges(text, query)` is the same answer as ranges, for a caller that must know whether a text is marked at all.
-- `EmptyState({ title, description, action, as, className })` is "there is nothing here": a 404 (`as="h1"`), an empty table, a filtered-out grid. `.empty-state` > the title (`h1`, or `p.empty-state-title`), `.empty-state-desc`, `.empty-state-action`; `base.css` stacks and centres it, the site sets its type and colour.
+- `EmptyState({ title, description, action, as, className })` is "there is nothing here": a 404 (`as="h1"`), an empty table, a filtered-out grid. `.empty-state` > the title (`h1`, or `p.empty-state-title`), `.empty-state-desc`, `.empty-state-action`; `base.css` stacks and centres it, the site sets its look on the `--empty-*` tokens.
+- `NotFound({ site, link, buttonClassName })` is what `not-found.tsx` draws: an `EmptyState` in `.not-found` titled "Page not found", `site.notFound`'s `description` under it, and its `home` (the front page, Home, unless given) as a `.btn-primary` link.
 
 - `FacetBar` renders `facetControls` and `alphaControls`; `letterRow`, `letterControl`, `text` and `letterCounts="title"` separate the A–Z row and let a label truncate while its count stays.
 - `Breadcrumbs` renders the trail and its `BreadcrumbList` JSON-LD together; `base` makes the URLs absolute.
 - `JsonLd` escapes every `<`, so an authored `</script>` cannot close the tag.
 - `SiteDocument` is the root layout's `<html>`: the rail's boot script and the `site`'s `SiteLinks` in the head, its `JsonLd` graph and `Beacon` (`beacon`, on by default) in the body, `suppressHydrationWarning` for the attribute the script stamps. Other props go on `<html>`; `bodyClassName` on the body.
-- `SiteShell` is `base.css`'s shell under `SidebarProvider`: `.app-shell` > skip link, `header.app-header` (around `header`, which is its contents), `main#main.app-main.page-frame`, the footer (a `SiteFooter` of `site`'s `footer` with `link`, unless `footer` gives another): the main is the column, so no page frames itself, bar a full-width `.page-bleed` band that draws its own `.page-frame` (`frame={false}` for a site that draws its own column). `RailFrame` is a section layout's rail beside its column, `.wiki-layout` > `rail` + `.wiki-layout__main` > `.page-frame`, inside `main`, where the main's frame gives way to it; it mounts `WikiLinkPreview` over the column from `/api/wiki/preview` unless `preview` names another `endpoint` or is `false`. Given a `logo`, the shell leads the header with `RailToggle` and the mark as a link home, `.header-logo`, named for `site.name`, ahead of `header`; a header drawn without one puts `RailToggle` first itself. `base.css` hides the toggle on a page with no rail. A `dock` is pinned to the window's foot in `.dock`, a click-through strip whose buttons are `.dock-button` (`--dock-button`, `--dock-inset`, and the look `--dock-bg`, `--dock-ink`, `--dock-border`, `--dock-shadow`, `--dock-hover`); `DockLink({ href, label, link })` is a disc that is a link, its glyph the children. The shell mounts the `Toaster`. With no `header` it draws none; other attributes go on the shell's box; `prefix` renames the boxes (`<prefix>-shell`, `-header`, `-main`) for a host that styles a shell of its own and keeps the skip link and landmarks.
+- `SiteShell` is `base.css`'s shell under `SidebarProvider`: `.app-shell` > skip link, `header.app-header` (around `header`, which is its contents), `main#main.app-main.page-frame`, the footer (a `SiteFooter` of `site`'s `footer` with `link`, unless `footer` gives another): the main is the column, so no page frames itself, bar a full-width `.page-bleed` band that draws its own `.page-frame` (`frame={false}` for a site that draws its own column). `RailFrame` is a section layout's rail beside its column, `.wiki-layout` > `rail` + `.wiki-layout__main` > `.page-frame`, inside `main`, where the main's frame gives way to it; it mounts `WikiLinkPreview` over the column from `/api/wiki/preview` unless `preview` names another `endpoint` or is `false`. Given a site with a `logo` (`defineSite`'s), the shell leads the header with `RailToggle` and the mark as a link home, `.header-logo`, named for `site.name`, ahead of `header`; a header drawn without one puts `RailToggle` first itself. `base.css` hides the toggle on a page with no rail. A `dock` is pinned to the window's foot in `.dock`, a click-through strip whose buttons are `.dock-button` (`--dock-button`, `--dock-inset`, and the look `--dock-bg`, `--dock-ink`, `--dock-border`, `--dock-shadow`, `--dock-hover`); `DockLink({ href, label, link })` is a disc that is a link, its glyph the children. The shell mounts the `Toaster`. With no `header` it draws none; other attributes go on the shell's box; `prefix` renames the boxes (`<prefix>-shell`, `-header`, `-main`) for a host that styles a shell of its own and keeps the skip link and landmarks.
 - `SiteFooter` is `footer.app-footer`: the site's own matter (`children`), a row of `links` ending on the `x` follow link, and `© <year> <owner>`, `Content licensed under <license>` and a `note` (a disclaimer, a credit). Given `site`, each comes from `defineSite`'s `footer` (`links`, `owner`, which defaults to the site's name, `license`, `note`) and `x`, a prop overriding its own.
 
 ```tsx
 // @/lib/site
-export const site = defineSite({ name, url, description, x: X, image, feeds, agentsMd: true, themeColor, graph: { logo } });
+export const site = defineSite({ name, url, description, x: X, image, feeds, agentsMd: true, themeColor, graph: { logo }, logo: <Mark />, notFound: { description } });
 
 // src/app/layout.tsx
-export const metadata = site.metadata;
-export const viewport = site.viewport;
+export const { metadata, viewport } = site;
 <SiteDocument className={fontVariables} site={site}>
-  <SiteShell header={<Header />} footer={<Footer />} dock={<SearchButton />}>{children}</SiteShell>
+  <SiteShell site={site} link={Link} header={<Header />} dock={<SearchButton />}>{children}</SiteShell>
 </SiteDocument>
+
+// src/app/not-found.tsx
+export default function NotFoundPage() {
+  return <NotFound site={site} link={Link} />;
+}
 ```
 
 - `SiteLinks` is the root layout's agent-surface `<link>`s: `/llms.txt` as `help`, the RSS `feeds`, the OpenAPI document as `service-desc` and the agent card as `service-meta` (`described`, on by default), `/AGENTS.md` as `service-doc` (`agentsMd`). React hoists them into `<head>` from anywhere. `service-desc` is never the MCP endpoint, which is POST-only.
@@ -439,7 +444,7 @@ export const generateMetadata = () => ({
 <JsonLd data={articleLd({ headline: title, url, image, published, modified, publisher: SITE.publisher, citation: citationsFromReferences(refs) })} />
 ```
 
-- `defineSite({ ...rootMetadata's options, x, feeds, agentsMd, themeColor, graph })` is a site's identity stated once in `@/lib/site`: it returns the facts (`name`, `url`, `description`, `x`) and what each surface takes, `metadata` and `viewport` for the root layout, `links` and `graph` for `<SiteDocument site>`. The handle and the graph's `sameAs` come from `x`; `graph` adds to `siteGraphLd`'s options or overrides them.
+- `defineSite({ ...rootMetadata's options, x, feeds, agentsMd, themeColor, graph, footer, logo, notFound })` is a site's identity stated once in `@/lib/site` (a `.tsx` module where its `logo` is markup): it returns the facts (`name`, `url`, `description`, `x`) and what each surface takes, `metadata` and `viewport` for the root layout, `links` and `graph` for `<SiteDocument site>`, `footer` and `logo` for `<SiteShell site>`, `notFound` for `<NotFound site>`. The handle and the graph's `sameAs` come from `x`; `graph` adds to `siteGraphLd`'s options or overrides them.
 - `rootMetadata({ name, url, description, title, image, handle, keywords, icons })` is the root layout's `metadata`: title template, robots, and an inherited card with no title, description or URL, which Next fills from each page's own; the site's name as author, creator and publisher; and Search Console and Bing verification from `GOOGLE_SITE_VERIFICATION` and `BING_SITE_VERIFICATION` where set.
 - Next replaces `openGraph` and `twitter` per segment rather than merging, so `pageMetadata` sets both; `sitePageMetadata({ siteName, handle })` binds the fields every page's card needs.
 - `sitePageMetadata({ ..., card: `${SITE_URL}/og` })` binds the site's card route, and a page then passes `card: { title, eyebrow, description, banner }` in place of `image`. `cardUrl(base, fields)` is the same address for JSON-LD: empty fields left out, the order fixed, so one card has one URL.
@@ -831,13 +836,15 @@ const rdt = await loadRadixWallet({
 
 ## Base stylesheet
 
-`wiki-formant/base.css`: the layout the package's markup needs and the package's components drawn on eleven `--ui-*` tokens (`--ui-surface`, `--ui-surface-2`, `--ui-border`, `--ui-radius`, `--ui-pad`, `--ui-small`, `--ui-muted`, `--ui-accent`, `--ui-on-accent`, `--ui-up`, `--ui-down`) a site maps from its palette in `:root`. No colour and no scale, so a design system's rules override it at equal specificity.
+`wiki-formant/base.css`: the layout the package's markup needs and the package's components drawn on the `--ui-*` tokens (`--ui-surface`, `--ui-surface-2`, `--ui-stripe`, `--ui-border`, `--ui-radius`, `--ui-pad`, `--ui-small`, `--ui-muted`, `--ui-accent`, `--ui-accent-soft`, `--ui-on-accent`, `--ui-up`, `--ui-down`, `--ui-shadow`). Each defaults to the house colour vocabulary (`--color-surface-1`, `--color-text-muted`, `--color-accent` and the rest, listed in `base.css`), so a site whose `@theme` uses it maps only what it names otherwise, in its own `:root`.
+
+The classes on its `@dressed` line take their look from tokens listed beside their rules: the shell (`--shell-*`, `--footer-*`, `--header-*`, `--layout-bg`), the rail (`--rail-*`), the dock (`--dock-*`), and `EmptyState` (`--empty-*`), breadcrumbs (`--crumb-*`), `ArticleMeta` (`--meta-*`), the stats figures (`--figure-*`), the infobox (`--infobox-*`), ColumnsView (`--columns-*`, `--column-flex`), code blocks (`--code-*`), `SearchField` (`--search-*`) and `SectionIndex` (`--index-*`). A site sets the tokens and never restates the class; `check-classes --restated` enforces it, bar a rule licensed by a `/* licensed: <why> */` comment above it.
 
 ```css
 @import "wiki-formant/base.css" layer(components);
 ```
 
-It declares the page frame (`--content-width` 120rem for every page, `--sidebar-width` 18rem, `--infobox-width`, `--page-pad` 16/24/64px) in the components layer, so a site never restates them in `@theme`; the shell every root layout draws (`.app-shell`, `.app-main`, `.page-frame`, `.skip-link`), whose header sticks at every width on `--header-bg`, `--header-border` and `--header-filter` and lays out its row on `--header-gap`, `--header-pad`, `--header-wrap`, `--header-justify` and `--header-z`, and whose column beside a rail is a flex column `--frame-gap` apart; the primitives `.spinner`, `.skeleton`, `.empty-state`; and the reduced-motion guard. The rail's rows are tokens a site sets in `:root` rather than restating `wiki-rail__*`: `--rail-pad-block`, `--rail-section`, `--rail-gap`, `--rail-row`, `--rail-inline`, `--rail-size`, `--rail-ink`, `--rail-weight`, and its title, labels, glyphs, subtrees and "On this page" the same way (`--rail-title-*`, `--rail-label-*`, `--rail-glyph-*`, `--rail-subtree-*`, `--rail-toc-*`; the list and defaults are `base.css`'s comment), so no site restates a `wiki-rail__*` class. It also splits a page beside its infobox at 768px of its column; whether the infobox sticks stays the site's, and the rail's surface is `--rail-bg`.
+It declares the page frame (`--content-width` 120rem for every page, `--sidebar-width` 18rem, `--infobox-width`, `--page-pad` 16/24/64px) in the components layer, so a site never restates them in `@theme`; the shell every root layout draws (`.app-shell`, `.app-main`, `.page-frame`, `.skip-link`), whose header sticks at every width on `--header-bg`, `--header-border` and `--header-filter` and lays out its row on `--header-gap`, `--header-pad`, `--header-wrap`, `--header-justify` and `--header-z`, and whose column beside a rail is a flex column `--frame-gap` apart; the primitives `.spinner`, `.skeleton`, `.empty-state`; and the reduced-motion guard. The rail's rows are tokens a site sets in `:root` rather than restating `wiki-rail__*`: `--rail-pad-block`, `--rail-section`, `--rail-gap`, `--rail-row`, `--rail-inline`, `--rail-size`, `--rail-ink`, `--rail-weight`, and its title, labels, glyphs, subtrees and "On this page" the same way (`--rail-title-*`, `--rail-label-*`, `--rail-glyph-*`, `--rail-subtree-*`, `--rail-toc-*`; the list and defaults are `base.css`'s comment), so no site restates a `wiki-rail__*` class. It also splits a page beside its infobox at 768px of its column, where the infobox sticks (`--infobox-top`, `--infobox-position`), and a ColumnsView row at 40rem of its column: `.page-frame` is a container, so both read the width they have rather than the window's. The rail's surface is `--rail-bg`.
 
 ## Database and scripts
 
@@ -869,7 +876,7 @@ await withClient(async client => {
 Run each from the app's root, where `.env` holds `DATABASE_URL`.
 
 ```sh
-npx check-classes [--warn] [--compositions]   # a className token no stylesheet defines; 3+ inline utilities
+npx check-classes [--warn] [--compositions] [--unused] [--restated]   # a className token no stylesheet defines; 3+ inline utilities; dead selectors; a dressed class restated
 npx check-pages https://radix.wiki            # the served HTML of every sitemap page
 npx analytics-digest --days 7 [--gap "Symptom Miss:term"]
 npx passkey-invite https://caper.network/stats [--days n]

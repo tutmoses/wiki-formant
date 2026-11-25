@@ -30,6 +30,13 @@
 //   npx check-classes --warn         # report and exit 0
 //   npx check-classes --compositions # also fail on 3+ inline utilities
 //   npx check-classes --unused       # also fail on unreferenced selectors
+//   npx check-classes --restated     # also fail on a rule restating a dressed class
+//
+// And one fault in the source alone, which needs no build: a site rule that
+// restates a class base.css dresses with tokens (its `@dressed` line). A rule
+// whose first compound names one of them, or a `__` or `--` part of one, may
+// set custom properties and nothing else; a `/* licensed: <why> */` comment
+// directly above it licenses one no token covers.
 //
 // Run it from the repo root: `.next` and `src` are resolved against cwd.
 //
@@ -52,10 +59,92 @@ const walk = (dir, ext, out = []) => {
   return out;
 };
 
+const baseCss = new URL('../dist/base.css', import.meta.url);
+const CHECK_RESTATED = process.argv.includes('--restated');
+
+// Rules as written, nesting resolved to the outermost selector: a nested rule
+// styles the element its parent's first compound names. A licensed comment is
+// kept as a marker; every other comment is blanked, so offsets still give lines.
+const LICENSED = '\u0001';
+const rulesIn = file => {
+  const src = fs.readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, c => (/^\/\*\s*licensed:/.test(c) ? LICENSED : ' ') + c.slice(1).replace(/[^\n]/g, ' '));
+  const out = [];
+  let i = 0;
+  const block = selector => {
+    const own = { decls: [] };
+    let start = i;
+    while (i < src.length) {
+      const c = src[i];
+      if (c === '{') {
+        const prelude = src.slice(start, i);
+        const head = prelude.trim();
+        const licensed = head.includes(LICENSED);
+        const text = head.replaceAll(LICENSED, '').trim();
+        const at = i;
+        i++;
+        if (text.startsWith('@')) block(selector);
+        else {
+          const rule = block(selector ?? { text, licensed, line: src.slice(0, at).split('\n').length });
+          if (!selector) out.push({ file, ...rule.selector, decls: rule.decls });
+          else own.decls.push(...rule.decls);
+        }
+        start = i;
+      } else if (c === '}') {
+        const tail = src.slice(start, i).trim();
+        if (tail) own.decls.push(tail);
+        i++;
+        return { selector, decls: own.decls };
+      } else if (c === ';') {
+        const decl = src.slice(start, i).replaceAll(LICENSED, '').trim();
+        if (decl && !decl.startsWith('@import') && !decl.startsWith('@source') && !decl.startsWith('@plugin')) own.decls.push(decl);
+        i++;
+        start = i;
+      } else i++;
+    }
+    return { selector, decls: own.decls };
+  };
+  block(null);
+  return out;
+};
+// The classes a selector's first compound names, outside `:has()` and `:not()`,
+// which name other elements.
+const firstCompounds = selector => {
+  const parts = [];
+  let depth = 0, cur = '';
+  for (const c of selector) {
+    if (c === '(' || c === '[') depth++;
+    if (c === ')' || c === ']') depth--;
+    if (c === ',' && depth === 0) { parts.push(cur); cur = ''; } else cur += c;
+  }
+  parts.push(cur);
+  return parts.map(part => {
+    let d = 0, compound = '';
+    for (const c of part.trim()) {
+      if (c === '(' || c === '[') d++;
+      if (c === ')' || c === ']') d--;
+      if (d === 0 && /[\s>+~]/.test(c)) break;
+      compound += c;
+    }
+    let bare = compound, prev;
+    do { prev = bare; bare = bare.replace(/:(?:has|not)\([^()]*\)/g, ''); } while (bare !== prev);
+    return [...bare.matchAll(/\.((?:\\.|[-\w])+)/g)].map(m => m[1]);
+  }).flat();
+};
+const dressedList = fs.existsSync(baseCss) ? (fs.readFileSync(baseCss, 'utf8').match(/^\s*@dressed ([^\n]+)/m)?.[1].trim().split(/\s+/) ?? []) : [];
+const isDressed = name => dressedList.some(d => name === d || name.startsWith(`${d}__`) || name.startsWith(`${d}--`));
+const restated = walk(SRC_DIR, '.css').flatMap(rulesIn).filter(r => !r.licensed && firstCompounds(r.text).some(isDressed) && r.decls.some(d => !d.startsWith('--')));
+if (restated.length) {
+  const verb = CHECK_RESTATED ? 'must set tokens instead' : 'advisory';
+  console.error(`check-classes: ${restated.length} rule(s) restate a class base.css dresses with tokens (${verb}):\n`);
+  for (const r of restated) console.error(`  ${r.file}:${r.line}  ${r.text.replace(/\s+/g, ' ').slice(0, 90)}`);
+  console.error('\n  Set the class\'s tokens (base.css lists them beside its rules), or license the rule with a `/* licensed: <why> */` comment above it.\n');
+}
+const restatedFailed = CHECK_RESTATED && restated.length > 0 && !WARN_ONLY;
+
 const cssFiles = walk(STATIC_DIR, '.css');
 if (!cssFiles.length) {
-  console.log('check-classes: no built CSS under .next/static — run `npm run build` first. Skipping.');
-  process.exit(0);
+  console.log('check-classes: no built CSS under .next/static — run `npm run build` first. Skipping the build checks.');
+  process.exit(restatedFailed ? 1 : 0);
 }
 
 // Every class selector present in the emitted stylesheets, unescaped.
@@ -86,7 +175,6 @@ const classesIn = file => {
 const ownCss = walk(SRC_DIR, '.css');
 const globalsFile = ownCss.find(f => f.endsWith('globals.css'));
 const own = new Set(ownCss.flatMap(f => [...classesIn(f)]));
-const baseCss = new URL('../dist/base.css', import.meta.url);
 const named = new Set([...own, ...(fs.existsSync(baseCss) ? classesIn(baseCss) : [])]);
 
 // Only bare literals: anything interpolated is beyond a static check.
@@ -146,7 +234,7 @@ if (unused.length) {
   console.error('  Class names inside HTML stored in a database do not count, so check stored content before deleting one.\n');
 }
 
-const advisoryFailed = (CHECK_COMPOSITIONS && compositions.length > 0) || (CHECK_UNUSED && unused.length > 0);
+const advisoryFailed = (CHECK_COMPOSITIONS && compositions.length > 0) || (CHECK_UNUSED && unused.length > 0) || restatedFailed;
 
 if (!dead.size) {
   console.log(`check-classes: clean — every className token resolves against ${emitted.size} emitted selectors.`);

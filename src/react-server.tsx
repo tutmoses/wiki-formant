@@ -1049,6 +1049,7 @@ export function SectionIndex({ groups, level = 2, link: Link = Anchor, className
   );
 }
 
+import { EmptyState } from './empty-state.js';
 export { EmptyState, type EmptyStateProps } from './empty-state.js';
 
 /**
@@ -1124,13 +1125,12 @@ export interface SiteShellProps extends Omit<ComponentProps<'div'>, 'children'> 
   /** The header's contents: the shell draws the `header.app-header` around them. None, no header. */
   header?: ReactNode;
   /**
-   * The site's mark. Given one, the shell leads the header with the rail
-   * toggle and the mark as a link home, `.header-logo`, named for the site,
-   * ahead of `header`: every header opened on those two, each written its own way.
+   * The site from `defineSite`: its `footer`, drawn as a `SiteFooter`, and its
+   * `logo`. Given a logo, the shell leads the header with the rail toggle and
+   * the mark as a link home, `.header-logo`, named for the site, ahead of
+   * `header`: every header opened on those two, each written its own way.
    */
-  logo?: ReactNode;
-  /** The site from `defineSite`: its `footer`, drawn as a `SiteFooter`, and its name, the logo's. */
-  site?: FooterSite & { name?: string };
+  site?: FooterSite & Pick<SiteDefinition, 'logo'> & { name?: string };
   /** In place of the site's footer: a `SiteFooter` with matter of the site's own, or a site's own `footer.app-footer`. */
   footer?: ReactNode;
   /** A site's router link, for the footer's own paths. */
@@ -1166,8 +1166,9 @@ export interface SiteShellProps extends Omit<ComponentProps<'div'>, 'children'> 
  * pinned to the window's foot, and the `Toaster` that `toast()` fills is
  * mounted here, once for every site.
  */
-export function SiteShell({ header, logo, site, footer, link, children, className, frame = true, dock, prefix = 'app', ...shell }: SiteShellProps) {
+export function SiteShell({ header, site, footer, link, children, className, frame = true, dock, prefix = 'app', ...shell }: SiteShellProps) {
   const Link = link ?? Anchor;
+  const logo = site?.logo;
   return (
     <SidebarProvider>
       <div {...shell} className={className ? `${prefix}-shell ${className}` : `${prefix}-shell`}>
@@ -1195,6 +1196,34 @@ export function SiteShell({ header, logo, site, footer, link, children, classNam
       </div>
       <Toaster />
     </SidebarProvider>
+  );
+}
+
+export interface NotFoundProps {
+  /** The site from `defineSite`: its `notFound` words. */
+  site: Pick<SiteDefinition, 'notFound'>;
+  /** A site's router link, for the way on. */
+  link?: WikiLinkComponent;
+  /** The way on's classes: `.btn-primary`, as `RouteError`'s Try again, unless given. */
+  buttonClassName?: string;
+}
+
+/**
+ * What `not-found.tsx` draws: "Page not found" as the page's one heading, the
+ * site's line on it, and the way on, an `EmptyState` in `.not-found`. Four
+ * sites had written four 404s, each with its own title, wrapper and button.
+ */
+export function NotFound({ site, link, buttonClassName = 'btn-primary' }: NotFoundProps) {
+  const Link = link ?? Anchor;
+  const home = site.notFound?.home ?? { href: '/', label: 'Home' };
+  return (
+    <EmptyState
+      as="h1"
+      title="Page not found"
+      description={site.notFound?.description}
+      action={<Link href={home.href} className={buttonClassName}>{home.label}</Link>}
+      className="not-found"
+    />
   );
 }
 
